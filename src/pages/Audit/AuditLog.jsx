@@ -16,7 +16,7 @@ export default function AuditLog() {
   const { showToast, online } = useApp()
   const { isOwner, isSuperAdmin } = useAuth()
 
-  useEffect(() => { if (online) loadLogs() else setLoading(false) }, [online])
+  useEffect(() => { if (online) loadLogs(); else setLoading(false) }, [online])
 
   async function loadLogs() {
     setLoading(true)
