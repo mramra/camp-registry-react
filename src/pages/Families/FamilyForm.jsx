@@ -61,7 +61,7 @@ export default function FamilyForm() {
         created_by: profile?.user_id || profile?.id,
         updated_at: now,
         created_at: isEdit ? (form.created_at || now) : now,
-        members_count: parseInt(form.members_count) || 1,
+        members_count: parseInt(form.members_count) || 1,  // عدد الأفراد (محلي فقط)
         version: (form.version || 0) + 1,
       }
 
