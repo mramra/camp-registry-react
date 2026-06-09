@@ -65,7 +65,22 @@ export default function FamiliesList() {
         const [fRes, cRes, mRes] = await Promise.all([
           supabase.from('families').select('*').eq('org_id', ORG_ID).order('updated_at', { ascending: false }).limit(1000),
           supabase.from('camps').select('*').eq('org_id', ORG_ID),
-          supabase.from('family_members').select('id, family_id, name, national_id, relation, dob, gender').eq('org_id', ORG_ID),
+          (async () => {
+            // family_members لا يحتوي org_id — نجلب عبر family_ids
+            const famIds = (fRes.data || []).map(f => f.id)
+            if (!famIds.length) return { data: [] }
+            // نجلب على دفعات لتجنب حد الـ URL
+            const chunks = []
+            for (let i = 0; i < famIds.length; i += 200) chunks.push(famIds.slice(i, i+200))
+            const all = []
+            for (const chunk of chunks) {
+              const { data } = await supabase.from('family_members')
+                .select('id, family_id, name, national_id, relation, dob, gender')
+                .in('family_id', chunk)
+              if (data) all.push(...data)
+            }
+            return { data: all }
+          })(),
         ])
         const fams    = fRes.data  || []
         const camps   = cRes.data  || []
