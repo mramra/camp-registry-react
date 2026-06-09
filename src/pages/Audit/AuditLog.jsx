@@ -1,25 +1,28 @@
-
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { formatDate } from '../../lib/utils'
 import { useApp } from '../../context/AppContext'
-import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/ui/PageHeader'
 import SearchBar from '../../components/ui/SearchBar'
 import EmptyState from '../../components/ui/EmptyState'
 import Spinner from '../../components/ui/Spinner'
 
 export default function AuditLog() {
-  const [logs, setLogs] = useState([])
-  const [search, setSearch] = useState('')
+  const [logs,    setLogs]    = useState([])
+  const [search,  setSearch]  = useState('')
   const [loading, setLoading] = useState(true)
-  const { showToast, online } = useApp()
-  const { isOwner, isSuperAdmin } = useAuth()
+  const [offline, setOffline] = useState(false)
+  const { showToast } = useApp()
 
-  useEffect(() => { if (online) loadLogs(); else setLoading(false) }, [online])
+  useEffect(() => {
+    if (!navigator.onLine) { setOffline(true); setLoading(false); return }
+    loadLogs()
+    window.addEventListener('online', loadLogs)
+    return () => window.removeEventListener('online', loadLogs)
+  }, [])
 
   async function loadLogs() {
-    setLoading(true)
+    setOffline(false); setLoading(true)
     try {
       const { data, error } = await supabase
         .from('audit_log')
@@ -33,18 +36,24 @@ export default function AuditLog() {
     finally { setLoading(false) }
   }
 
-  const filtered = logs.filter(l => !search || (l.action||'').toLowerCase().includes(search.toLowerCase()) || (l.org_members?.full_name||'').toLowerCase().includes(search.toLowerCase()))
+  const filtered = logs.filter(l => !search ||
+    (l.action||'').toLowerCase().includes(search.toLowerCase()) ||
+    (l.org_members?.full_name||'').toLowerCase().includes(search.toLowerCase()))
 
   const ACTION_COLOR = { add:'green', edit:'blue', delete:'red', login:'accent', logout:'muted' }
+
+  if (offline) return (
+    <div>
+      <PageHeader icon="📋" title="سجل النشاط" />
+      <EmptyState icon="📡" title="يتطلب اتصالاً بالإنترنت"
+        subtitle="سجل النشاط متاح عند الاتصال فقط" />
+    </div>
+  )
 
   return (
     <div>
       <PageHeader icon="📋" title="سجل النشاط" subtitle={`${logs.length} سجل`} />
-
-      {!online && <div className="bg-red/10 border border-red/30 text-red text-xs rounded-xl p-3 mb-4 text-center">يتطلب اتصالاً بالإنترنت</div>}
-
       <SearchBar value={search} onChange={setSearch} placeholder="بحث في السجلات..." />
-
       {loading ? <div className="flex justify-center py-16"><Spinner /></div>
       : filtered.length === 0 ? <EmptyState icon="📋" title="لا توجد سجلات" />
       : (
