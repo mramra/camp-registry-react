@@ -40,7 +40,7 @@ export default function FamiliesList() {
       if (online) {
         const { data, error } = await supabase
           .from('families')
-          .select('id, head_name, head_id, camp_id, phone1, status, created_at, members_count')
+          .select('id, head_name, head_id, camp_id, phone1, status, created_at')
           .eq('org_id', ORG_ID)
           .order('created_at', { ascending: false })
         if (error) { console.error('supabase families:', error); showToast('خطأ السيرفر: ' + error.message, true) }
@@ -139,9 +139,7 @@ export default function FamiliesList() {
                   <Badge color={STATUS_MAP[family.status]?.color || 'muted'}>
                     {STATUS_MAP[family.status]?.label || family.status}
                   </Badge>
-                  {family.members_count > 0 && (
-                    <span className="text-muted text-[10px]">{family.members_count} فرد</span>
-                  )}
+
                 </div>
               </div>
             </div>
