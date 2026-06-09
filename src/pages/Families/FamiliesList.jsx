@@ -14,13 +14,20 @@ import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
 
 const STATUS_MAP = {
-  active:   { label: 'نشط',    color: 'green',  dot: '🟢' },
-  inactive: { label: 'غير نشط', color: 'muted',  dot: '⚪' },
-  pending:  { label: 'معلق',   color: 'accent', dot: '🟡' },
-  departed: { label: 'مغادر',  color: 'red',    dot: '🔴' },
-  urgent:   { label: 'عاجل',   color: 'red',    dot: '🔴' },
-  ok:       { label: 'مستقر',  color: 'green',  dot: '🟢' },
-  need:     { label: 'يحتاج',  color: 'accent', dot: '🟡' },
+  active:   { label: 'نشط',   color: 'green',  dot: '🟢' },
+  pending:  { label: 'معلق',  color: 'accent', dot: '🟡' },
+  departed: { label: 'مغادر', color: 'red',    dot: '🔴' },
+  ok:       { label: 'نشط',   color: 'green',  dot: '🟢' },
+  need:     { label: 'معلق',  color: 'accent', dot: '🟡' },
+  urgent:   { label: 'معلق',  color: 'accent', dot: '🟡' },
+  inactive: { label: 'مغادر', color: 'red',    dot: '🔴' },
+}
+
+// تجميعات الحالات
+const STATUS_GROUPS = {
+  active:   ['active','ok'],
+  pending:  ['pending','need','urgent'],
+  departed: ['departed','inactive'],
 }
 
 export default function FamiliesList() {
@@ -165,11 +172,10 @@ export default function FamiliesList() {
 
   // فلترة وبحث
   const allCampIds = [...new Set(families.map(f => f.camp_id).filter(Boolean))]
-  const statusCounts = families.reduce((acc, f) => { acc[f.status] = (acc[f.status]||0)+1; return acc }, {})
 
   const filtered = useMemo(() => {
     return families.filter(f => {
-      if (filterStatus !== 'all' && f.status !== filterStatus) return false
+      if (filterStatus !== 'all' && !STATUS_GROUPS[filterStatus]?.includes(f.status)) return false
       if (filterCamp !== 'all' && f.camp_id !== filterCamp) return false
       if (!search) return true
       const q = search.toLowerCase()
@@ -201,12 +207,11 @@ export default function FamiliesList() {
       />
 
       {/* إحصائيات سريعة */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-3 gap-2 mb-4">
         {[
-          ['الكل',    families.length,                'accent'],
-          ['نشط',    statusCounts.active||statusCounts.ok||0,  'green'],
-          ['عاجل',   statusCounts.urgent||statusCounts.need||0,'red'],
-          ['مغادر',  statusCounts.departed||0,        'muted'],
+          ['الكل',   families.length,                                                           'accent'],
+          ['نشط',    families.filter(f=>STATUS_GROUPS.active.includes(f.status)).length,        'green'],
+          ['مغادر',  families.filter(f=>STATUS_GROUPS.departed.includes(f.status)).length,      'red'],
         ].map(([l,v,c]) => (
           <div key={l} className="bg-surface border border-border rounded-xl p-2 text-center">
             <div className={`text-lg font-black text-${c}`}>{v}</div>
@@ -215,21 +220,18 @@ export default function FamiliesList() {
         ))}
       </div>
 
-      {/* فلاتر الحالة */}
-      <div className="flex gap-2 mb-2 overflow-x-auto pb-1 scrollbar-hide">
+      {/* فلاتر الحالة — 3 فقط */}
+      <div className="flex gap-2 mb-2">
         {[
-          { key:'all', label:'الكل' },
-          { key:'active', label:'نشط' },
-          { key:'ok', label:'مستقر' },
-          { key:'urgent', label:'عاجل' },
-          { key:'need', label:'يحتاج' },
-          { key:'inactive', label:'غير نشط' },
-          { key:'departed', label:'مغادر' },
+          { key:'all',      label:'الكل',   count: families.length },
+          { key:'active',   label:'🟢 نشط',  count: families.filter(f=>STATUS_GROUPS.active.includes(f.status)).length },
+          { key:'pending',  label:'🟡 معلق', count: families.filter(f=>STATUS_GROUPS.pending.includes(f.status)).length },
+          { key:'departed', label:'🔴 مغادر',count: families.filter(f=>STATUS_GROUPS.departed.includes(f.status)).length },
         ].map(f => (
           <button key={f.key} onClick={() => setFilterStatus(f.key)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all
+            className={`flex-1 px-2 py-2 rounded-xl text-[11px] font-bold border transition-all
               ${filterStatus === f.key ? 'bg-accent text-bg border-accent' : 'bg-surface2 border-border text-muted'}`}>
-            {f.label}{f.key !== 'all' && statusCounts[f.key] ? ` (${statusCounts[f.key]})` : ''}
+            {f.label}<br/><span className="text-[10px]">{f.count}</span>
           </button>
         ))}
       </div>
