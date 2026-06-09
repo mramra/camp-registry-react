@@ -20,8 +20,8 @@ export default function DataPage() {
       const camps = await localDB.camps.toArray()
       const campMap = Object.fromEntries(camps.map(c => [c.id, c.name]))
       const rows = [
-        ['اسم الأسرة', 'رقم الهوية', 'الجوال', 'المخيم', 'عدد الأفراد', 'الحالة', 'التاريخ'],
-        ...families.map(f => [f.family_name||'', f.national_id||'', f.phone||'', campMap[f.camp_id]||'', f.members_count||'', f.status||'', (f.created_at||'').slice(0,10)])
+        ['اسم الأسرة', 'رقم الهوية', 'الجوال', 'المخيم', 'الحالة', 'التاريخ'],
+        ...families.map(f => [f.head_name||'', f.head_id||'', f.phone1||'', campMap[f.camp_id]||'', f.status||'', (f.created_at||'').slice(0,10)])
       ]
       const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
       const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8' })
