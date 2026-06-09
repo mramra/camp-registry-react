@@ -57,21 +57,24 @@ export default function UsersList() {
   async function loadData() {
     setLoading(true)
     try {
-      const [campsData] = await Promise.all([localDB.camps.toArray()])
+      const campsData = await localDB.camps.toArray().catch(() => [])
       setCamps(campsData)
       if (online) {
         const { data, error } = await supabase
           .from('org_members').select('*').eq('org_id', ORG_ID).order('created_at', { ascending: false })
-        if (!error && data) {
-          await localDB.org_members.bulkPut(data)
+        if (error) { console.error('supabase users:', error); showToast('خطاء السيرفر: ' + error.message, true) }
+        else if (data) {
+          try { await localDB.org_members.bulkPut(data) } catch {}
           setUsers(data)
         }
       } else {
-        const local = await localDB.org_members.toArray()
+        const local = await localDB.org_members.toArray().catch(() => [])
         setUsers(local)
       }
-    } catch { showToast('خطأ في التحميل', true) }
-    finally { setLoading(false) }
+    } catch(err) {
+      console.error('loadData users:', err)
+      showToast('خطاء: ' + (err?.message || String(err)), true)
+    } finally { setLoading(false) }
   }
 
   function setF(field, value) {
