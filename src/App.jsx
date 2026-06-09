@@ -1,38 +1,52 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
-
-// Layout
 import Layout from './components/layout/Layout'
+import Spinner from './components/ui/Spinner'
 
-// Auth
-import LoginPage     from './pages/Login/LoginPage'
-import ChangePassword from './pages/Login/ChangePassword'
+// ── تحميل كسول لكل الصفحات ──────────────────────────
+const LoginPage      = lazy(() => import('./pages/Login/LoginPage'))
+const ChangePassword = lazy(() => import('./pages/Login/ChangePassword'))
+const Dashboard      = lazy(() => import('./pages/Dashboard/Dashboard'))
+const FamiliesList   = lazy(() => import('./pages/Families/FamiliesList'))
+const FamilyForm     = lazy(() => import('./pages/Families/FamilyForm'))
+const CampsList      = lazy(() => import('./pages/Camps/CampsList'))
+const UsersList      = lazy(() => import('./pages/Users/UsersList'))
+const Distributions  = lazy(() => import('./pages/Distributions/Distributions'))
+const Analysis       = lazy(() => import('./pages/Analysis/Analysis'))
+const DataPage       = lazy(() => import('./pages/Data/DataPage'))
+const Settings       = lazy(() => import('./pages/Settings/Settings'))
+const AuditLog       = lazy(() => import('./pages/Audit/AuditLog'))
+const Alerts         = lazy(() => import('./pages/Alerts/Alerts'))
+const Movements      = lazy(() => import('./pages/Movements/Movements'))
+const Devices        = lazy(() => import('./pages/Devices/Devices'))
+const Subscription   = lazy(() => import('./pages/Subscription/Subscription'))
+const HelpPage       = lazy(() => import('./pages/Help/HelpPage'))
+const SMS            = lazy(() => import('./pages/SMS/SMS'))
+const FamilyPortal   = lazy(() => import('./pages/FamilyPortal/FamilyPortal'))
 
-// Pages
-import Dashboard     from './pages/Dashboard/Dashboard'
-import FamiliesList  from './pages/Families/FamiliesList'
-import FamilyForm    from './pages/Families/FamilyForm'
-import CampsList     from './pages/Camps/CampsList'
-import UsersList     from './pages/Users/UsersList'
-import Distributions from './pages/Distributions/Distributions'
-import Analysis      from './pages/Analysis/Analysis'
-import DataPage      from './pages/Data/DataPage'
-import Settings      from './pages/Settings/Settings'
-import AuditLog      from './pages/Audit/AuditLog'
-import Alerts        from './pages/Alerts/Alerts'
-import Movements     from './pages/Movements/Movements'
-import Devices       from './pages/Devices/Devices'
-import Subscription  from './pages/Subscription/Subscription'
-import HelpPage      from './pages/Help/HelpPage'
-import SMS           from './pages/SMS/SMS'
-import FamilyPortal  from './pages/FamilyPortal/FamilyPortal'
+// ── شاشة تحميل موحّدة ────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <Spinner size="lg" />
+      <p className="text-muted text-sm">جاري التحميل...</p>
+    </div>
+  )
+}
 
 function ProtectedRoute({ children }) {
   const { user, loading, mustChange } = useAuth()
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-accent text-lg">جاري التحميل...</div>
-  if (!user)   return <Navigate to="/login" replace />
-  if (mustChange) return <Navigate to="/change-password" replace />
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-bg gap-4">
+      <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-3xl">🏕️</div>
+      <p className="text-accent font-bold text-lg">نبض المخيم</p>
+      <Spinner size="lg" />
+    </div>
+  )
+  if (!user)        return <Navigate to="/login" replace />
+  if (mustChange)   return <Navigate to="/change-password" replace />
   return children
 }
 
@@ -41,46 +55,48 @@ function AppRoutes() {
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-bg gap-4">
-      <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-3xl">⛺</div>
+      <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-3xl">🏕️</div>
       <p className="text-accent font-bold text-lg">نبض المخيم</p>
-      <div className="w-8 h-8 border-4 border-accent/30 border-t-accent rounded-full animate-spin" />
+      <Spinner size="lg" />
     </div>
   )
 
   return (
-    <Routes>
-      {/* بوابة الأسرة — عامة */}
-      <Route path="/portal" element={<FamilyPortal />} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        {/* بوابة الأسرة — عامة */}
+        <Route path="/portal" element={<FamilyPortal />} />
 
-      {/* تسجيل الدخول */}
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route path="/change-password" element={<ChangePassword />} />
+        {/* تسجيل الدخول */}
+        <Route path="/login"           element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+        <Route path="/change-password" element={<ChangePassword />} />
 
-      {/* الصفحات المحمية */}
-      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Dashboard />} />
-        <Route path="families">
-          <Route index element={<FamiliesList />} />
-          <Route path="add" element={<FamilyForm />} />
-          <Route path="edit/:id" element={<FamilyForm />} />
+        {/* الصفحات المحمية */}
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Dashboard />} />
+          <Route path="families">
+            <Route index        element={<FamiliesList />} />
+            <Route path="add"   element={<FamilyForm />} />
+            <Route path="edit/:id" element={<FamilyForm />} />
+          </Route>
+          <Route path="camps"         element={<CampsList />} />
+          <Route path="users"         element={<UsersList />} />
+          <Route path="distributions" element={<Distributions />} />
+          <Route path="analysis"      element={<Analysis />} />
+          <Route path="data"          element={<DataPage />} />
+          <Route path="settings"      element={<Settings />} />
+          <Route path="audit"         element={<AuditLog />} />
+          <Route path="alerts"        element={<Alerts />} />
+          <Route path="movements"     element={<Movements />} />
+          <Route path="devices"       element={<Devices />} />
+          <Route path="subscription"  element={<Subscription />} />
+          <Route path="help"          element={<HelpPage />} />
+          <Route path="sms"           element={<SMS />} />
         </Route>
-        <Route path="camps"        element={<CampsList />} />
-        <Route path="users"        element={<UsersList />} />
-        <Route path="distributions" element={<Distributions />} />
-        <Route path="analysis"     element={<Analysis />} />
-        <Route path="data"         element={<DataPage />} />
-        <Route path="settings"     element={<Settings />} />
-        <Route path="audit"        element={<AuditLog />} />
-        <Route path="alerts"       element={<Alerts />} />
-        <Route path="movements"    element={<Movements />} />
-        <Route path="devices"      element={<Devices />} />
-        <Route path="subscription" element={<Subscription />} />
-        <Route path="help"         element={<HelpPage />} />
-        <Route path="sms"          element={<SMS />} />
-      </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 
