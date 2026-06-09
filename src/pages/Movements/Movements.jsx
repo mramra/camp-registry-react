@@ -42,7 +42,7 @@ export default function Movements() {
         localDB.families.toArray().catch(() => []),
         localDB.camps.toArray().catch(() => [])
       ])
-      setFamilies(Object.fromEntries(familiesData.map(f => [f.id, f.family_name])))
+      setFamilies(Object.fromEntries(familiesData.map(f => [f.id, f.head_name])))
       setCamps(Object.fromEntries(campsData.map(c => [c.id, c.name])))
       if (online) {
         const { data, error } = await supabase.from('family_movements').select('*').eq('org_id', ORG_ID).order('date', { ascending: false }).limit(200)
