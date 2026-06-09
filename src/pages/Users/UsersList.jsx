@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID, callAdminAPI } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
-import { randomPassword, roleLabel } from '../../lib/utils'
+import { randomPassword } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
@@ -12,25 +13,15 @@ import EmptyState from '../../components/ui/EmptyState'
 import Spinner from '../../components/ui/Spinner'
 
 const ROLE_CONFIG = {
-  platform_owner: { icon: '👑', color: 'text-yellow-400', bg: 'border-r-yellow-400', badge: 'bg-yellow-400/15 text-yellow-400 border-yellow-400/30', label: 'مالك المنصة', indent: 0 },
-  super_admin:    { icon: '🔴', color: 'text-red',    bg: 'border-r-red',    badge: 'bg-red/15 text-red border-red/30',       label: 'مدير الإيواء',   indent: 0 },
-  camp_delegate:  { icon: '🟠', color: 'text-accent', bg: 'border-r-accent', badge: 'bg-accent/15 text-accent border-accent/30', label: 'مندوب مخيم',   indent: 1 },
-  assistant:      { icon: '🟡', color: 'text-blue',   bg: 'border-r-blue',   badge: 'bg-blue/15 text-blue border-blue/30',     label: 'مساعد',         indent: 2 },
+  platform_owner: { icon:'👑', color:'text-yellow-400', bg:'border-r-yellow-400', badge:'bg-yellow-400/15 text-yellow-400 border-yellow-400/30', label:'مالك المنصة',  indent:0 },
+  super_admin:    { icon:'🔴', color:'text-red',        bg:'border-r-red',        badge:'bg-red/15 text-red border-red/30',               label:'مدير الإيواء',  indent:0 },
+  camp_delegate:  { icon:'🟠', color:'text-accent',     bg:'border-r-accent',     badge:'bg-accent/15 text-accent border-accent/30',       label:'مندوب مخيم',    indent:1 },
+  assistant:      { icon:'🟡', color:'text-blue',       bg:'border-r-blue',       badge:'bg-blue/15 text-blue border-blue/30',             label:'مساعد',         indent:2 },
 }
-
-const PAGES_LIST = [
-  { id: 'families',      label: '👪 الأسر',         ops: ['add','edit','delete'] },
-  { id: 'distributions', label: '📦 التوزيع',        ops: ['add'] },
-  { id: 'data',          label: '📁 استيراد/تصدير',  ops: [] },
-  { id: 'movements',     label: '🚶 حركات الأسر',    ops: [] },
-  { id: 'analysis',      label: '📈 التقارير',        ops: [] },
-  { id: 'alerts',        label: '🔔 التنبيهات',       ops: [] },
-]
 
 const EMPTY_FORM = {
   full_name:'', national_id:'', phone:'', role:'camp_delegate', camp_id:'',
-  can_add:true, can_edit:true, can_delete:false, can_export:false, can_import:false,
-  allowed_pages:{},
+  can_add:true, can_edit:true, can_delete:false, can_export:false, can_import:false, allowed_pages:{},
 }
 
 export default function UsersList() {
@@ -55,19 +46,29 @@ export default function UsersList() {
   async function loadData() {
     setLoading(true)
     try {
+      // جلب المخيمات
       const campsData = await localDB.camps.toArray().catch(() => [])
       setCamps(campsData)
+
+      // جلب المستخدمين - أوف لاين أو أون لاين
       if (online) {
         const { data, error } = await supabase
           .from('org_members').select('*').eq('org_id', ORG_ID).order('created_at', { ascending: false })
-        if (error) { showToast('خطأ السيرفر: ' + error.message, true) }
-        else if (data) {
+        if (error) {
+          console.warn('org_members server error:', error.message)
+          // fallback محلي
+          const local = await localDB.org_members.toArray().catch(() => [])
+          setUsers(local)
+          if (!local.length) showToast('خطأ السيرفر: ' + error.message, true)
+        } else if (data) {
           try { await localDB.org_members.bulkPut(data) } catch {}
           setUsers(data)
         }
       } else {
+        // وضع أوف لاين - قراءة محلية
         const local = await localDB.org_members.toArray().catch(() => [])
         setUsers(local)
+        if (!local.length) showToast('لا توجد بيانات محلية — اتصل بالإنترنت وزامن', true)
       }
     } catch(err) { showToast('خطأ: ' + err.message, true) }
     finally { setLoading(false) }
@@ -76,9 +77,6 @@ export default function UsersList() {
   function setF(field, value) {
     setForm(f => ({ ...f, [field]: value }))
     if (errors[field]) setErrors(e => ({ ...e, [field]: null }))
-  }
-  function setPage(pageId, checked) {
-    setForm(f => ({ ...f, allowed_pages: { ...f.allowed_pages, [pageId]: checked ? { view:true } : undefined } }))
   }
 
   function getAllowedRoles() {
@@ -101,7 +99,7 @@ export default function UsersList() {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    if (!online) return showToast('يتطلب اتصالاً', true)
+    if (!online) return showToast('إضافة مستخدم تتطلب اتصالاً', true)
     setSaving(true)
     try {
       const pass = randomPassword()
@@ -114,7 +112,7 @@ export default function UsersList() {
         can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages), created_by: profile?.id,
       })
-      showToast(`✅ تم الإنشاء — كلمة المرور: ${pass}`)
+      showToast('✅ تم الإنشاء\nكلمة المرور: ' + pass)
       setShowAdd(false); setForm(EMPTY_FORM); await loadData()
     } catch(err) { showToast('خطأ: ' + err.message, true) }
     finally { setSaving(false) }
@@ -123,11 +121,13 @@ export default function UsersList() {
   async function handleEdit(e) {
     e.preventDefault()
     if (!editUser) return
+    if (!online) return showToast('التعديل يتطلب اتصالاً', true)
     setSaving(true)
     try {
       const updates = {
         full_name: form.full_name.trim(), phone: form.phone?.trim() || null,
-        camp_id: form.camp_id || null, can_add: form.can_add, can_edit: form.can_edit,
+        camp_id: form.camp_id || null,
+        can_add: form.can_add, can_edit: form.can_edit,
         can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages),
       }
@@ -184,67 +184,45 @@ export default function UsersList() {
   }
 
   const campMap = Object.fromEntries(camps.map(c => [c.id, c.name]))
-  const toggleCollapse = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }))
+  const admins = users.filter(u => ['super_admin','platform_owner'].includes(u.role))
+  const delegates = users.filter(u => u.role === 'camp_delegate')
+  const assistants = users.filter(u => u.role === 'assistant')
 
-  // ===== بناء الشجرة الهرمية =====
-  const buildTree = () => {
-    const q = search.toLowerCase()
-    const filtered = search
-      ? users.filter(u => (u.full_name||'').toLowerCase().includes(q) || (u.national_id||'').includes(q))
-      : users
+  const q = search.toLowerCase()
+  const allFiltered = search ? users.filter(u => (u.full_name||'').toLowerCase().includes(q) || (u.national_id||'').includes(q)) : users
 
-    // المديرون (super_admin + platform_owner)
-    const admins = filtered.filter(u => ['super_admin','platform_owner'].includes(u.role))
-    // المناديب
-    const delegates = filtered.filter(u => u.role === 'camp_delegate')
-    // المساعدون
-    const assistants = filtered.filter(u => u.role === 'assistant')
-
-    return { admins, delegates, assistants }
-  }
-
-  const { admins, delegates, assistants } = buildTree()
-
-  // مناديب تحت مدير معين
-  const getDelegates = (adminId) =>
-    delegates.filter(d => d.supervisor_id === adminId || d.created_by === adminId)
-
-  // مناديب بدون مدير
-  const orphanDelegates = delegates.filter(d => {
-    const hasSupervisor = admins.some(a => a.id === d.supervisor_id || a.id === d.created_by)
-    return !hasSupervisor
-  })
-
-  // مساعدون تحت مندوب معين — فقط عبر supervisor_id أو created_by
-  const getAssistants = (delegateId) =>
-    assistants.filter(a => a.supervisor_id === delegateId || a.created_by === delegateId)
-
-  // مساعدون بدون مندوب (لم يرتبط بأي مندوب)
-  const orphanAssistants = assistants.filter(a => {
-    const hasDelegate = delegates.some(d => d.id === a.supervisor_id || d.id === a.created_by)
-    const hasAdmin    = admins.some(ad => ad.id === a.supervisor_id || ad.id === a.created_by)
-    return !hasDelegate && !hasAdmin
-  })
+  const getDelegates = (adminId) => delegates.filter(d => d.supervisor_id === adminId || d.created_by === adminId)
+  const getAssistants = (delegateId) => assistants.filter(a => a.supervisor_id === delegateId || a.created_by === delegateId)
+  const orphanDelegates = delegates.filter(d => !admins.some(a => a.id === d.supervisor_id || a.id === d.created_by))
+  const orphanAssistants = assistants.filter(a => !delegates.some(d => d.id === a.supervisor_id || d.id === a.created_by) && !admins.some(ad => ad.id === a.supervisor_id || ad.id === a.created_by))
 
   const isMe = (id) => id === profile?.id
 
   return (
     <div>
       <PageHeader icon="👥" title="إدارة المستخدمين" subtitle={`${users.length} مستخدم`}
-        action={(isOwner || isSuperAdmin) && (
+        action={(isOwner || isSuperAdmin) && online && (
           <button onClick={() => { setForm(EMPTY_FORM); setErrors({}); setShowAdd(true) }}
             className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">＋ إضافة</button>
         )}
       />
 
-      {/* إحصائيات */}
+      {!online && users.length > 0 && (
+        <div className="bg-surface2 border border-border text-muted text-xs rounded-xl p-2.5 mb-3 text-center">
+          📴 عرض للقراءة فقط — التعديل يتطلب اتصالاً
+        </div>
+      )}
+      {!online && users.length === 0 && (
+        <div className="bg-red/10 border border-red/30 text-red text-xs rounded-xl p-3 mb-3 text-center">
+          لا توجد بيانات محلية — اتصل وامزج البيانات أولاً
+        </div>
+      )}
+
       <div className="grid grid-cols-4 gap-2 mb-4">
-        {[
-          ['مدير',   users.filter(u=>u.role==='super_admin').length,   'red'],
-          ['مندوب',  users.filter(u=>u.role==='camp_delegate').length, 'accent'],
-          ['مساعد',  users.filter(u=>u.role==='assistant').length,     'blue'],
-          ['موقوف',  users.filter(u=>!u.is_active).length,            'muted'],
-        ].map(([l,v,c]) => (
+        {[['مدير', users.filter(u=>u.role==='super_admin').length,'red'],
+          ['مندوب', users.filter(u=>u.role==='camp_delegate').length,'accent'],
+          ['مساعد', users.filter(u=>u.role==='assistant').length,'blue'],
+          ['موقوف', users.filter(u=>!u.is_active).length,'muted']].map(([l,v,c]) => (
           <div key={l} className="bg-surface border border-border rounded-xl p-2 text-center">
             <div className={`text-lg font-black text-${c}`}>{v}</div>
             <div className="text-muted text-[9px] mt-0.5">{l}</div>
@@ -254,58 +232,49 @@ export default function UsersList() {
 
       <SearchBar value={search} onChange={setSearch} placeholder="بحث بالاسم أو الهوية..." />
 
-      {loading ? (
-        <div className="flex justify-center py-16"><Spinner /></div>
-      ) : users.length === 0 ? (
-        <EmptyState icon="👥" title="لا يوجد مستخدمون" />
-      ) : (
+      {loading ? <div className="flex justify-center py-16"><Spinner /></div>
+      : users.length === 0 ? <EmptyState icon="👥" title="لا يوجد مستخدمون" />
+      : (
         <div className="flex flex-col gap-2">
-          {/* ======= المديرون وما تحتهم ======= */}
-          {admins.map(admin => {
+          {(search ? allFiltered.filter(u=>['super_admin','platform_owner'].includes(u.role)) : admins).map(admin => {
             const cfg = ROLE_CONFIG[admin.role]
-            const adminDelegates = getDelegates(admin.id)
+            const adminDelegates = search ? [] : getDelegates(admin.id)
             const isOpen = !collapsed[admin.id]
             return (
               <div key={admin.id}>
-                {/* بطاقة المدير */}
                 <UserCard user={admin} cfg={cfg} campMap={campMap} isMe={isMe(admin.id)}
                   onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                  isOwner={isOwner} isSuperAdmin={isSuperAdmin}
-                  childCount={adminDelegates.length}
-                  isOpen={isOpen} onToggleOpen={() => toggleCollapse(admin.id)}
+                  isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
+                  childCount={adminDelegates.length} isOpen={isOpen}
+                  onToggleOpen={() => setCollapsed(c => ({ ...c, [admin.id]: !c[admin.id] }))}
                 />
-
-                {/* المناديب تحت هذا المدير */}
                 {isOpen && adminDelegates.map(delegate => {
                   const dcfg = ROLE_CONFIG.camp_delegate
                   const delegateAssistants = getAssistants(delegate.id)
                   const isDOpen = !collapsed[delegate.id]
                   return (
-                    <div key={delegate.id} className="mr-4 border-r-2 border-accent/20 pr-2">
-                      {/* خط الربط */}
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="text-accent/40 text-xs">└─</span>
+                    <div key={delegate.id} className="mr-4 border-r-2 border-accent/20">
+                      <div className="flex items-center gap-1 pr-2">
+                        <span className="text-accent/40 text-xs mr-1">└─</span>
                         <UserCard user={delegate} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
                           onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                           onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                          isOwner={isOwner} isSuperAdmin={isSuperAdmin}
-                          childCount={delegateAssistants.length}
-                          isOpen={isDOpen} onToggleOpen={() => toggleCollapse(delegate.id)}
+                          isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
+                          childCount={delegateAssistants.length} isOpen={isDOpen}
+                          onToggleOpen={() => setCollapsed(c => ({ ...c, [delegate.id]: !c[delegate.id] }))}
                           fullWidth
                         />
                       </div>
-
-                      {/* المساعدون تحت هذا المندوب */}
                       {isDOpen && delegateAssistants.map(asst => (
-                        <div key={asst.id} className="mr-4 border-r-2 border-blue/20 pr-2">
-                          <div className="flex items-center gap-1 mb-1">
-                            <span className="text-blue/40 text-xs">└─</span>
+                        <div key={asst.id} className="mr-8 border-r-2 border-blue/20">
+                          <div className="flex items-center gap-1 pr-2">
+                            <span className="text-blue/40 text-xs mr-1">└─</span>
                             <UserCard user={asst} cfg={ROLE_CONFIG.assistant} campMap={campMap}
                               isMe={isMe(asst.id)} onEdit={openEdit} onToggle={handleToggleStatus}
                               onDelete={handleDelete}
                               onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                              isOwner={isOwner} isSuperAdmin={isSuperAdmin} fullWidth
+                              isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online} fullWidth
                             />
                           </div>
                         </div>
@@ -316,73 +285,53 @@ export default function UsersList() {
               </div>
             )
           })}
-
-          {/* مناديب بدون مدير */}
-          {orphanDelegates.length > 0 && (
+          {!search && orphanDelegates.length > 0 && (
             <div>
-              <div className="text-xs text-muted font-bold px-2 py-2 mt-2">مناديب غير مرتبطين بمدير</div>
-              {orphanDelegates.map(delegate => {
-                const dcfg = ROLE_CONFIG.camp_delegate
-                const delegateAssistants = getAssistants(delegate.id)
-                const isDOpen = !collapsed[delegate.id]
-                return (
-                  <div key={delegate.id}>
-                    <UserCard user={delegate} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
-                      onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
-                      onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                      isOwner={isOwner} isSuperAdmin={isSuperAdmin}
-                      childCount={delegateAssistants.length}
-                      isOpen={isDOpen} onToggleOpen={() => toggleCollapse(delegate.id)}
-                    />
-                    {isDOpen && delegateAssistants.map(asst => (
-                      <div key={asst.id} className="mr-4 border-r-2 border-blue/20 pr-2">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-blue/40 text-xs">└─</span>
-                          <UserCard user={asst} cfg={ROLE_CONFIG.assistant} campMap={campMap}
-                            isMe={isMe(asst.id)} onEdit={openEdit} onToggle={handleToggleStatus}
-                            onDelete={handleDelete}
-                            onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                            isOwner={isOwner} isSuperAdmin={isSuperAdmin} fullWidth
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* مساعدون بدون مندوب */}
-          {orphanAssistants.length > 0 && (
-            <div>
-              <div className="text-xs text-muted font-bold px-2 py-2 mt-2">مساعدون غير مرتبطين</div>
-              {orphanAssistants.map(asst => (
-                <UserCard key={asst.id} user={asst} cfg={ROLE_CONFIG.assistant} campMap={campMap}
-                  isMe={isMe(asst.id)} onEdit={openEdit} onToggle={handleToggleStatus}
-                  onDelete={handleDelete}
+              <div className="text-xs text-muted font-bold px-2 py-2 mt-2">مناديب غير مرتبطين</div>
+              {orphanDelegates.map(d => (
+                <UserCard key={d.id} user={d} cfg={ROLE_CONFIG.camp_delegate} campMap={campMap}
+                  isMe={isMe(d.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                  isOwner={isOwner} isSuperAdmin={isSuperAdmin}
+                  isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                 />
               ))}
             </div>
           )}
+          {!search && orphanAssistants.length > 0 && (
+            <div>
+              <div className="text-xs text-muted font-bold px-2 py-2 mt-2">مساعدون غير مرتبطين</div>
+              {orphanAssistants.map(a => (
+                <UserCard key={a.id} user={a} cfg={ROLE_CONFIG.assistant} campMap={campMap}
+                  isMe={isMe(a.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
+                  onReset={u => { setReset(u); setNewPass(randomPassword()) }}
+                  isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
+                />
+              ))}
+            </div>
+          )}
+          {search && allFiltered.filter(u=>!['super_admin','platform_owner'].includes(u.role)).map(u => (
+            <UserCard key={u.id} user={u} cfg={ROLE_CONFIG[u.role]||ROLE_CONFIG.assistant} campMap={campMap}
+              isMe={isMe(u.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
+              onReset={u2 => { setReset(u2); setNewPass(randomPassword()) }}
+              isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
+            />
+          ))}
         </div>
       )}
 
-      {/* ======= نافذة الإضافة ======= */}
+      {/* نوافذ الإضافة والتعديل */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="➕ إضافة مستخدم" size="lg">
         <form onSubmit={handleAdd} className="flex flex-col gap-4">
-          <Field label="الاسم الكامل *" value={form.full_name} onChange={v=>setF('full_name',v)} error={errors.full_name} />
-          <Field label="رقم الهوية *" value={form.national_id} onChange={v=>setF('national_id',v)} type="tel" inputMode="numeric" error={errors.national_id} />
-          <Field label="رقم الجوال" value={form.phone} onChange={v=>setF('phone',v)} type="tel" />
+          <Field label="الاسم الكامل *" value={form.full_name} onChange={v=>setF('full_name',v)} error={errors.full_name}/>
+          <Field label="رقم الهوية *" value={form.national_id} onChange={v=>setF('national_id',v)} type="tel" inputMode="numeric" error={errors.national_id}/>
+          <Field label="رقم الجوال" value={form.phone} onChange={v=>setF('phone',v)} type="tel"/>
           <div>
             <label className="text-xs font-bold text-muted block mb-1.5">الدور *</label>
             <div className="flex flex-col gap-1.5">
               {getAllowedRoles().map(r => (
                 <button key={r} type="button" onClick={() => setF('role',r)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold border text-right transition-all
-                    ${form.role===r ? 'bg-accent/15 text-accent border-accent':'bg-surface2 border-border text-muted'}`}>
+                    ${form.role===r?'bg-accent/15 text-accent border-accent':'bg-surface2 border-border text-muted'}`}>
                   <span>{ROLE_CONFIG[r]?.icon}</span>{ROLE_CONFIG[r]?.label}
                 </button>
               ))}
@@ -399,41 +348,15 @@ export default function UsersList() {
               {errors.camp_id && <p className="text-red text-xs mt-1">{errors.camp_id}</p>}
             </div>
           )}
-          {form.role === 'assistant' && (
-            <div className="bg-surface2 border border-border rounded-xl p-3">
-              <div className="text-xs font-bold text-muted mb-2">🔐 الصلاحيات</div>
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {[['can_add','إضافة'],['can_edit','تعديل'],['can_delete','حذف'],['can_export','تصدير'],['can_import','استيراد']].map(([k,l])=>(
-                  <label key={k} className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={form[k]} onChange={e=>setF(k,e.target.checked)} className="w-4 h-4 accent-amber-500" />
-                    <span className="text-xs text-white">{l}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="text-xs font-bold text-muted mb-1.5">📄 الصفحات</div>
-              {PAGES_LIST.map(pg=>(
-                <label key={pg.id} className="flex items-center gap-2 cursor-pointer py-1 border-b border-border/30">
-                  <input type="checkbox" checked={!!form.allowed_pages[pg.id]?.view}
-                    onChange={e=>setPage(pg.id,e.target.checked)} className="w-4 h-4 accent-amber-500" />
-                  <span className="text-xs text-white">{pg.label}</span>
-                </label>
-              ))}
-            </div>
-          )}
           <div className="flex gap-3">
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
+            <button type="submit" disabled={saving} className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
               {saving?'جاري الإنشاء...':'✅ إنشاء المستخدم'}
             </button>
-            <button type="button" onClick={()=>setShowAdd(false)}
-              className="flex-1 bg-surface2 border border-border text-white font-bold py-3 rounded-xl text-sm">
-              إلغاء
-            </button>
+            <button type="button" onClick={()=>setShowAdd(false)} className="flex-1 bg-surface2 border border-border text-white font-bold py-3 rounded-xl text-sm">إلغاء</button>
           </div>
         </form>
       </Modal>
 
-      {/* ======= نافذة التعديل ======= */}
       <Modal open={!!editUser} onClose={()=>setEditUser(null)} title={`✏️ ${editUser?.full_name}`} size="lg">
         <form onSubmit={handleEdit} className="flex flex-col gap-4">
           <Field label="الاسم الكامل *" value={form.full_name} onChange={v=>setF('full_name',v)} error={errors.full_name}/>
@@ -459,33 +382,15 @@ export default function UsersList() {
               </select>
             </div>
           )}
-          {form.role === 'assistant' && (
-            <div className="bg-surface2 border border-border rounded-xl p-3">
-              <div className="text-xs font-bold text-muted mb-2">🔐 الصلاحيات</div>
-              <div className="grid grid-cols-2 gap-2">
-                {[['can_add','إضافة'],['can_edit','تعديل'],['can_delete','حذف'],['can_export','تصدير'],['can_import','استيراد']].map(([k,l])=>(
-                  <label key={k} className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={form[k]} onChange={e=>setF(k,e.target.checked)} className="w-4 h-4 accent-amber-500"/>
-                    <span className="text-xs text-white">{l}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
           <div className="flex gap-3">
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
+            <button type="submit" disabled={saving} className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
               {saving?'جاري الحفظ...':'💾 حفظ التعديلات'}
             </button>
-            <button type="button" onClick={()=>setEditUser(null)}
-              className="flex-1 bg-surface2 border border-border text-white font-bold py-3 rounded-xl text-sm">
-              إلغاء
-            </button>
+            <button type="button" onClick={()=>setEditUser(null)} className="flex-1 bg-surface2 border border-border text-white font-bold py-3 rounded-xl text-sm">إلغاء</button>
           </div>
         </form>
       </Modal>
 
-      {/* ======= نافذة كلمة المرور ======= */}
       <Modal open={!!resetTarget} onClose={()=>setReset(null)} title="🔑 إعادة تعيين كلمة المرور" size="sm">
         {resetTarget && (
           <div className="flex flex-col gap-4">
@@ -507,60 +412,36 @@ export default function UsersList() {
   )
 }
 
-// ======= مكوّن بطاقة المستخدم =======
-function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onReset, isOwner, isSuperAdmin, childCount, isOpen, onToggleOpen, fullWidth }) {
+function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onReset, isOwner, isSuperAdmin, childCount, isOpen, onToggleOpen, fullWidth, online }) {
   return (
     <div className={`bg-surface border border-border rounded-xl overflow-hidden mb-1.5 border-r-4 ${cfg.bg} ${!user.is_active?'opacity-60':''} ${fullWidth?'w-full':''}`}>
       <div className="flex items-center gap-3 p-3">
-        {/* أيقونة الدور */}
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${cfg.badge} border`}>
-          {cfg.icon}
-        </div>
-
-        {/* البيانات */}
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${cfg.badge} border`}>{cfg.icon}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-white text-sm truncate">{user.full_name}</span>
             {isMe && <span className="text-[9px] bg-green/20 text-green border border-green/30 px-1.5 rounded-full">أنت</span>}
             {user.must_change_pass && <span className="text-[9px] text-accent">⚠️</span>}
+            {!online && <span className="text-[9px] text-muted">📴</span>}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className={`text-[10px] font-bold ${cfg.color}`}>{cfg.label}</span>
-            {user.camp_id && campMap[user.camp_id] && (
-              <span className="text-[10px] text-blue">🏕️ {campMap[user.camp_id]}</span>
-            )}
-            <span className={`text-[10px] ${user.is_active?'text-green':'text-red'}`}>
-              {user.is_active?'● نشط':'● موقوف'}
-            </span>
+            {user.camp_id && campMap[user.camp_id] && <span className="text-[10px] text-blue">🏕️ {campMap[user.camp_id]}</span>}
+            <span className={`text-[10px] ${user.is_active!==false?'text-green':'text-red'}`}>{user.is_active!==false?'● نشط':'● موقوف'}</span>
           </div>
         </div>
-
-        {/* زر طي/بسط إذا كان لديه أبناء */}
         {childCount > 0 && onToggleOpen && (
-          <button onClick={onToggleOpen}
-            className="w-6 h-6 bg-surface2 border border-border rounded-lg flex items-center justify-center text-[10px] text-muted flex-shrink-0">
-            {isOpen ? '▲' : `▼${childCount}`}
+          <button onClick={onToggleOpen} className="w-6 h-6 bg-surface2 border border-border rounded-lg flex items-center justify-center text-[10px] text-muted flex-shrink-0">
+            {isOpen ? '▲' : `▼`}
           </button>
         )}
       </div>
-
-      {/* أزرار الإجراءات */}
-      {user.role !== 'platform_owner' && (
+      {user.role !== 'platform_owner' && online && (
         <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
-          <button onClick={()=>onEdit(user)}
-            className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>
-          {!isMe && (
-            <button onClick={()=>onToggle(user)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${user.is_active?'bg-red/10 border-red/30 text-red':'bg-green/10 border-green/30 text-green'}`}>
-              {user.is_active?'🚫':'✅'}
-            </button>
-          )}
-          <button onClick={()=>onReset(user)}
-            className="bg-accent/10 border border-accent/30 text-accent px-2.5 py-1 rounded-lg text-[11px] font-bold">🔑</button>
-          {!isMe && (isOwner||isSuperAdmin) && (
-            <button onClick={()=>onDelete(user)}
-              className="bg-red/10 border border-red/30 text-red px-2.5 py-1 rounded-lg text-[11px] font-bold">🗑️</button>
-          )}
+          <button onClick={()=>onEdit(user)} className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>
+          {!isMe && <button onClick={()=>onToggle(user)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${user.is_active!==false?'bg-red/10 border-red/30 text-red':'bg-green/10 border-green/30 text-green'}`}>{user.is_active!==false?'🚫':'✅'}</button>}
+          <button onClick={()=>onReset(user)} className="bg-accent/10 border border-accent/30 text-accent px-2.5 py-1 rounded-lg text-[11px] font-bold">🔑</button>
+          {!isMe && (isOwner||isSuperAdmin) && <button onClick={()=>onDelete(user)} className="bg-red/10 border border-red/30 text-red px-2.5 py-1 rounded-lg text-[11px] font-bold">🗑️</button>}
         </div>
       )}
     </div>
