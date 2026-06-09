@@ -64,7 +64,7 @@ export default function CampsList() {
       const counts = {}
       families.forEach(f => { counts[f.camp_id] = (counts[f.camp_id] || 0) + 1 })
       setFamilyCounts(counts)
-    } catch { showToast('خطأ في التحميل', true) }
+    } catch(err) { console.error('camps error:', err); showToast('خطأ: ' + (err?.message || err), true) }
     finally { setLoading(false) }
   }
 
