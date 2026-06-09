@@ -25,7 +25,7 @@ export default function SMS() {
     if (!filterCamp) return true
     return f.camp_id === filterCamp
   })
-  const withPhone = filtered.filter(f => f.phone)
+  const withPhone = filtered.filter(f => f.phone1)
 
   async function sendSMS() {
     if (!message.trim()) return showToast('اكتب الرسالة أولاً', true)
