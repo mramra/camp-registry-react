@@ -11,7 +11,17 @@ export default function Analysis() {
   const [loading, setLoading] = useState(true)
   const { showToast } = useApp()
 
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => {
+    loadStats()
+    // تحديث في الخلفية إذا متصل
+    if (navigator.onLine) {
+      import('../../lib/supabase').then(({ supabase, ORG_ID }) => {
+        supabase.from('families').select('id,status,camp_id').eq('org_id',ORG_ID)
+          .then(({data}) => { if(data?.length) { import('../../lib/db').then(({localDB})=>{ try{localDB.families.bulkPut(data)}catch{} loadStats() }) } })
+          .catch(()=>{})
+      })
+    }
+  }, [])
 
   async function loadStats() {
     setLoading(true)
