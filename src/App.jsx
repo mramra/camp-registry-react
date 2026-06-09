@@ -86,7 +86,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/camp-registry">
+    <BrowserRouter basename="/camp-registry-react">
       <AuthProvider>
         <AppProvider>
           <AppRoutes />
