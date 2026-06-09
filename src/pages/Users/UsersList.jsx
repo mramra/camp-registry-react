@@ -215,14 +215,15 @@ export default function UsersList() {
     return !hasSupervisor
   })
 
-  // مساعدون تحت مندوب معين
+  // مساعدون تحت مندوب معين — فقط عبر supervisor_id أو created_by
   const getAssistants = (delegateId) =>
-    assistants.filter(a => a.supervisor_id === delegateId || a.created_by === delegateId || a.camp_id === delegates.find(d=>d.id===delegateId)?.camp_id)
+    assistants.filter(a => a.supervisor_id === delegateId || a.created_by === delegateId)
 
-  // مساعدون بدون مندوب
+  // مساعدون بدون مندوب (لم يرتبط بأي مندوب)
   const orphanAssistants = assistants.filter(a => {
     const hasDelegate = delegates.some(d => d.id === a.supervisor_id || d.id === a.created_by)
-    return !hasDelegate
+    const hasAdmin    = admins.some(ad => ad.id === a.supervisor_id || ad.id === a.created_by)
+    return !hasDelegate && !hasAdmin
   })
 
   const isMe = (id) => id === profile?.id
