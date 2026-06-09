@@ -34,13 +34,33 @@ export default function CampsList() {
   const { showToast } = useApp()
   const canManage = isOwner || isSuperAdmin || isCampDelegate
 
+  // جلب عدد الأسر لكل مخيم
   useEffect(() => {
-    localDB.families.toArray().catch(()=>[]).then(fams => {
+    async function loadFamCounts() {
+      // من المحلي أولاً
+      const local = await localDB.families.toArray().catch(()=>[])
       const c = {}
-      fams.forEach(f => { c[f.camp_id] = (c[f.camp_id]||0)+1 })
+      local.forEach(f => { if(f.camp_id) c[f.camp_id] = (c[f.camp_id]||0)+1 })
       setFamCounts(c)
-    })
-  }, [camps])
+      // من السيرفر إذا متصل
+      if (navigator.onLine) {
+        try {
+          const { data } = await supabase
+            .from('families')
+            .select('camp_id')
+            .eq('org_id', ORG_ID)
+          if (data) {
+            const sc = {}
+            data.forEach(f => { if(f.camp_id) sc[f.camp_id] = (sc[f.camp_id]||0)+1 })
+            setFamCounts(sc)
+            // حدّث المحلي في الخلفية
+            try { await localDB.families.bulkPut(data) } catch {}
+          }
+        } catch {}
+      }
+    }
+    loadFamCounts()
+  }, [])
 
   function set(f, v) { setForm(x=>({...x,[f]:v})); if(errors[f]) setErrors(e=>({...e,[f]:null})) }
 
