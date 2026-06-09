@@ -54,18 +54,22 @@ export default function CampsList() {
       if (online) {
         const { data, error } = await supabase
           .from('camps').select('*').eq('org_id', ORG_ID).order('created_at', { ascending: false })
-        if (!error && data) await localDB.camps.bulkPut(data)
+        if (error) { console.error('supabase camps:', error); showToast('خطاء السيرفر: ' + error.message, true) }
+        else if (data) {
+          try { await localDB.camps.bulkPut(data) } catch {}
+          setCamps(data)
+        }
       }
-      const data = await localDB.camps.toArray()
-      setCamps(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
-
-      // عدد الأسر لكل مخيم
-      const families = await localDB.families.toArray()
+      const localCamps = await localDB.camps.toArray().catch(() => [])
+      if (!online) setCamps(localCamps.sort((a,b) => new Date(b.created_at)-new Date(a.created_at)))
+      const families = await localDB.families.toArray().catch(() => [])
       const counts = {}
       families.forEach(f => { counts[f.camp_id] = (counts[f.camp_id] || 0) + 1 })
       setFamilyCounts(counts)
-    } catch(err) { console.error('camps error:', err); showToast('خطأ: ' + (err?.message || err), true) }
-    finally { setLoading(false) }
+    } catch(err) {
+      console.error('loadData camps:', err)
+      showToast('خطاء: ' + (err?.message || String(err)), true)
+    } finally { setLoading(false) }
   }
 
   function openAdd() {
