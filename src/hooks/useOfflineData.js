@@ -1,44 +1,42 @@
-// hooks/useOfflineData.js
-// Hook مشترك يجلب من السيرفر عند الاتصال ويحفظ محلياً
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
 import { localDB } from '../lib/db'
 
-export function useOfflineData(tableName, localTableName, selectQuery = '*', orderBy = null) {
-  const [data, setData]     = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(null)
+export function useOfflineData({ localTable, remoteTable, select = '*', orderBy = 'created_at', filterFn, enabled = true }) {
+  const [data,      setData]      = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [syncing,   setSyncing]   = useState(false)
+  const [fromCache, setFromCache] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
-      if (navigator.onLine) {
-        let q = supabase.from(tableName).select(selectQuery).eq('org_id', ORG_ID)
-        if (orderBy) q = q.order(orderBy, { ascending: false })
-        const { data: serverData, error: serverError } = await q
-        if (serverError) {
-          console.warn(`${tableName} server error:`, serverError.message)
-        } else if (serverData) {
-          try { await localDB[localTableName].bulkPut(serverData) } catch {}
-          setData(serverData)
-          setLoading(false)
-          return
-        }
-      }
-      // fallback: قراءة محلية
-      const localData = await localDB[localTableName].toArray().catch(() => [])
-      setData(localData.sort((a, b) => {
-        if (orderBy && a[orderBy] && b[orderBy]) return new Date(b[orderBy]) - new Date(a[orderBy])
-        return 0
-      }))
-    } catch (err) {
-      setError(err)
-      // محاولة أخيرة من المحلي
-      const fallback = await localDB[localTableName].toArray().catch(() => [])
-      setData(fallback)
-    } finally { setLoading(false) }
-  }
+      // 1. محلي فوراً
+      const local = await localDB[localTable].toArray().catch(() => [])
+      const sorted = (filterFn ? local.filter(filterFn) : local)
+        .sort((a, b) => new Date(b[orderBy]||0) - new Date(a[orderBy]||0))
+      setData(sorted)
+      setFromCache(true)
+      setLoading(false)
 
-  useEffect(() => { load() }, [tableName])
-  return { data, loading, error, reload: load }
+      // 2. سيرفر في الخلفية
+      if (navigator.onLine) {
+        setSyncing(true)
+        try {
+          const { data: remote, error } = await supabase
+            .from(remoteTable).select(select).eq('org_id', ORG_ID)
+            .order(orderBy, { ascending: false })
+          if (!error && remote) {
+            try { await localDB[localTable].bulkPut(remote) } catch {}
+            setData(filterFn ? remote.filter(filterFn) : remote)
+            setFromCache(false)
+          }
+        } catch (e) { console.warn('[offline]', remoteTable, e.message) }
+        finally { setSyncing(false) }
+      }
+    } catch (e) { setLoading(false) }
+  }, [localTable, remoteTable, select, orderBy])
+
+  useEffect(() => { if (enabled) load() }, [enabled])
+  return { data, loading, syncing, fromCache, reload: load, setData }
 }
