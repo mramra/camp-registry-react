@@ -29,19 +29,16 @@ const STATUS_GROUPS = {
   departed: ['departed', 'inactive'],
 }
 
-// حساب عدد الأفراد (باستثناء رب الأسرة)
 function countMembers(members, family) {
   return members.filter(m => {
-    // ① يجب أن ينتمي لهذه الأسرة
     if (m.family_id !== family.id) return false
-    // ② استثناء رب الأسرة
     const rel   = (m.relation   || '').trim()
     const mName = (m.name       || '').trim().replace(/\s+/g, ' ')
     const hName = (family.head_name || '').trim().replace(/\s+/g, ' ')
-    if (['رب الأسرة', 'رب أسرة', 'head'].includes(rel))  return false
+    if (['رب الأسرة', 'رب أسرة', 'head'].includes(rel)) return false
     if (family.head_id && m.national_id &&
-        m.national_id.trim() === family.head_id.trim())   return false
-    if (mName && hName && mName === hName)                return false
+        m.national_id.trim() === family.head_id.trim())  return false
+    if (mName && hName && mName === hName)               return false
     return true
   }).length
 }
@@ -55,7 +52,6 @@ export default function FamiliesList() {
   const [filterCamp,   setFilterCamp]   = useState('all')
   const [loading,      setLoading]      = useState(true)
   const [syncing,      setSyncing]      = useState(false)
-  const [fromCache,    setFromCache]    = useState(false)
   const [selected,     setSelected]     = useState(null)
   const [members,      setMembers]      = useState([])
 
@@ -67,26 +63,27 @@ export default function FamiliesList() {
 
   async function loadAll() {
     setLoading(true)
-
-    // ① محلي فوراً
     try {
+      // ══════════════════════════════════════════
+      // ① محلي فوراً — لا ننتظر الإنترنت أبداً
+      // ══════════════════════════════════════════
       const [localFams, localCamps, localMems] = await Promise.all([
         localDB.families.toArray().catch(() => []),
         localDB.camps.toArray().catch(() => []),
         localDB.family_members.toArray().catch(() => []),
       ])
-      if (localFams.length) {
-        applyData(localFams, localCamps, localMems)
-        setFromCache(true)
-        setLoading(false)
-      }
-    } catch {}
+      // اعرض المحلي حتى لو فارغ
+      applyData(localFams, localCamps, localMems)
+      setLoading(false)
 
-    // ② سيرفر في الخلفية — families وcamps أولاً ثم members
-    if (navigator.onLine) {
+      // ══════════════════════════════════════════
+      // ② سيرفر في الخلفية — فقط إذا متصل
+      // ══════════════════════════════════════════
+      if (!navigator.onLine) return
+
       setSyncing(true)
       try {
-        // STEP 1: جلب الأسر والمخيمات
+        // STEP 1: الأسر والمخيمات
         const [fRes, cRes] = await Promise.all([
           supabase.from('families').select('*')
             .eq('org_id', ORG_ID)
@@ -95,14 +92,13 @@ export default function FamiliesList() {
           supabase.from('camps').select('*').eq('org_id', ORG_ID),
         ])
 
-        const fams  = fRes.data  || []
-        const camps = cRes.data  || []
+        const fams  = fRes.error  ? localFams  : (fRes.data  || [])
+        const camps = cRes.error  ? localCamps : (cRes.data  || [])
 
-        // STEP 2: جلب الأفراد بعد معرفة IDs الأسر
-        let mems = []
-        if (fams.length) {
+        // STEP 2: الأفراد بعد معرفة IDs
+        let mems = localMems
+        if (fams.length && !fRes.error) {
           const famIds = fams.map(f => f.id)
-          // دُفعات بحد أقصى 200 لكل دُفعة
           const chunks = []
           for (let i = 0; i < famIds.length; i += 200)
             chunks.push(famIds.slice(i, i + 200))
@@ -110,32 +106,31 @@ export default function FamiliesList() {
           const results = await Promise.all(
             chunks.map(chunk =>
               supabase.from('family_members')
-                .select('id, family_id, name, national_id, relation, dob, gender')
+                .select('id,family_id,name,national_id,relation,dob,gender')
                 .in('family_id', chunk)
             )
           )
-          results.forEach(r => { if (r.data) mems.push(...r.data) })
+          const serverMems = []
+          results.forEach(r => { if (!r.error && r.data) serverMems.push(...r.data) })
+          if (serverMems.length) mems = serverMems
         }
 
         // STEP 3: حفظ محلي
-        if (fams.length)  try { await localDB.families.bulkPut(fams) }          catch {}
-        if (camps.length) try { await localDB.camps.bulkPut(camps) }            catch {}
-        if (mems.length)  try { await localDB.family_members.bulkPut(mems) }    catch {}
+        if (fams.length)  try { await localDB.families.bulkPut(fams) }        catch {}
+        if (camps.length) try { await localDB.camps.bulkPut(camps) }          catch {}
+        if (mems.length)  try { await localDB.family_members.bulkPut(mems) }  catch {}
 
         applyData(fams, camps, mems)
-        setFromCache(false)
 
-        if (fRes.error) showToast('تحذير: ' + fRes.error.message, true)
       } catch (err) {
-        console.warn('[families] server error:', err.message)
-        // لا نُظهر خطأ إذا عندنا بيانات محلية
-        const localFams = await localDB.families.toArray().catch(() => [])
-        if (!localFams.length) showToast('خطأ في التحميل: ' + err.message, true)
+        // فشل السيرفر — نبقى على المحلي بدون رسالة خطأ
+        console.warn('[families] server:', err.message)
       } finally {
         setSyncing(false)
-        setLoading(false)
       }
-    } else {
+
+    } catch (err) {
+      console.error('[families] critical:', err.message)
       setLoading(false)
     }
   }
@@ -186,27 +181,32 @@ export default function FamiliesList() {
     } catch (err) { showToast('خطأ: ' + err.message, true) }
   }
 
-  // فلترة مُحسَّنة
   const allCampIds = useMemo(
     () => [...new Set(families.map(f => f.camp_id).filter(Boolean))],
     [families]
   )
 
+  // ترتيب: عدد الأفراد تنازلياً
   const filtered = useMemo(() => {
     return families
       .filter(f => {
         if (filterStatus !== 'all' && !STATUS_GROUPS[filterStatus]?.includes(f.status)) return false
-        if (filterCamp   !== 'all' && f.camp_id !== filterCamp)                          return false
+        if (filterCamp   !== 'all' && f.camp_id !== filterCamp) return false
         if (!search) return true
         const q = search.toLowerCase()
         return (f.head_name || '').toLowerCase().includes(q) ||
                (f.head_id   || '').includes(q)               ||
                (f.phone1    || '').includes(q)
       })
-      .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
-  }, [families, filterStatus, filterCamp, search])
+      .sort((a, b) => {
+        // ترتيب حسب عدد الأفراد تنازلياً (الأكبر أولاً)
+        const diff = (memberCount[b.id] || 0) - (memberCount[a.id] || 0)
+        if (diff !== 0) return diff
+        // إذا متساوي → الأحدث أولاً
+        return new Date(b.updated_at || 0) - new Date(a.updated_at || 0)
+      })
+  }, [families, filterStatus, filterCamp, search, memberCount])
 
-  // عدد كل مجموعة (بدون إعادة حساب في JSX)
   const groupCounts = useMemo(() => ({
     all:      families.length,
     active:   families.filter(f => STATUS_GROUPS.active.includes(f.status)).length,
@@ -222,8 +222,8 @@ export default function FamiliesList() {
         subtitle={
           <span className="flex items-center gap-2">
             <span>{families.length} أسرة</span>
-            {fromCache && !syncing && <span className="text-[10px] text-muted">📱 محلي</span>}
             {syncing && <span className="text-[10px] text-accent animate-pulse">🔄 تحديث...</span>}
+            {!navigator.onLine && <span className="text-[10px] text-red">📴 أوف لاين</span>}
           </span>
         }
         action={canWrite && (
@@ -248,7 +248,7 @@ export default function FamiliesList() {
         ))}
       </div>
 
-      {/* فلاتر الحالة */}
+      {/* فلاتر */}
       <div className="flex gap-2 mb-2">
         {[
           { key: 'all',      label: 'الكل',     count: groupCounts.all },
@@ -284,7 +284,6 @@ export default function FamiliesList() {
 
       <SearchBar value={search} onChange={setSearch} placeholder="بحث بالاسم أو الهوية أو الجوال..." />
 
-      {/* القائمة */}
       {loading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
       ) : filtered.length === 0 ? (
@@ -309,13 +308,23 @@ export default function FamiliesList() {
                 className="bg-surface border border-border rounded-xl p-4 active:scale-98 transition-all cursor-pointer hover:border-accent/40">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-sm mb-1 truncate">
+                    {/* الاسم */}
+                    <div className="font-bold text-white text-sm mb-1.5 truncate">
                       {sm.dot} {family.head_name || '—'}
                     </div>
-                    <div className="text-muted text-xs" dir="ltr">{family.head_id}</div>
-                    {cn && <div className="text-blue text-xs mt-0.5 font-bold">🏕️ {cn}</div>}
+                    {/* رقم الهوية — أبيض */}
+                    <div className="text-white text-xs font-medium" dir="ltr">
+                      🪪 {family.head_id}
+                    </div>
+                    {/* المخيم */}
+                    {cn && (
+                      <div className="text-blue text-xs mt-1 font-bold">🏕️ {cn}</div>
+                    )}
+                    {/* الجوال — أبيض */}
                     {family.phone1 && (
-                      <div className="text-muted text-xs mt-0.5" dir="ltr">📞 {family.phone1}</div>
+                      <div className="text-white text-xs mt-0.5 font-medium" dir="ltr">
+                        📞 {family.phone1}
+                      </div>
                     )}
                     {family.tent && (
                       <div className="text-muted text-[10px] mt-0.5">⛺ {family.tent}</div>
@@ -339,22 +348,21 @@ export default function FamiliesList() {
         title="تفاصيل الأسرة" size="lg">
         {selected && (
           <div className="flex flex-col gap-4">
-            {/* بيانات رب الأسرة */}
             <div className="bg-surface2 rounded-xl p-4 border border-accent/20">
               <div className="text-accent text-xs font-bold mb-3">👤 رب الأسرة</div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  ['الاسم',            selected.head_name],
-                  ['رقم الهوية',       selected.head_id],
-                  ['الجوال',           selected.phone1],
-                  ['جوال 2',           selected.phone2],
-                  ['الجنس',            selected.head_gender === 'male' ? 'ذكر' : selected.head_gender === 'female' ? 'أنثى' : null],
+                  ['الاسم',             selected.head_name],
+                  ['رقم الهوية',        selected.head_id],
+                  ['الجوال',            selected.phone1],
+                  ['جوال 2',            selected.phone2],
+                  ['الجنس',             selected.head_gender === 'male' ? 'ذكر' : selected.head_gender === 'female' ? 'أنثى' : null],
                   ['الحالة الاجتماعية', selected.head_marital],
-                  ['المخيم',           campMap[selected.camp_id]],
-                  ['الخيمة',           selected.tent],
-                  ['العنوان الأصلي',   selected.original_address],
-                  ['الحالة',           STATUS_MAP[selected.status]?.label],
-                  ['تاريخ التسجيل',    formatDate(selected.created_at)],
+                  ['المخيم',            campMap[selected.camp_id]],
+                  ['الخيمة',            selected.tent],
+                  ['العنوان الأصلي',    selected.original_address],
+                  ['الحالة',            STATUS_MAP[selected.status]?.label],
+                  ['تاريخ التسجيل',     formatDate(selected.created_at)],
                 ].filter(([, v]) => v).map(([k, v]) => (
                   <div key={k} className="bg-surface rounded-xl p-2.5">
                     <div className="text-muted text-[9px] mb-0.5">{k}</div>
@@ -364,10 +372,8 @@ export default function FamiliesList() {
               </div>
             </div>
 
-            {/* أفراد الأسرة */}
             <FamilyMembers members={members} family={selected} />
 
-            {/* الملاحظات */}
             {selected.notes && (
               <div className="bg-surface2 rounded-xl p-3">
                 <div className="text-muted text-[10px] mb-1">📝 ملاحظات</div>
@@ -375,7 +381,6 @@ export default function FamiliesList() {
               </div>
             )}
 
-            {/* الأزرار */}
             <div className="flex gap-2 pt-1">
               <button onClick={() => { navigate(`/families/edit/${selected.id}`); setSelected(null) }}
                 className="flex-1 bg-accent text-bg font-black py-2.5 rounded-xl text-sm">
@@ -395,17 +400,17 @@ export default function FamiliesList() {
   )
 }
 
-// مكوّن منفصل لعرض الأفراد (يمنع إعادة حساب في كل render)
 function FamilyMembers({ members, family }) {
   const filtered = useMemo(() => {
     return members.filter(m => {
-      const rel   = (m.relation  || '').trim()
-      const mName = (m.name      || '').trim().replace(/\s+/g, ' ')
+      if (m.family_id !== family.id) return false
+      const rel   = (m.relation   || '').trim()
+      const mName = (m.name       || '').trim().replace(/\s+/g, ' ')
       const hName = (family.head_name || '').trim().replace(/\s+/g, ' ')
-      if (['رب الأسرة', 'رب أسرة', 'head'].includes(rel))       return false
+      if (['رب الأسرة', 'رب أسرة', 'head'].includes(rel)) return false
       if (family.head_id && m.national_id &&
-          m.national_id.trim() === family.head_id.trim())        return false
-      if (mName && hName && mName === hName)                     return false
+          m.national_id.trim() === family.head_id.trim())  return false
+      if (mName && hName && mName === hName)               return false
       return true
     })
   }, [members, family])
@@ -419,7 +424,6 @@ function FamilyMembers({ members, family }) {
         <div className="text-muted text-xs text-center py-4">لا يوجد أفراد مسجلون</div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {/* رب الأسرة أولاً */}
           <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-accent/10 border border-accent/20">
             <div>
               <div className="text-white text-xs font-bold">{family.head_name}</div>
@@ -427,7 +431,6 @@ function FamilyMembers({ members, family }) {
             </div>
             <span className="text-base">👑</span>
           </div>
-          {/* باقي الأفراد */}
           {filtered.map(m => (
             <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface2">
               <div>
