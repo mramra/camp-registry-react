@@ -32,13 +32,16 @@ const STATUS_GROUPS = {
 // حساب عدد الأفراد (باستثناء رب الأسرة)
 function countMembers(members, family) {
   return members.filter(m => {
-    const rel  = (m.relation  || '').trim()
-    const mName = (m.name     || '').trim().replace(/\s+/g, ' ')
+    // ① يجب أن ينتمي لهذه الأسرة
+    if (m.family_id !== family.id) return false
+    // ② استثناء رب الأسرة
+    const rel   = (m.relation   || '').trim()
+    const mName = (m.name       || '').trim().replace(/\s+/g, ' ')
     const hName = (family.head_name || '').trim().replace(/\s+/g, ' ')
-    if (['رب الأسرة', 'رب أسرة', 'head'].includes(rel))         return false
+    if (['رب الأسرة', 'رب أسرة', 'head'].includes(rel))  return false
     if (family.head_id && m.national_id &&
-        m.national_id.trim() === family.head_id.trim())          return false
-    if (mName && hName && mName === hName)                       return false
+        m.national_id.trim() === family.head_id.trim())   return false
+    if (mName && hName && mName === hName)                return false
     return true
   }).length
 }
