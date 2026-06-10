@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { processSyncQueue } from '../lib/sync'
+import { processSyncQueue, getSyncStats, retryFailed } from '../lib/sync'
 import { syncAllData, getLastSyncTime, setLastSyncTime } from '../lib/syncAll'
 
 const AppContext = createContext(null)
