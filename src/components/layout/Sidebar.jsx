@@ -61,7 +61,7 @@ export default function Sidebar({ open, onClose }) {
       {/* User */}
       {profile && (
         <div className="px-5 py-4 border-b border-border bg-surface2">
-          <div className="font-bold text-white text-sm">{profile.name || '—'}</div>
+          <div className="font-bold text-white text-sm">{profile.full_name || profile.name || '—'}</div>
           <div className="text-muted text-xs mt-0.5">{profile.national_id}</div>
           <span className="inline-block mt-1.5 bg-accent/15 text-accent border border-accent/30 rounded-full px-2.5 py-0.5 text-[10px] font-bold">
             {roleLabel(role)}
