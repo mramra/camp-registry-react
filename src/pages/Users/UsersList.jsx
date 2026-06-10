@@ -46,29 +46,40 @@ export default function UsersList() {
   async function loadData() {
     setLoading(true)
     try {
-      // جلب المخيمات
-      const campsData = await localDB.camps.toArray().catch(() => [])
-      setCamps(campsData)
+      // ① محلي فوراً — عرض فوري بدون انتظار
+      const [localCamps, localUsers] = await Promise.all([
+        localDB.camps.toArray().catch(() => []),
+        localDB.org_members.toArray().catch(() => []),
+      ])
+      setCamps(localCamps)
+      if (localUsers.length) {
+        setUsers(localUsers)
+        setLoading(false)   // أظهر البيانات المحلية فوراً
+      }
 
-      // جلب المستخدمين - أوف لاين أو أون لاين
-      if (online) {
-        const { data, error } = await supabase
-          .from('org_members').select('*').eq('org_id', ORG_ID).order('created_at', { ascending: false })
-        if (error) {
-          console.warn('org_members server error:', error.message)
-          // fallback محلي
-          const local = await localDB.org_members.toArray().catch(() => [])
-          setUsers(local)
-          if (!local.length) showToast('خطأ السيرفر: ' + error.message, true)
-        } else if (data) {
-          try { await localDB.org_members.bulkPut(data) } catch {}
-          setUsers(data)
+      // ② سيرفر في الخلفية
+      if (navigator.onLine) {
+        try {
+          const [campRes, userRes] = await Promise.all([
+            supabase.from('camps').select('*').eq('org_id', ORG_ID),
+            supabase.from('org_members').select('*').eq('org_id', ORG_ID)
+              .order('created_at', { ascending: false }),
+          ])
+          if (campRes.data) {
+            try { await localDB.camps.bulkPut(campRes.data) } catch {}
+            setCamps(campRes.data)
+          }
+          if (userRes.data) {
+            try { await localDB.org_members.bulkPut(userRes.data) } catch {}
+            setUsers(userRes.data)
+          } else if (userRes.error) {
+            console.warn('org_members:', userRes.error.message)
+          }
+        } catch (err) {
+          console.warn('[users] server:', err.message)
         }
-      } else {
-        // وضع أوف لاين - قراءة محلية
-        const local = await localDB.org_members.toArray().catch(() => [])
-        setUsers(local)
-        if (!local.length) showToast('لا توجد بيانات محلية — اتصل بالإنترنت وزامن', true)
+      } else if (!localUsers.length) {
+        showToast('لا توجد بيانات محلية — اتصل بالإنترنت', true)
       }
     } catch(err) { showToast('خطأ: ' + err.message, true) }
     finally { setLoading(false) }
