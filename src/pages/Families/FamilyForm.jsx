@@ -29,14 +29,6 @@ const MARITAL_BY_GENDER = {
   'ذكر':  ['متزوج','أعزب','مطلق','أرمل'],
   'أنثى': ['متزوجة','عزباء','مطلقة','أرملة'],
 }
-const TAGS = [
-  { id:'food',     label:'🍞 غذاء'      },
-  { id:'medicine', label:'💊 دواء'       },
-  { id:'clothes',  label:'👕 ملابس'      },
-  { id:'shelter',  label:'⛺ مأوى'        },
-  { id:'special',  label:'⚠️ احتياج خاص'},
-]
-
 const EMPTY_FORM = {
   head_name:'', head_id:'', phone1:'', phone2:'',
   head_gender:'', head_marital:'',
@@ -80,15 +72,6 @@ export default function FamilyForm() {
   function setF(field, value) {
     setForm(f => ({ ...f, [field]: value }))
     if (errors[field]) setErrors(e => ({ ...e, [field]: null }))
-  }
-
-  function toggleTag(tagId) {
-    setForm(f => ({
-      ...f,
-      tags: f.tags.includes(tagId)
-        ? f.tags.filter(t => t !== tagId)
-        : [...f.tags, tagId],
-    }))
   }
 
   // ══ أفراد الأسرة ══
@@ -138,7 +121,6 @@ export default function FamilyForm() {
         created_by: profile?.user_id || profile?.id,
         updated_at: now,
         created_at: isEdit ? (form.created_at || now) : now,
-        tags: form.tags || [],
         version: (form.version || 0) + 1,
       }
 
@@ -277,21 +259,6 @@ export default function FamilyForm() {
             </div>
             <F label="تفاصيل العنوان" field="address_details"
                placeholder="مثال: حي الشجاعية - شارع صلاح الدين" />
-          </div>
-        </Card>
-
-        {/* ══ الاحتياجات ══ */}
-        <Card title="الاحتياجات" icon="🏷️">
-          <div className="flex flex-wrap gap-2">
-            {TAGS.map(tag => (
-              <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all
-                  ${form.tags.includes(tag.id)
-                    ? 'bg-accent/20 text-accent border-accent'
-                    : 'bg-surface2 border-border text-muted'}`}>
-                {tag.label}
-              </button>
-            ))}
           </div>
         </Card>
 
