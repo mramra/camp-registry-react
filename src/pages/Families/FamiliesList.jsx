@@ -12,23 +12,56 @@ import Modal from '../../components/ui/Modal'
 
 const REQUIRED_FIELDS = ['head_name','head_id','phone1','camp_id']
 
-function isIncomplete(f, members) {
-  // النواقص الأساسية
-  if (REQUIRED_FIELDS.some(k => !f[k]?.toString().trim())) return true
+// حساب النواقص التفصيلية لكل أسرة — مثل التطبيق القديم
+function checkFamilyIssues(f, members) {
+  const issues = []
+  const mems   = members || []
 
-  // النواقص الذكية — حسب الحالة الاجتماعية
+  // ── رب الأسرة ──
+  if (!f.head_name?.trim())
+    issues.push('اسم رب الأسرة ناقص')
+  else if ((f.head_name||'').trim().split(/\s+/).filter(Boolean).length < 4)
+    issues.push('الاسم غير رباعي')
+
+  if (!f.head_id?.trim())
+    issues.push('رقم الهوية ناقص')
+
+  if (!f.phone1?.trim())
+    issues.push('رقم الجوال ناقص')
+
+  if (!f.camp_id)
+    issues.push('المخيم غير محدد')
+
+  if (!f.head_dob)
+    issues.push('تاريخ الميلاد ناقص')
+
+  if (!f.head_marital?.trim())
+    issues.push('الحالة الاجتماعية ناقصة')
+
+  // ── النواقص الذكية — زوجة مفقودة ──
   const marital = (f.head_marital || '').trim()
   if (marital === 'متزوج' || marital === 'متزوجة') {
-    // يجب أن يوجد فرد بصفة زوجة أو زوج
-    const mems = members || []
-    const hasSpouse = mems.some(m => {
-      const rel = (m.relation || '').trim()
-      return rel === 'زوجة' || rel === 'زوج'
-    })
-    if (!hasSpouse) return true
+    const hasSpouse = mems.some(m => m.relation === 'زوجة' || m.relation === 'زوج')
+    if (!hasSpouse) issues.push('بيانات الزوجة ناقصة')
   }
 
-  return false
+  // ── الأفراد ──
+  mems.forEach(m => {
+    const name = (m.name || '').trim()
+    if (!name) return
+    if (name.split(/\s+/).filter(Boolean).length < 4)
+      issues.push(`اسم "${name}" غير رباعي`)
+    if (!m.national_id?.trim())
+      issues.push(`هوية "${name}" ناقصة`)
+    if (!m.dob)
+      issues.push(`تاريخ ميلاد "${name}" ناقص`)
+  })
+
+  return issues
+}
+
+function isIncomplete(f, members) {
+  return checkFamilyIssues(f, members).length > 0
 }
 
 function calcAge(dob) {
@@ -556,29 +589,15 @@ function DuplicateWarnings({ family, families, allMembers }) {
   const issues = []
 
   // ── النواقص ──
-  // النواقص الأساسية
-  const missing = REQUIRED_FIELDS.filter(f => !family[f]?.toString().trim())
-  if (missing.length) {
+  // كل النواقص دفعة واحدة
+  const famMems = allMembers.filter(m => m.family_id === family.id)
+  const allIssues = checkFamilyIssues(family, famMems)
+  if (allIssues.length) {
     issues.push({
       color: 'red', icon: '⚠️',
-      title: 'بيانات ناقصة',
-      detail: [missing.map(f => FIELD_LABELS[f]).join('، ')]
+      title: `${allIssues.length} نقص في بيانات الأسرة`,
+      detail: allIssues
     })
-  }
-
-  // النواقص الذكية — زوجة مفقودة
-  const marital = (family.head_marital || '').trim()
-  if (marital === 'متزوج' || marital === 'متزوجة') {
-    const hasSpouse = allMembers.some(m =>
-      m.family_id === family.id && (m.relation === 'زوجة' || m.relation === 'زوج')
-    )
-    if (!hasSpouse) {
-      issues.push({
-        color: 'red', icon: '⚠️',
-        title: 'ناقص — بيانات الزوجة',
-        detail: ['رب الأسرة متزوج ولم تُضف بيانات الزوجة']
-      })
-    }
   }
 
   // ── تكرار هوية رب الأسرة ──
