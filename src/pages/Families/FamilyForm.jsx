@@ -217,15 +217,40 @@ export default function FamilyForm() {
 
   useEffect(() => {
     localDB.camps.toArray().catch(()=>[]).then(setCamps)
+
     if (isEdit) {
+      // ① جلب من localDB فوراً
       localDB.families.get(id).catch(()=>null).then(f => {
-        if (f) setForm({ ...EMPTY_FORM, ...f })
+        if (f) setForm({ ...EMPTY_FORM, ...f,
+          categories:    f.categories    || [],
+          economic_level:f.economic_level || '',
+          num_orphans:   f.num_orphans   || 0,
+        })
       })
-      localDB.family_members.where('family_id').equals(id).toArray()
-        .catch(()=>[]).then(setMembers)
+      localDB.family_members.where('family_id').equals(id)
+        .toArray().catch(()=>[]).then(setMembers)
+
+      // ② جلب من Supabase للتأكد من البيانات الكاملة
       if (navigator.onLine) {
+        supabase.from('families').select('*').eq('id', id).single()
+          .then(({ data }) => {
+            if (data) {
+              setForm({ ...EMPTY_FORM, ...data,
+                categories:    data.categories    || [],
+                economic_level:data.economic_level || '',
+                num_orphans:   data.num_orphans   || 0,
+              })
+              // حفظ محلي محدّث
+              localDB.families.put(data).catch(()=>{})
+            }
+          })
         supabase.from('family_members').select('*').eq('family_id', id)
-          .then(({ data }) => { if (data?.length) setMembers(data) })
+          .then(({ data }) => {
+            if (data?.length) {
+              setMembers(data)
+              localDB.family_members.bulkPut(data).catch(()=>{})
+            }
+          })
       }
     }
   }, [id])
