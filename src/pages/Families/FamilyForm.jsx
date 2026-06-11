@@ -28,11 +28,27 @@ const MARITAL_BY_GENDER = {
   'أنثى': ['متزوجة','عزباء','مطلقة','أرملة'],
 }
 
+
+const FAMILY_CATEGORIES = [
+  { key:'martyr',      label:'🕊️ أسرة شهيد'  },
+  { key:'captive',     label:'⛓️ أسرة أسير'   },
+  { key:'no_provider', label:'💔 فاقد معيل'   },
+  { key:'destroyed',   label:'🏗️ بيت مهدم'   },
+  { key:'large',       label:'👨‍👩‍👧‍👦 أسرة كبيرة' },
+]
+const ECONOMIC_LEVELS = [
+  { key:'extreme_poverty', label:'🔴 فقر مدقع'       },
+  { key:'poor',            label:'🟠 فقير'           },
+  { key:'worker',          label:'🟡 عامل / متوسط'   },
+  { key:'employee',        label:'🟢 موظف / متوسط'   },
+  { key:'well_off',        label:'🔵 ميسور'          },
+]
 const EMPTY_FORM = {
   head_name:'', head_id:'', phone1:'', phone2:'',
   head_gender:'', head_marital:'', head_dob:'',
   camp_id:'', tent:'', tent2:'',
   original_address:'', address_details:'', notes:'',
+  categories:[], economic_level:'', num_orphans:0,
 }
 const newMember = () => ({
   id: crypto.randomUUID(),
@@ -487,6 +503,46 @@ export default function FamilyForm() {
               className="w-full py-2.5 border border-dashed border-green rounded-xl text-green text-sm font-bold bg-green/5">
               ➕ إضافة فرد
             </button>
+          </div>
+        </Card>
+
+
+        {/* ══ الفئات الاجتماعية ══ */}
+        <Card title="الفئات الاجتماعية" icon="🏷️">
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-bold text-muted block mb-2">فئة الأسرة</label>
+              <div className="flex flex-wrap gap-2">
+                {FAMILY_CATEGORIES.map(cat => (
+                  <button key={cat.key} type="button"
+                    onClick={() => setF('categories', (form.categories||[]).includes(cat.key)
+                      ? (form.categories||[]).filter(c=>c!==cat.key)
+                      : [...(form.categories||[]), cat.key])}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all
+                      ${(form.categories||[]).includes(cat.key)
+                        ? 'bg-accent/20 text-accent border-accent'
+                        : 'bg-surface2 border-border text-muted'}`}>
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">المستوى الاقتصادي</label>
+              <select value={form.economic_level||''}
+                onChange={e=>setF('economic_level',e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">— غير محدد —</option>
+                {ECONOMIC_LEVELS.map(l=><option key={l.key} value={l.key}>{l.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">عدد الأيتام في الأسرة</label>
+              <input type="number" min="0" max="20" dir="ltr"
+                value={form.num_orphans||0}
+                onChange={e=>setF('num_orphans',parseInt(e.target.value)||0)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
+            </div>
           </div>
         </Card>
 
