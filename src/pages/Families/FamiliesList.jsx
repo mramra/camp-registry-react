@@ -605,8 +605,7 @@ function DuplicateWarnings({ family, families, allMembers }) {
         color: 'blue',
         icon: '📞',
         title: `الجوال ${family.phone1} مكرر مع`,
-        detail: dupFams.map(f => `رب الأسرة ${f.head_name}`).join('
-')
+        detail: dupFams.map(f => `رب الأسرة ${f.head_name}`)
       })
     }
   }
