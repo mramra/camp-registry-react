@@ -14,18 +14,9 @@ import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
 
 const STATUS_MAP = {
-  active:   { label:'نشط',   color:'green',  dot:'🟢' },
-  pending:  { label:'معلق',  color:'accent', dot:'🟡' },
-  departed: { label:'مغادر', color:'red',    dot:'🔴' },
-  ok:       { label:'نشط',   color:'green',  dot:'🟢' },
-  need:     { label:'نشط',   color:'green',  dot:'🟢' },
-  urgent:   { label:'نشط',   color:'green',  dot:'🟢' },
-  inactive: { label:'مغادر', color:'red',    dot:'🔴' },
-}
-const STATUS_GROUPS = {
-  active:   ['active','ok','need','urgent'],
-  pending:  ['pending'],
-  departed: ['departed','inactive'],
+  active:   { label: 'نشط',   color: 'green',  dot: '🟢' },
+  pending:  { label: 'معلق',  color: 'accent', dot: '🟡' },
+  departed: { label: 'مغادر', color: 'red',    dot: '🔴' },
 }
 
 // حقول النواقص
@@ -190,7 +181,7 @@ export default function FamiliesList() {
     return families
       .filter(f => {
         // حالة
-        if (filterStatus !== 'all' && !STATUS_GROUPS[filterStatus]?.includes(f.status)) return false
+        if (filterStatus !== 'all' && f.status !== filterStatus) return false
         // مخيم
         if (filterCamp !== 'all' && f.camp_id !== filterCamp) return false
         // جودة البيانات
@@ -223,9 +214,9 @@ export default function FamiliesList() {
 
   const gc = useMemo(() => ({
     all:        families.length,
-    active:     families.filter(f => STATUS_GROUPS.active.includes(f.status)).length,
-    pending:    families.filter(f => STATUS_GROUPS.pending.includes(f.status)).length,
-    departed:   families.filter(f => STATUS_GROUPS.departed.includes(f.status)).length,
+    active:     families.filter(f => f.status === 'active').length,
+    pending:    families.filter(f => f.status === 'pending').length,
+    departed:   families.filter(f => f.status === 'departed').length,
     incomplete: families.filter(f => isIncomplete(f)).length,
     dup_id:     families.filter(f => dupIds.has(f.head_id)).length,
     dup_phone:  families.filter(f => dupPhones.has(f.phone1)).length,
