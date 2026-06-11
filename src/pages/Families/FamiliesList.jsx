@@ -60,9 +60,15 @@ export default function FamiliesList() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    loadLocal().then(localFams => {
-      // إذا Dexie فارغة → جلب من السيرفر فوراً
-      syncBackground()
+    loadLocal().then(async () => {
+      // تحقق من وقت آخر مزامنة — إذا مضى أكثر من 5 دقائق أو فارغة → زامن
+      try {
+        const meta = await localDB.meta.get('families_synced_at').catch(() => null)
+        const lastSync = meta?.value ? new Date(meta.value) : null
+        const fiveMin = 5 * 60 * 1000
+        const needsSync = !lastSync || (Date.now() - lastSync.getTime() > fiveMin)
+        if (needsSync) syncBackground()
+      } catch { syncBackground() }
     })
   }, [])
 
@@ -130,6 +136,8 @@ export default function FamiliesList() {
 
       const localCamps = camps || await localDB.camps.toArray().catch(()=>[])
       applyData(fams, localCamps, mems)
+      // حفظ وقت آخر مزامنة
+      try { await localDB.meta.put({ key: 'families_synced_at', value: new Date().toISOString() }) } catch {}
     } catch(e) { console.warn('[sync]', e.message) }
     finally { setSyncing(false) }
   }
@@ -634,40 +642,91 @@ function DuplicateWarnings({ family, families, allMembers }) {
   )
 }
 
+function getMemberIcon(relation, gender) {
+  const rel = (relation || '').trim()
+  const g   = (gender   || '').trim()
+  const isFemale = g === 'أنثى' || g === 'female'
+  const isMale   = g === 'ذكر'  || g === 'male'
+  if (rel === 'زوجة' || rel === 'زوج')            return '💑'
+  if (rel === 'ابن'  || rel === 'ولد')             return '👦'
+  if (rel === 'ابنة' || rel === 'بنت')             return '👧'
+  if (rel === 'أب'   || rel === 'أم')              return isFemale ? '👩' : '👨'
+  if (rel === 'أخ'   || rel === 'أخت')             return isFemale ? '👩' : '👦'
+  if (rel === 'جد'   || rel === 'جدة')             return isFemale ? '👵' : '👴'
+  if (isFemale) return '👩'
+  if (isMale)   return '👨'
+  return '👤'
+}
+
+function calcMemberAge(dob) {
+  if (!dob) return null
+  const b = new Date(dob), t = new Date()
+  let age = t.getFullYear() - b.getFullYear()
+  if (t.getMonth() < b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) age--
+  return age >= 0 ? age : null
+}
+
 function FamilyMembersView({ members, family }) {
   const HEALTH_ICONS = { مريض:'🤒', معاق:'♿', مزمن:'💊', مصاب:'🩹' }
+
+  // ترتيب: زوجة أولاً، ثم حسب تاريخ الميلاد (الأكبر أولاً)
+  const REL_ORDER = { 'زوجة':0, 'زوج':0, 'ابن':1, 'ولد':1, 'ابنة':1, 'بنت':1 }
+  const sorted = [...members].sort((a, b) => {
+    const ra = REL_ORDER[a.relation?.trim()] ?? 2
+    const rb = REL_ORDER[b.relation?.trim()] ?? 2
+    if (ra !== rb) return ra - rb
+    // نفس الفئة → ترتيب حسب تاريخ الميلاد (الأكبر سناً أولاً)
+    const da = a.dob ? new Date(a.dob).getTime() : 0
+    const db = b.dob ? new Date(b.dob).getTime() : 0
+    return da - db  // الأقدم تاريخاً = الأكبر سناً أولاً
+  })
+
   if (!members.length) return (
     <div className="text-muted text-xs text-center py-3">لا يوجد أفراد مسجلون</div>
   )
+
   return (
     <div>
       <div className="text-accent text-xs font-bold mb-2">
         👨‍👩‍👧‍👦 أفراد الأسرة ({members.length + 1} فرد)
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-accent/10 border border-accent/20">
-          <div>
+        {/* رب الأسرة */}
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20">
+          <span className="text-xl">👑</span>
+          <div className="flex-1 min-w-0">
             <div className="text-white text-xs font-bold">{family.head_name}</div>
-            <div className="text-muted text-[10px]">رب الأسرة · {family.head_id}</div>
-          </div>
-          <span>👑</span>
-        </div>
-        {members.map(m => (
-          <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface2">
-            <div>
-              <div className="text-white text-xs font-bold">{m.name}</div>
-              <div className="text-muted text-[10px]">
-                {m.relation}{m.national_id?` · ${m.national_id}`:''}{m.dob?` · ${formatDate(m.dob)}`:''}
-              </div>
+            <div className="text-muted text-[10px]">
+              رب الأسرة
+              {family.head_id ? ` · ${family.head_id}` : ''}
+              {family.head_dob ? ` · ${calcMemberAge(family.head_dob)} سنة` : ''}
             </div>
-            <div className="flex flex-col items-end gap-0.5">
-              <span>{m.gender==='ذكر'||m.gender==='male'?'👦':m.gender==='أنثى'||m.gender==='female'?'👧':'👤'}</span>
-              {m.health && m.health!=='سليم' && (
-                <span className="text-[10px] text-red">{HEALTH_ICONS[m.health]||'⚠️'} {m.health}</span>
+          </div>
+          <span className="text-[10px] text-accent font-bold">
+            {family.head_gender === 'ذكر' ? '👨' : family.head_gender === 'أنثى' ? '👩' : ''}
+          </span>
+        </div>
+        {/* باقي الأفراد */}
+        {sorted.map(m => {
+          const age  = calcMemberAge(m.dob)
+          const icon = getMemberIcon(m.relation, m.gender)
+          return (
+            <div key={m.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-surface2">
+              <span className="text-xl">{icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-xs font-bold">{m.name}</div>
+                <div className="text-muted text-[10px]">
+                  {m.relation || '—'}
+                  {m.national_id ? ` · ${m.national_id}` : ''}
+                  {age !== null ? ` · ${age} سنة` : m.dob ? ` · ${formatDate(m.dob)}` : ''}
+                </div>
+              </div>
+              {m.health && m.health !== 'سليم' && (
+                <span className="text-[10px] text-red">{HEALTH_ICONS[m.health] || '⚠️'} {m.health}</span>
               )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
