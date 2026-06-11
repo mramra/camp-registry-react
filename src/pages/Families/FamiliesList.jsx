@@ -436,17 +436,11 @@ export default function FamiliesList() {
       <Modal open={!!selected} onClose={() => { setSelected(null); setSelMembers([]) }} title="تفاصيل الأسرة" size="lg">
         {selected && (
           <div className="flex flex-col gap-4">
-            {(isIncomplete(selected)||dupIds.has(selected.head_id)||dupPhones.has(selected.phone1)) && (
-              <div className="bg-red/10 border border-red/30 rounded-xl p-3 flex flex-col gap-1">
-                {isIncomplete(selected) && (
-                  <span className="text-red text-xs">
-                    ⚠️ بيانات ناقصة: {REQUIRED_FIELDS.filter(f=>!selected[f]?.toString().trim()).join(', ')}
-                  </span>
-                )}
-                {dupIds.has(selected.head_id)   && <span className="text-accent text-xs">🔁 رقم الهوية مكرر في أسرة أخرى</span>}
-                {dupPhones.has(selected.phone1) && <span className="text-blue text-xs">📞 رقم الجوال مكرر في أسرة أخرى</span>}
-              </div>
-            )}
+            <DuplicateWarnings
+              family={selected}
+              families={families}
+              allMembers={allMembers}
+            />
             <div className="bg-surface2 rounded-xl p-4 border border-accent/20">
               <div className="text-accent text-xs font-bold mb-3">👤 رب الأسرة</div>
               <div className="grid grid-cols-2 gap-2">
@@ -490,6 +484,102 @@ export default function FamiliesList() {
           </div>
         )}
       </Modal>
+    </div>
+  )
+}
+
+function DuplicateWarnings({ family, families, allMembers }) {
+  const REQUIRED_FIELDS = ['head_name','head_id','phone1','camp_id']
+  const FIELD_LABELS = { head_name:'الاسم', head_id:'رقم الهوية', phone1:'الجوال', camp_id:'المخيم' }
+
+  const issues = []
+
+  // ── النواقص ──
+  const missing = REQUIRED_FIELDS.filter(f => !family[f]?.toString().trim())
+  if (missing.length) {
+    issues.push({
+      color: 'red',
+      icon: '⚠️',
+      title: 'بيانات ناقصة',
+      detail: missing.map(f => FIELD_LABELS[f]).join('، ')
+    })
+  }
+
+  // ── تكرار الهوية ──
+  if (family.head_id) {
+    const dupFams = families.filter(f =>
+      f.id !== family.id && f.head_id === family.head_id
+    )
+    const dupMems = allMembers.filter(m =>
+      m.family_id !== family.id && m.national_id === family.head_id
+    )
+    if (dupFams.length || dupMems.length) {
+      const names = [
+        ...dupFams.map(f => `أسرة ${f.head_name}`),
+        ...dupMems.map(m => `${m.name} (فرد)`)
+      ]
+      issues.push({
+        color: 'purple',
+        icon: '🔁',
+        title: `هوية رب الأسرة مكررة مع`,
+        detail: names.join('، ')
+      })
+    }
+  }
+
+  // ── تكرار هويات الأفراد ──
+  const myMembers = allMembers.filter(m => m.family_id === family.id && m.national_id)
+  myMembers.forEach(m => {
+    const dupFams = families.filter(f => f.id !== family.id && f.head_id === m.national_id)
+    const dupMems = allMembers.filter(x =>
+      x.family_id !== family.id && x.national_id === m.national_id
+    )
+    if (dupFams.length || dupMems.length) {
+      const names = [
+        ...dupFams.map(f => `رب أسرة ${f.head_name}`),
+        ...dupMems.map(x => `${x.name} (فرد)`)
+      ]
+      issues.push({
+        color: 'purple',
+        icon: '🔁',
+        title: `هوية الفرد "${m.name}" مكررة مع`,
+        detail: names.join('، ')
+      })
+    }
+  })
+
+  // ── تكرار الجوال ──
+  if (family.phone1) {
+    const clean = p => (p||'').replace(/\s/g,'')
+    const dupFams = families.filter(f =>
+      f.id !== family.id && clean(f.phone1) === clean(family.phone1)
+    )
+    if (dupFams.length) {
+      issues.push({
+        color: 'blue',
+        icon: '📞',
+        title: `الجوال ${family.phone1} مكرر مع`,
+        detail: dupFams.map(f => f.head_name).join('، ')
+      })
+    }
+  }
+
+  if (!issues.length) return null
+
+  const colorMap = {
+    red:    'bg-red/10 border-red/30 text-red',
+    purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
+    blue:   'bg-blue/10 border-blue/30 text-blue',
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {issues.map((issue, i) => (
+        <div key={i} className={`border rounded-xl p-3 ${colorMap[issue.color]}`}>
+          <div className="text-xs font-bold mb-0.5">{issue.icon} {issue.title}</div>
+          <div className="text-[11px] opacity-80">{issue.detail}</div>
+        </div>
+      ))}
     </div>
   )
 }
