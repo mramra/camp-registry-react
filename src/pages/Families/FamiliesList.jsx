@@ -62,7 +62,7 @@ export default function FamiliesList() {
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
-    setLoading(true)
+    // Dexie فقط — فوري بدون شبكة
     try {
       const [lFams, lCamps, lMems] = await Promise.all([
         localDB.families.toArray().catch(() => []),
@@ -70,38 +70,41 @@ export default function FamiliesList() {
         localDB.family_members.toArray().catch(() => []),
       ])
       applyData(lFams, lCamps, lMems)
-      setLoading(false)
-      if (!navigator.onLine) return
-      setSyncing(true)
-      try {
-        const [fRes, cRes] = await Promise.all([
-          supabase.from('families').select('*').eq('org_id', ORG_ID)
-            .order('updated_at', { ascending: false }).limit(1000),
-          supabase.from('camps').select('*').eq('org_id', ORG_ID),
-        ])
-        const fams  = fRes.error  ? lFams  : (fRes.data  || [])
-        const camps = cRes.error  ? lCamps : (cRes.data  || [])
-        let mems = lMems
-        if (fams.length && !fRes.error) {
-          const ids = fams.map(f => f.id)
-          const chunks = []
-          for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i,i+200))
-          const res = await Promise.all(chunks.map(c =>
-            supabase.from('family_members')
-              .select('id,family_id,name,national_id,relation,dob,gender,health')
-              .in('family_id', c)
-          ))
-          const sm = []
-          res.forEach(r => { if (!r.error && r.data) sm.push(...r.data) })
-          if (sm.length) mems = sm
-        }
-        if (fams.length)  try { await localDB.families.bulkPut(fams) }       catch {}
-        if (camps.length) try { await localDB.camps.bulkPut(camps) }          catch {}
-        if (mems.length)  try { await localDB.family_members.bulkPut(mems) }  catch {}
-        applyData(fams, camps, mems)
-      } catch (err) { console.warn(err) }
-      finally { setSyncing(false) }
-    } catch (err) { console.error(err); setLoading(false) }
+    } catch (err) { console.error(err) }
+    finally { setLoading(false) }
+  }
+
+  // مزامنة يدوية — عند الضغط على زر التحديث
+  async function syncFromServer() {
+    if (!navigator.onLine) return showToast('لا يوجد اتصال', true)
+    setSyncing(true)
+    try {
+      const [fRes, cRes] = await Promise.all([
+        supabase.from('families').select('*').eq('org_id', ORG_ID)
+          .order('updated_at', { ascending: false }).limit(1000),
+        supabase.from('camps').select('*').eq('org_id', ORG_ID),
+      ])
+      const fams  = !fRes.error  && fRes.data  ? fRes.data  : []
+      const camps = !cRes.error  && cRes.data  ? cRes.data  : []
+      let mems = []
+      if (fams.length) {
+        const ids = fams.map(f => f.id)
+        const chunks = []
+        for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i,i+200))
+        const res = await Promise.all(chunks.map(c =>
+          supabase.from('family_members')
+            .select('id,family_id,name,national_id,relation,dob,gender,health')
+            .in('family_id', c)
+        ))
+        res.forEach(r => { if (!r.error && r.data) mems.push(...r.data) })
+      }
+      if (fams.length)  try { await localDB.families.bulkPut(fams) }       catch {}
+      if (camps.length) try { await localDB.camps.bulkPut(camps) }          catch {}
+      if (mems.length)  try { await localDB.family_members.bulkPut(mems) }  catch {}
+      applyData(fams, camps, mems)
+      showToast(`✅ تم التحديث — ${fams.length} أسرة`)
+    } catch (err) { showToast('خطأ: ' + err.message, true) }
+    finally { setSyncing(false) }
   }
 
   function applyData(fams, camps, mems) {
@@ -191,10 +194,18 @@ export default function FamiliesList() {
             {!navigator.onLine && <span className="text-[10px] text-red">📴</span>}
           </span>
         }
-        action={canWrite && (
-          <button onClick={() => navigate('/families/add')}
-            className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">➕ إضافة</button>
-        )}
+        action={
+          <div className="flex gap-2">
+            <button onClick={syncFromServer} disabled={syncing}
+              className="bg-surface2 border border-border text-white font-bold px-3 py-2 rounded-xl text-sm disabled:opacity-50">
+              {syncing ? '⏳' : '🔄'}
+            </button>
+            {canWrite && (
+              <button onClick={() => navigate('/families/add')}
+                className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">➕ إضافة</button>
+            )}
+          </div>
+        }
       />
 
       {/* شريط البحث */}
