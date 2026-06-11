@@ -240,6 +240,8 @@ export default function FamiliesList() {
   // ── حساب التكرارات ───────────────────────────────────
   // حساب التكرارات شاملاً أفراد الأسرة
   const { dupFamilyIds, dupPhoneFamilyIds, counts } = useMemo(() => {
+    // الأسر المفلترة بالمخيم فقط (للأعداد)
+    const filteredByCamp = filterCamp ? families.filter(f => f.camp_id === filterCamp) : families
     // ── تكرار الهويات (رب الأسرة + الأفراد) ──
     const idToFams = {}  // هوية → Set من family_ids
     families.forEach(f => {
@@ -279,8 +281,12 @@ export default function FamiliesList() {
     // ── الأسر الناقصة ──
     const memsByFamC = {}
     allMembers.forEach(m => { if (!memsByFamC[m.family_id]) memsByFamC[m.family_id] = []; memsByFamC[m.family_id].push(m) })
-    const incompleteCount = families.filter(f => isIncomplete(f, memsByFamC[f.id])).length
-    const completeCount   = families.filter(f => !isIncomplete(f, memsByFamC[f.id]) && !dupFamilyIds.has(f.id) && !dupPhoneFamilyIds.has(f.id)).length
+    const incompleteCount = filteredByCamp.filter(f => isIncomplete(f, memsByFamC[f.id])).length
+    const completeCount   = filteredByCamp.filter(f => !isIncomplete(f, memsByFamC[f.id]) && !dupFamilyIds.has(f.id) && !dupPhoneFamilyIds.has(f.id)).length
+
+    // أعداد التكرارات في المخيم المختار فقط
+    const dupIdCount    = filteredByCamp.filter(f => dupFamilyIds.has(f.id)).length
+    const dupPhoneCount = filteredByCamp.filter(f => dupPhoneFamilyIds.has(f.id)).length
 
     return {
       dupFamilyIds,
@@ -288,11 +294,11 @@ export default function FamiliesList() {
       counts: {
         incomplete: incompleteCount,
         complete:   completeCount,
-        dup_id:     dupFamilyIds.size,
-        dup_phone:  dupPhoneFamilyIds.size,
+        dup_id:     dupIdCount,
+        dup_phone:  dupPhoneCount,
       }
     }
-  }, [families, allMembers])
+  }, [families, allMembers, filterCamp])
 
   // للتوافق مع باقي الكود
   const dupIds    = dupFamilyIds
@@ -488,8 +494,14 @@ export default function FamiliesList() {
                 const dupCount   = (isDupId?1:0) + (isDupPhone?1:0)
                 return (
                   <tr key={f.id} onClick={() => openFamily(f)}
-                    className={`border-t border-border cursor-pointer transition-colors
-                      ${hasWarn ? 'bg-red/5 hover:bg-red/10' : 'hover:bg-surface2'}`}>
+                    className={`border-t cursor-pointer transition-colors
+                      ${incomplete
+                        ? 'border-red/40 bg-red/5 hover:bg-red/10'
+                        : isDupId
+                          ? 'border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 border-border'
+                          : isDupPhone
+                            ? 'border-blue/40 bg-blue/5 hover:bg-blue/10 border-border'
+                            : 'border-border hover:bg-surface2'}`}>
                     <td className="px-2 py-2.5 text-muted text-[11px]">{i+1}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-bold text-white text-[13px] leading-snug">{f.head_name||'—'}</div>
