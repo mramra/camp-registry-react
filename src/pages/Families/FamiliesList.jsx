@@ -240,8 +240,6 @@ export default function FamiliesList() {
   // ── حساب التكرارات ───────────────────────────────────
   // حساب التكرارات شاملاً أفراد الأسرة
   const { dupFamilyIds, dupPhoneFamilyIds, counts } = useMemo(() => {
-    // الأسر المفلترة بالمخيم فقط (للأعداد)
-    const filteredByCamp = filterCamp ? families.filter(f => f.camp_id === filterCamp) : families
     // ── تكرار الهويات (رب الأسرة + الأفراد) ──
     const idToFams = {}  // هوية → Set من family_ids
     families.forEach(f => {
@@ -279,26 +277,21 @@ export default function FamiliesList() {
     )
 
     // ── الأسر الناقصة ──
-    const memsByFamC = {}
-    allMembers.forEach(m => { if (!memsByFamC[m.family_id]) memsByFamC[m.family_id] = []; memsByFamC[m.family_id].push(m) })
-    const incompleteCount = filteredByCamp.filter(f => isIncomplete(f, memsByFamC[f.id])).length
-    const completeCount   = filteredByCamp.filter(f => !isIncomplete(f, memsByFamC[f.id]) && !dupFamilyIds.has(f.id) && !dupPhoneFamilyIds.has(f.id)).length
+    return { dupFamilyIds, dupPhoneFamilyIds }
+  }, [families, allMembers])
 
-    // أعداد التكرارات في المخيم المختار فقط
-    const dupIdCount    = filteredByCamp.filter(f => dupFamilyIds.has(f.id)).length
-    const dupPhoneCount = filteredByCamp.filter(f => dupPhoneFamilyIds.has(f.id)).length
-
+  // أعداد الفلاتر — تتغير حسب المخيم المختار
+  const counts = useMemo(() => {
+    const base = filterCamp ? families.filter(f => f.camp_id === filterCamp) : families
+    const memsByFam = {}
+    allMembers.forEach(m => { if (!memsByFam[m.family_id]) memsByFam[m.family_id] = []; memsByFam[m.family_id].push(m) })
     return {
-      dupFamilyIds,
-      dupPhoneFamilyIds,
-      counts: {
-        incomplete: incompleteCount,
-        complete:   completeCount,
-        dup_id:     dupIdCount,
-        dup_phone:  dupPhoneCount,
-      }
+      incomplete: base.filter(f => isIncomplete(f, memsByFam[f.id])).length,
+      complete:   base.filter(f => !isIncomplete(f, memsByFam[f.id]) && !dupFamilyIds.has(f.id) && !dupPhoneFamilyIds.has(f.id)).length,
+      dup_id:     base.filter(f => dupFamilyIds.has(f.id)).length,
+      dup_phone:  base.filter(f => dupPhoneFamilyIds.has(f.id)).length,
     }
-  }, [families, allMembers, filterCamp])
+  }, [families, allMembers, filterCamp, dupFamilyIds, dupPhoneFamilyIds])
 
   // للتوافق مع باقي الكود
   const dupIds    = dupFamilyIds
@@ -494,31 +487,45 @@ export default function FamiliesList() {
                 const dupCount   = (isDupId?1:0) + (isDupPhone?1:0)
                 return (
                   <tr key={f.id} onClick={() => openFamily(f)}
-                    className={`border-t border-border cursor-pointer transition-all
-                      ${incomplete
-                        ? 'bg-red/10 border-l-2 border-l-red'
+                    className="border-t border-border cursor-pointer transition-all hover:opacity-90"
+                    style={{
+                      backgroundColor: incomplete
+                        ? 'rgba(239,68,68,0.08)'
                         : isDupId
-                          ? 'bg-purple-500/10 border-l-2 border-l-purple-500'
+                          ? 'rgba(168,85,247,0.08)'
                           : isDupPhone
-                            ? 'bg-blue/10 border-l-2 border-l-blue'
-                            : 'hover:bg-surface2'}`}>
+                            ? 'rgba(59,130,246,0.08)'
+                            : 'transparent',
+                      borderRight: incomplete
+                        ? '3px solid rgba(239,68,68,0.7)'
+                        : isDupId
+                          ? '3px solid rgba(168,85,247,0.7)'
+                          : isDupPhone
+                            ? '3px solid rgba(59,130,246,0.7)'
+                            : 'none',
+                    }}>
                     <td className="px-2 py-2.5 text-muted text-[11px]">{i+1}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-bold text-white text-[13px] leading-snug">{f.head_name||'—'}</div>
                       {f.head_id && <div className="text-muted text-[10px]" dir="ltr">{f.head_id}</div>}
                       <div className="flex gap-1 mt-0.5 flex-wrap">
                         {incomplete && (
-                          <span className="text-[9px] bg-red/15 text-red px-1.5 py-0.5 rounded font-bold">
+                          <span style={{background:'rgba(239,68,68,0.15)',color:'#ef4444',padding:'1px 6px',borderRadius:'4px',fontSize:'10px',fontWeight:'bold'}}>
                             ⚠️ {famIssues.length} نقص
                           </span>
                         )}
-                        {dupCount > 0 && (
-                          <span className="text-[9px] bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded font-bold">
-                            🔁 {dupCount} تكرار
+                        {isDupId && (
+                          <span style={{background:'rgba(168,85,247,0.15)',color:'#a855f7',padding:'1px 6px',borderRadius:'4px',fontSize:'10px',fontWeight:'bold'}}>
+                            🔁 هوية
                           </span>
                         )}
-                        {!incomplete && dupCount === 0 && (
-                          <span className="text-[9px] text-green">✅</span>
+                        {isDupPhone && (
+                          <span style={{background:'rgba(59,130,246,0.15)',color:'#3b82f6',padding:'1px 6px',borderRadius:'4px',fontSize:'10px',fontWeight:'bold'}}>
+                            📞 جوال
+                          </span>
+                        )}
+                        {!incomplete && !isDupId && !isDupPhone && (
+                          <span style={{color:'#22c55e',fontSize:'10px'}}>✅</span>
                         )}
                       </div>
                     </td>
