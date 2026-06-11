@@ -1,0 +1,31 @@
+name: DB Migration — fix status values
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run migration
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          psql "host=db.ojclpkenecicujkqhhlu.supabase.co port=5432 dbname=postgres user=postgres sslmode=require" << 'SQL'
+            -- 1. امسح الـ constraint
+            ALTER TABLE families DROP CONSTRAINT IF EXISTS families_status_check;
+            
+            -- 2. حوّل القيم القديمة
+            UPDATE families SET status = 'active'   WHERE status IN ('ok','need','urgent');
+            UPDATE families SET status = 'departed' WHERE status = 'inactive';
+            
+            -- 3. أضف الـ constraint من جديد
+            ALTER TABLE families ADD CONSTRAINT families_status_check
+              CHECK (status IN ('active','pending','departed'));
+            
+            -- 4. تحقق
+            SELECT status, COUNT(*) FROM families GROUP BY status ORDER BY count DESC;
+          SQL
