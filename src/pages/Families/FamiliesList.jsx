@@ -247,13 +247,14 @@ export default function FamiliesList() {
     const memsByFamC = {}
     allMembers.forEach(m => { if (!memsByFamC[m.family_id]) memsByFamC[m.family_id] = []; memsByFamC[m.family_id].push(m) })
     const incompleteCount = families.filter(f => isIncomplete(f, memsByFamC[f.id])).length
+    const completeCount   = families.filter(f => !isIncomplete(f, memsByFamC[f.id]) && !dupFamilyIds.has(f.id) && !dupPhoneFamilyIds.has(f.id)).length
 
     return {
       dupFamilyIds,
       dupPhoneFamilyIds,
       counts: {
         incomplete: incompleteCount,
-        complete:   families.length - incompleteCount,
+        complete:   completeCount,
         dup_id:     dupFamilyIds.size,
         dup_phone:  dupPhoneFamilyIds.size,
       }
@@ -278,7 +279,7 @@ export default function FamiliesList() {
     if (filterGender) list = list.filter(f => f.head_gender === filterGender)
     const memsByFamF = {}
     allMembers.forEach(m => { if (!memsByFamF[m.family_id]) memsByFamF[m.family_id] = []; memsByFamF[m.family_id].push(m) })
-    if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f, memsByFamF[f.id]) || dupIds.has(f.id) || dupPhones.has(f.id))
+    if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f, memsByFamF[f.id]))
     if (filterMiss === 'complete')   list = list.filter(f => !isIncomplete(f, memsByFamF[f.id]) && !dupIds.has(f.id) && !dupPhones.has(f.id))
     if (filterMiss === 'dup_id')     list = list.filter(f => dupFamilyIds.has(f.id))
     if (filterMiss === 'dup_phone')  list = list.filter(f => dupPhoneFamilyIds.has(f.id))
@@ -310,8 +311,8 @@ export default function FamiliesList() {
     // ترتيب: ناقص أولاً إذا فلتر ناقص، وإلا حسب عدد الأفراد
     if (filterMiss === 'incomplete') {
       list.sort((a,b) => {
-        const aI = (isIncomplete(a, memsByFamF[a.id])?1:0)+(dupIds.has(a.id)?1:0)+(dupPhones.has(a.id)?1:0)
-        const bI = (isIncomplete(b, memsByFamF[b.id])?1:0)+(dupIds.has(b.id)?1:0)+(dupPhones.has(b.id)?1:0)
+        const aI = isIncomplete(a, memsByFamF[a.id]) ? 1 : 0
+        const bI = isIncomplete(b, memsByFamF[b.id]) ? 1 : 0
         return bI - aI
       })
     } else {
