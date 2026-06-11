@@ -331,39 +331,98 @@ export default function FamilyForm() {
     if (Object.keys(errs).length) { setErrors(errs); return }
     setSaving(true)
     try {
-      const now = new Date().toISOString()
-      const familyId = isEdit ? id : crypto.randomUUID()
-      const data = {
+      const now       = new Date().toISOString()
+      const familyId  = isEdit ? id : crypto.randomUUID()
+      const newVersion = (form.version || 0) + 1
+
+      // ═══ بيانات الأسرة الكاملة ═══
+      const familyData = {
         ...form,
-        id: familyId, org_id: ORG_ID,
+        id:         familyId,
+        org_id:     ORG_ID,
         created_by: profile?.user_id || profile?.id,
         updated_at: now,
         created_at: isEdit ? (form.created_at || now) : now,
-        version: (form.version || 0) + 1,
+        version:    newVersion,
+        // الحقول الجديدة
+        categories:     form.categories     || [],
+        economic_level: form.economic_level || null,
+        num_orphans:    form.num_orphans    || 0,
       }
-      await localDB.families.put(data)
-      await enqueue(isEdit ? 'update_family' : 'insert_family', data)
 
+      // ═══ بيانات الأفراد ═══
       const memberDocs = members.map(m => ({
-        ...m,
-        id: m.id || crypto.randomUUID(),
-        family_id: familyId, org_id: ORG_ID,
-        updated_at: now,
+        id:          m.id || crypto.randomUUID(),
+        family_id:   familyId,
+        name:        m.name        || '',
+        gender:      m.gender      || '',
+        relation:    m.relation    || '',
+        national_id: m.national_id || null,
+        dob:         m.dob         || null,
+        health:      m.health      || 'سليم',
+        updated_at:  now,
       }))
-      await localDB.family_members.where('family_id').equals(familyId).delete()
-      if (memberDocs.length) await localDB.family_members.bulkPut(memberDocs)
 
+      // ══════════════════════════════════════════
+      // ① حفظ محلي فوري (قبل أي شيء)
+      // ══════════════════════════════════════════
+      await localDB.families.put(familyData)
+      await localDB.family_members.where('family_id').equals(familyId).delete()
+      if (memberDocs.length) {
+        const withOrgId = memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
+        await localDB.family_members.bulkPut(withOrgId)
+      }
+
+      // إضافة لطابور المزامنة
+      await enqueue(isEdit ? 'update_family' : 'insert_family', familyData)
+
+      // ══════════════════════════════════════════
+      // ② رفع للسيرفر (إذا متصل)
+      // ══════════════════════════════════════════
       if (navigator.onLine) {
-        await supabase.from('families').upsert(data)
+        // رفع الأسرة
+        const { data: savedFamily, error: fErr } = await supabase
+          .from('families').upsert(familyData).select().single()
+
+        if (!fErr && savedFamily) {
+          // تحديث المحلي بما رجع من السيرفر (للتطابق التام)
+          await localDB.families.put({ ...savedFamily,
+            categories:     savedFamily.categories     || [],
+            economic_level: savedFamily.economic_level || null,
+            num_orphans:    savedFamily.num_orphans    || 0,
+          })
+        } else if (fErr) {
+          console.warn('[save family]', fErr.message)
+        }
+
+        // رفع الأفراد (بدون org_id لأن Supabase لا يقبله في family_members)
         if (memberDocs.length) {
           await supabase.from('family_members').delete().eq('family_id', familyId)
-          await supabase.from('family_members').insert(memberDocs)
+          const { data: savedMembers, error: mErr } = await supabase
+            .from('family_members').insert(memberDocs).select()
+
+          if (!mErr && savedMembers?.length) {
+            // تحديث المحلي بما رجع من السيرفر
+            const withOrgId = savedMembers.map(m => ({ ...m, org_id: ORG_ID }))
+            await localDB.family_members.where('family_id').equals(familyId).delete()
+            await localDB.family_members.bulkPut(withOrgId)
+          } else if (mErr) {
+            console.warn('[save members]', mErr.message)
+          }
+        } else {
+          // حذف الأفراد من السيرفر إذا أصبحوا فارغين
+          await supabase.from('family_members').delete().eq('family_id', familyId)
         }
       }
+
       showToast(isEdit ? '✅ تم تحديث الأسرة' : '✅ تمت إضافة الأسرة')
       navigate('/families')
-    } catch (err) { showToast('خطأ: ' + err.message, true) }
-    finally { setSaving(false) }
+    } catch (err) {
+      console.error('[handleSubmit]', err)
+      showToast('خطأ: ' + err.message, true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   // فحص التكرار لرقم الهوية والاسم
