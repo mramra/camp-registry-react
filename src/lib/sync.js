@@ -44,8 +44,6 @@ async function handleSyncItem(item) {
   switch (action) {
     // ── الأسر ──────────────────────────────────────────────
     case 'insert_family':
-      return await upsertWithConflict('families', data)
-
     case 'update_family':
       return await upsertWithConflict('families', data)
 
@@ -66,55 +64,82 @@ async function handleSyncItem(item) {
       break
     }
 
-    // ── التوزيعات ──────────────────────────────────────────
-    case 'insert_dist_round':
-    case 'update_dist_round': {
-      const { error } = await supabase.from('dist_rounds').upsert({ ...data, org_id: ORG_ID })
+    // ── جولات التوزيع ─────────────────────────────────────
+    case 'insert_round':
+    case 'update_round': {
+      const { error } = await supabase
+        .from('dist_rounds')
+        .upsert({ ...data, org_id: ORG_ID })
+      if (error) throw error
+      break
+    }
+
+    // ── دفعات التوزيع ─────────────────────────────────────
+    case 'insert_batch':
+    case 'update_batch': {
+      const { error } = await supabase
+        .from('camp_distributions')
+        .upsert({ ...data, org_id: ORG_ID })
+      if (error) throw error
+      break
+    }
+
+    // ── سجل استلام الأسر ──────────────────────────────────
+    case 'insert_dist': {
+      const { error } = await supabase
+        .from('camp_dist_families')
+        .upsert({ ...data, org_id: ORG_ID })
       if (error) throw error
       break
     }
 
     // ── الحركات ───────────────────────────────────────────
     case 'insert_movement': {
-      const { error } = await supabase.from('family_movements').insert({ ...data, org_id: ORG_ID })
+      const { error } = await supabase
+        .from('family_movements')
+        .insert({ ...data, org_id: ORG_ID })
+      if (error) throw error
+      break
+    }
+
+    // ── القديمة — للتوافق ─────────────────────────────────
+    case 'insert_dist_round':
+    case 'update_dist_round': {
+      const { error } = await supabase
+        .from('dist_rounds')
+        .upsert({ ...data, org_id: ORG_ID })
       if (error) throw error
       break
     }
 
     default:
-      throw new Error(`Unknown sync action: ${action}`)
+      console.warn(`[sync] unknown action: ${action} — skipping`)
+      break
   }
 }
 
 // ─── Conflict Resolution ──────────────────────────────────
-/**
- * upsertWithConflict — Last-Write-Wins بناءً على version
- * إذا السيرفر أحدث من النسخة المحلية → conflict
- * إذا النسخة المحلية أحدث → رفع للسيرفر
- */
 async function upsertWithConflict(table, localData) {
   const id = localData.id
 
-  // جلب النسخة الحالية من السيرفر
   const { data: serverData } = await supabase
     .from(table).select('id, version, updated_at').eq('id', id).single()
 
   if (serverData) {
-    const serverVersion  = serverData.version  || 0
-    const localVersion   = localData.version   || 0
-    const serverUpdated  = new Date(serverData.updated_at  || 0).getTime()
-    const localUpdated   = new Date(localData.updated_at   || 0).getTime()
+    const serverVersion = serverData.version   || 0
+    const localVersion  = localData.version    || 0
+    const serverUpdated = new Date(serverData.updated_at || 0).getTime()
+    const localUpdated  = new Date(localData.updated_at  || 0).getTime()
 
-    // السيرفر أحدث → تعارض
     if (serverVersion > localVersion || serverUpdated > localUpdated + 5000) {
-      console.warn(`[sync] conflict detected for ${table}/${id}`)
-      // الحل: نحتفظ بالسيرفر ونحدّث المحلي
-      await localDB[table === 'families' ? 'families' : 'camps'].put(serverData)
+      console.warn(`[sync] conflict: ${table}/${id}`)
+      try {
+        await localDB[table === 'families' ? 'families' : 'camps'].put(serverData)
+      } catch {}
       return 'conflict'
     }
   }
 
-  // النسخة المحلية أحدث أو جديدة → رفع للسيرفر
   const { error } = await supabase.from(table).upsert({
     ...localData,
     org_id: ORG_ID,
@@ -135,7 +160,7 @@ export async function enqueue(action, payload) {
   })
 }
 
-// ─── جلب إحصائيات الطابور ─────────────────────────────────
+// ─── إحصائيات الطابور ──────────────────────────────────────
 export async function getSyncStats() {
   const [pending, failed, conflicts] = await Promise.all([
     localDB.sync_queue.where('status').equals('pending').count(),
