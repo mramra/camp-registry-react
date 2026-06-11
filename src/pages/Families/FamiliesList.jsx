@@ -228,15 +228,23 @@ export default function FamiliesList() {
     if (filterGender) list = list.filter(f => f.head_gender === filterGender)
     if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f) || dupIds.has(f.head_id) || dupPhones.has(f.phone1))
     if (filterMiss === 'complete')   list = list.filter(f => !isIncomplete(f) && !dupIds.has(f.head_id) && !dupPhones.has(f.phone1))
-    if (filterMiss === 'dup_id')     list = list.filter(f => dupIds.has(f.head_id))
-    if (filterMiss === 'dup_phone')  list = list.filter(f => dupPhones.has(f.phone1))
+    if (filterMiss === 'dup_id')     list = list.filter(f => dupFamilyIds.has(f.id))
+    if (filterMiss === 'dup_phone')  list = list.filter(f => dupPhoneFamilyIds.has(f.id))
     if (ageMin || ageMax) {
+      const mn = ageMin ? parseInt(ageMin) : 0
+      const mx = ageMax ? parseInt(ageMax) : 999
+      const inRange = age => age !== null && age >= mn && age <= mx
+      // خريطة أفراد الأسر لتسريع البحث
+      const memsByFam = {}
+      allMembers.forEach(m => {
+        if (!memsByFam[m.family_id]) memsByFam[m.family_id] = []
+        memsByFam[m.family_id].push(m)
+      })
       list = list.filter(f => {
-        const age = calcAge(f.head_dob)
-        if (age === null) return false
-        if (ageMin && age < parseInt(ageMin)) return false
-        if (ageMax && age > parseInt(ageMax)) return false
-        return true
+        // افحص رب الأسرة أولاً
+        if (inRange(calcAge(f.head_dob))) return true
+        // افحص أفراد الأسرة
+        return (memsByFam[f.id]||[]).some(m => inRange(calcAge(m.dob)))
       })
     }
     if (search) {
@@ -346,19 +354,19 @@ export default function FamiliesList() {
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState icon="🔍"
-          title={families.length === 0 ? 'لا توجد بيانات' : 'لا توجد نتائج'}
+          title={families.length === 0 ? 'لا توجد بيانات محلية' : 'لا توجد نتائج'}
           subtitle={families.length === 0
-            ? 'اضغط 🔄 لجلب البيانات من الخادم'
+            ? 'اضغط الزر لجلب البيانات من الخادم'
             : 'جرب تغيير الفلاتر'}
           action={
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-2 justify-center flex-wrap">
               {families.length === 0 && (
-                <button onClick={manualSync}
-                  className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">
-                  🔄 جلب البيانات
+                <button onClick={manualSync} disabled={syncing}
+                  className="bg-accent text-bg font-black px-5 py-2.5 rounded-xl text-sm disabled:opacity-60">
+                  {syncing ? '⏳ جاري الجلب...' : '🔄 جلب البيانات'}
                 </button>
               )}
-              {hasFilter && (
+              {hasFilter && families.length > 0 && (
                 <button onClick={resetFilters}
                   className="bg-surface2 border border-border text-white px-4 py-2 rounded-xl text-sm">
                   ↺ مسح الفلاتر
