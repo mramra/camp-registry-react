@@ -59,7 +59,12 @@ export default function FamiliesList() {
   const { showToast } = useApp()
   const navigate = useNavigate()
 
-  useEffect(() => { loadLocal().then(() => syncBackground()) }, [])
+  useEffect(() => {
+    loadLocal().then(localFams => {
+      // إذا Dexie فارغة → جلب من السيرفر فوراً
+      syncBackground()
+    })
+  }, [])
 
   // ── 1. تحميل من Dexie فوراً ─────────────────────────
   async function loadLocal() {
@@ -70,7 +75,8 @@ export default function FamiliesList() {
         localDB.family_members.toArray().catch(()=>[]),
       ])
       applyData(fams, camps, mems)
-    } catch(e) { console.error(e) }
+      return fams
+    } catch(e) { console.error(e); return [] }
     finally { setLoading(false) }
   }
 
@@ -84,9 +90,12 @@ export default function FamiliesList() {
           .order('updated_at', { ascending: false }).limit(1000),
         supabase.from('camps').select('*').eq('org_id', ORG_ID),
       ])
-      const fams  = !fRes.error  && fRes.data  ? fRes.data  : null
-      const camps = !cRes.error  && cRes.data  ? cRes.data  : null
-      if (!fams) return
+      const fams  = (!fRes.error  && fRes.data?.length)  ? fRes.data  : null
+      const camps = (!cRes.error  && cRes.data?.length)  ? cRes.data  : null
+      if (!fams) {
+        console.warn('[sync] fams empty or error:', fRes.error)
+        return
+      }
 
       let mems = null
       const ids = fams.map(f => f.id)
@@ -101,9 +110,23 @@ export default function FamiliesList() {
       res.forEach(r => { if (!r.error && r.data) sm.push(...r.data) })
       mems = sm
 
-      if (fams.length)  try { await localDB.families.bulkPut(fams) }       catch {}
-      if (camps?.length) try { await localDB.camps.bulkPut(camps) }         catch {}
-      if (mems.length)  try { await localDB.family_members.bulkPut(mems) }  catch {}
+      // حفظ في Dexie — نتجاهل أخطاء الـ schema بأمان
+      if (fams.length) {
+        try { await localDB.families.bulkPut(fams) }
+        catch(e) {
+          console.warn('[dexie] families bulkPut:', e.message)
+          // محاولة بديلة — حفظ واحد واحد
+          for (const f of fams) { try { await localDB.families.put(f) } catch {} }
+        }
+      }
+      if (camps?.length) {
+        try { await localDB.camps.bulkPut(camps) }
+        catch(e) { for (const c of camps) { try { await localDB.camps.put(c) } catch {} } }
+      }
+      if (mems.length) {
+        try { await localDB.family_members.bulkPut(mems) }
+        catch(e) { for (const m of mems) { try { await localDB.family_members.put(m) } catch {} } }
+      }
 
       const localCamps = camps || await localDB.camps.toArray().catch(()=>[])
       applyData(fams, localCamps, mems)
