@@ -515,6 +515,10 @@ function DuplicateWarnings({ family, families, allMembers }) {
   const REQUIRED_FIELDS = ['head_name','head_id','phone1','camp_id']
   const FIELD_LABELS = { head_name:'الاسم', head_id:'رقم الهوية', phone1:'الجوال', camp_id:'المخيم' }
 
+  // خريطة الأسر لسهولة البحث
+  const famMap = {}
+  families.forEach(f => { famMap[f.id] = f })
+
   const issues = []
 
   // ── النواقص ──
@@ -528,24 +532,33 @@ function DuplicateWarnings({ family, families, allMembers }) {
     })
   }
 
-  // ── تكرار الهوية ──
+  // ── تكرار هوية رب الأسرة ──
   if (family.head_id) {
-    const dupFams = families.filter(f =>
-      f.id !== family.id && f.head_id === family.head_id
-    )
-    const dupMems = allMembers.filter(m =>
-      m.family_id !== family.id && m.national_id === family.head_id
-    )
-    if (dupFams.length || dupMems.length) {
-      const names = [
-        ...dupFams.map(f => `أسرة ${f.head_name}`),
-        ...dupMems.map(m => `${m.name} (فرد)`)
-      ]
+    const names = []
+
+    // مع أرباب أسر آخرين
+    families.forEach(f => {
+      if (f.id !== family.id && f.head_id === family.head_id)
+        names.push(`رب الأسرة ${f.head_name}`)
+    })
+
+    // مع أفراد أسر أخرى (مع ذكر اسم رب الأسرة)
+    allMembers.forEach(m => {
+      if (m.family_id === family.id) return  // تجاهل أفراد نفس الأسرة
+      if (m.national_id === family.head_id) {
+        const parentFam = famMap[m.family_id]
+        const parentName = parentFam ? parentFam.head_name : '؟'
+        names.push(`الفرد ${m.name} من أسرة ${parentName}`)
+      }
+    })
+
+    if (names.length) {
       issues.push({
         color: 'purple',
         icon: '🔁',
         title: `هوية رب الأسرة مكررة مع`,
-        detail: names.join('، ')
+        detail: names.join('
+')
       })
     }
   }
@@ -553,36 +566,49 @@ function DuplicateWarnings({ family, families, allMembers }) {
   // ── تكرار هويات الأفراد ──
   const myMembers = allMembers.filter(m => m.family_id === family.id && m.national_id)
   myMembers.forEach(m => {
-    const dupFams = families.filter(f => f.id !== family.id && f.head_id === m.national_id)
-    const dupMems = allMembers.filter(x =>
-      x.family_id !== family.id && x.national_id === m.national_id
-    )
-    if (dupFams.length || dupMems.length) {
-      const names = [
-        ...dupFams.map(f => `رب أسرة ${f.head_name}`),
-        ...dupMems.map(x => `${x.name} (فرد)`)
-      ]
+    const names = []
+
+    // مع أرباب أسر
+    families.forEach(f => {
+      if (f.id !== family.id && f.head_id === m.national_id)
+        names.push(`رب الأسرة ${f.head_name}`)
+    })
+
+    // مع أفراد أسر أخرى
+    allMembers.forEach(x => {
+      if (x.family_id === family.id) return  // تجاهل نفس الأسرة
+      if (x.national_id === m.national_id) {
+        const parentFam = famMap[x.family_id]
+        const parentName = parentFam ? parentFam.head_name : '؟'
+        names.push(`الفرد ${x.name} من أسرة ${parentName}`)
+      }
+    })
+
+    if (names.length) {
       issues.push({
         color: 'purple',
         icon: '🔁',
         title: `هوية الفرد "${m.name}" مكررة مع`,
-        detail: names.join('، ')
+        detail: names.join('
+')
       })
     }
   })
 
   // ── تكرار الجوال ──
   if (family.phone1) {
-    const clean = p => (p||'').replace(/\s/g,'')
+    const clean = p => (p||'').replace(/[\s-]/g,'')
+    const myPhone = clean(family.phone1)
     const dupFams = families.filter(f =>
-      f.id !== family.id && clean(f.phone1) === clean(family.phone1)
+      f.id !== family.id && clean(f.phone1) === myPhone
     )
     if (dupFams.length) {
       issues.push({
         color: 'blue',
         icon: '📞',
         title: `الجوال ${family.phone1} مكرر مع`,
-        detail: dupFams.map(f => f.head_name).join('، ')
+        detail: dupFams.map(f => `رب الأسرة ${f.head_name}`).join('
+')
       })
     }
   }
@@ -599,8 +625,12 @@ function DuplicateWarnings({ family, families, allMembers }) {
     <div className="flex flex-col gap-2">
       {issues.map((issue, i) => (
         <div key={i} className={`border rounded-xl p-3 ${colorMap[issue.color]}`}>
-          <div className="text-xs font-bold mb-0.5">{issue.icon} {issue.title}</div>
-          <div className="text-[11px] opacity-80">{issue.detail}</div>
+          <div className="text-xs font-bold mb-1">{issue.icon} {issue.title}</div>
+          {issue.detail.split('\n').map((line, j) => (
+            <div key={j} className="text-[11px] opacity-90 py-0.5 border-t border-white/10 first:border-0">
+              ← {line}
+            </div>
+          ))}
         </div>
       ))}
     </div>
