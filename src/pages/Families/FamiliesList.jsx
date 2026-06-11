@@ -557,8 +557,7 @@ function DuplicateWarnings({ family, families, allMembers }) {
         color: 'purple',
         icon: '🔁',
         title: `هوية رب الأسرة مكررة مع`,
-        detail: names.join('
-')
+        detail: names
       })
     }
   }
@@ -589,8 +588,7 @@ function DuplicateWarnings({ family, families, allMembers }) {
         color: 'purple',
         icon: '🔁',
         title: `هوية الفرد "${m.name}" مكررة مع`,
-        detail: names.join('
-')
+        detail: names
       })
     }
   })
@@ -626,7 +624,7 @@ function DuplicateWarnings({ family, families, allMembers }) {
       {issues.map((issue, i) => (
         <div key={i} className={`border rounded-xl p-3 ${colorMap[issue.color]}`}>
           <div className="text-xs font-bold mb-1">{issue.icon} {issue.title}</div>
-          {issue.detail.split('\n').map((line, j) => (
+          {(Array.isArray(issue.detail) ? issue.detail : [issue.detail]).map((line, j) => (
             <div key={j} className="text-[11px] opacity-90 py-0.5 border-t border-white/10 first:border-0">
               ← {line}
             </div>
