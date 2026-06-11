@@ -478,10 +478,11 @@ export default function FamiliesList() {
             </thead>
             <tbody>
               {filtered.map((f, i) => {
-                const fMems = allMembers.filter(m => m.family_id === f.id)
-                const incomplete = isIncomplete(f, fMems)
-                const isDupId    = dupIds.has(f.head_id)
-                const isDupPhone = dupPhones.has(f.phone1)
+                const fMems      = allMembers.filter(m => m.family_id === f.id)
+                const famIssues  = checkFamilyIssues(f, fMems)
+                const incomplete = famIssues.length > 0
+                const isDupId    = dupIds.has(f.id)
+                const isDupPhone = dupPhones.has(f.id)
                 const hasWarn    = incomplete || isDupId || isDupPhone
                 const mc         = (memberCount[f.id]||0) + 1
                 const dupCount   = (isDupId?1:0) + (isDupPhone?1:0)
