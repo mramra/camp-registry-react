@@ -78,11 +78,11 @@ export default function Analysis() {
         ...mems.map(m => ({ dob: m.dob, gender: m.gender, health: m.health, orphan: m.orphan_status }))
       ]
 
-      // الحالة — active فقط (الإصدار المبسط)
+      // الحالة
       const byStatus = {
         active:   fams.filter(f => f.status === 'active').length,
         pending:  fams.filter(f => f.status === 'pending').length,
-        departed: fams.filter(f => ['departed', 'inactive'].includes(f.status)).length,
+        departed: fams.filter(f => f.status === 'departed').length,
       }
 
       // حسب المخيم
