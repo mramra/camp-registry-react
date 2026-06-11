@@ -400,7 +400,7 @@ export default function FamiliesList() {
       {/* الفلاتر — صف واحد */}
       <div className="flex gap-2 mb-3 flex-wrap items-center">
         <select value={filterMiss} onChange={e => setFilterMiss(e.target.value)} className={SEL}>
-          <option value="">كل الأسر ({families.length})</option>
+          <option value="">{filterCamp ? `كل الأسر (${(filterCamp ? families.filter(f=>f.camp_id===filterCamp) : families).length})` : `كل الأسر (${families.length})`}</option>
           <option value="incomplete">⚠️ ناقص ({counts.incomplete})</option>
           <option value="complete">✅ مكتمل ({counts.complete})</option>
           <option value="dup_id">🔁 هوية مكررة ({counts.dup_id})</option>
@@ -494,14 +494,14 @@ export default function FamiliesList() {
                 const dupCount   = (isDupId?1:0) + (isDupPhone?1:0)
                 return (
                   <tr key={f.id} onClick={() => openFamily(f)}
-                    className={`border-t cursor-pointer transition-colors
+                    className={`border-t border-border cursor-pointer transition-all
                       ${incomplete
-                        ? 'border-red/40 bg-red/5 hover:bg-red/10'
+                        ? 'bg-red/10 border-l-2 border-l-red'
                         : isDupId
-                          ? 'border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 border-border'
+                          ? 'bg-purple-500/10 border-l-2 border-l-purple-500'
                           : isDupPhone
-                            ? 'border-blue/40 bg-blue/5 hover:bg-blue/10 border-border'
-                            : 'border-border hover:bg-surface2'}`}>
+                            ? 'bg-blue/10 border-l-2 border-l-blue'
+                            : 'hover:bg-surface2'}`}>
                     <td className="px-2 py-2.5 text-muted text-[11px]">{i+1}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-bold text-white text-[13px] leading-snug">{f.head_name||'—'}</div>
@@ -509,7 +509,7 @@ export default function FamiliesList() {
                       <div className="flex gap-1 mt-0.5 flex-wrap">
                         {incomplete && (
                           <span className="text-[9px] bg-red/15 text-red px-1.5 py-0.5 rounded font-bold">
-                            ⚠️ ناقص
+                            ⚠️ {famIssues.length} نقص
                           </span>
                         )}
                         {dupCount > 0 && (
