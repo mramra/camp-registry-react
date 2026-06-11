@@ -30,11 +30,8 @@ const MARITAL_BY_GENDER = {
 
 
 const FAMILY_CATEGORIES = [
-  { key:'martyr',      label:'🕊️ أسرة شهيد'  },
-  { key:'captive',     label:'⛓️ أسرة أسير'   },
-  { key:'no_provider', label:'💔 فاقد معيل'   },
-  { key:'destroyed',   label:'🏗️ بيت مهدم'   },
-  { key:'large',       label:'👨‍👩‍👧‍👦 أسرة كبيرة' },
+  { key:'martyr',  label:'🕊️ أسرة شهيد' },
+  { key:'captive', label:'⛓️ أسرة أسير'  },
 ]
 const ECONOMIC_LEVELS = [
   { key:'extreme_poverty', label:'🔴 فقر مدقع'       },
