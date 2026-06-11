@@ -26,6 +26,8 @@ const Subscription   = lazy(() => import('./pages/Subscription/Subscription'))
 const HelpPage       = lazy(() => import('./pages/Help/HelpPage'))
 const SMS            = lazy(() => import('./pages/SMS/SMS'))
 const FamilyPortal   = lazy(() => import('./pages/FamilyPortal/FamilyPortal'))
+const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
+const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
 
 // ── شاشة تحميل موحّدة ────────────────────────────────
 function PageLoader() {
@@ -85,6 +87,8 @@ function AppRoutes() {
           <Route path="users"         element={<UsersList />} />
           <Route path="distributions" element={<Distributions />} />
           <Route path="analysis"      element={<Analysis />} />
+          <Route path="camp-compare"   element={<CampCompare />} />
+          <Route path="needs-report"   element={<NeedsReport />} />
           <Route path="data"          element={<DataPage />} />
           <Route path="settings"      element={<Settings />} />
           <Route path="audit"         element={<AuditLog />} />
