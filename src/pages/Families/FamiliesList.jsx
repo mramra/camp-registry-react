@@ -12,8 +12,23 @@ import Modal from '../../components/ui/Modal'
 
 const REQUIRED_FIELDS = ['head_name','head_id','phone1','camp_id']
 
-function isIncomplete(f) {
-  return REQUIRED_FIELDS.some(k => !f[k]?.toString().trim())
+function isIncomplete(f, members) {
+  // النواقص الأساسية
+  if (REQUIRED_FIELDS.some(k => !f[k]?.toString().trim())) return true
+
+  // النواقص الذكية — حسب الحالة الاجتماعية
+  const marital = (f.head_marital || '').trim()
+  if (marital === 'متزوج' || marital === 'متزوجة') {
+    // يجب أن يوجد فرد بصفة زوجة أو زوج
+    const mems = members || []
+    const hasSpouse = mems.some(m => {
+      const rel = (m.relation || '').trim()
+      return rel === 'زوجة' || rel === 'زوج'
+    })
+    if (!hasSpouse) return true
+  }
+
+  return false
 }
 
 function calcAge(dob) {
@@ -208,6 +223,8 @@ export default function FamiliesList() {
     })
     // أسر فيها تكرار هوية
     const dupFamilyIds = new Set()
+    const memsByFam2 = {}
+    allMembers.forEach(m => { if (!memsByFam2[m.family_id]) memsByFam2[m.family_id] = []; memsByFam2[m.family_id].push(m) })
     families.forEach(f => {
       if (f.head_id && (idToFams[f.head_id]?.size||0) > 1) dupFamilyIds.add(f.id)
       // إذا أي فرد من أسرته لديه هوية مكررة
@@ -227,7 +244,9 @@ export default function FamiliesList() {
     )
 
     // ── الأسر الناقصة ──
-    const incompleteCount = families.filter(f => isIncomplete(f)).length
+    const memsByFamC = {}
+    allMembers.forEach(m => { if (!memsByFamC[m.family_id]) memsByFamC[m.family_id] = []; memsByFamC[m.family_id].push(m) })
+    const incompleteCount = families.filter(f => isIncomplete(f, memsByFamC[f.id])).length
 
     return {
       dupFamilyIds,
@@ -257,8 +276,10 @@ export default function FamiliesList() {
     let list = [...families]
     if (filterCamp)   list = list.filter(f => f.camp_id === filterCamp)
     if (filterGender) list = list.filter(f => f.head_gender === filterGender)
-    if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f) || dupIds.has(f.head_id) || dupPhones.has(f.phone1))
-    if (filterMiss === 'complete')   list = list.filter(f => !isIncomplete(f) && !dupIds.has(f.head_id) && !dupPhones.has(f.phone1))
+    const memsByFamF = {}
+    allMembers.forEach(m => { if (!memsByFamF[m.family_id]) memsByFamF[m.family_id] = []; memsByFamF[m.family_id].push(m) })
+    if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f, memsByFamF[f.id]) || dupIds.has(f.id) || dupPhones.has(f.id))
+    if (filterMiss === 'complete')   list = list.filter(f => !isIncomplete(f, memsByFamF[f.id]) && !dupIds.has(f.id) && !dupPhones.has(f.id))
     if (filterMiss === 'dup_id')     list = list.filter(f => dupFamilyIds.has(f.id))
     if (filterMiss === 'dup_phone')  list = list.filter(f => dupPhoneFamilyIds.has(f.id))
     if (ageMin || ageMax) {
@@ -289,8 +310,8 @@ export default function FamiliesList() {
     // ترتيب: ناقص أولاً إذا فلتر ناقص، وإلا حسب عدد الأفراد
     if (filterMiss === 'incomplete') {
       list.sort((a,b) => {
-        const aI = (isIncomplete(a)?1:0)+(dupIds.has(a.head_id)?1:0)+(dupPhones.has(a.phone1)?1:0)
-        const bI = (isIncomplete(b)?1:0)+(dupIds.has(b.head_id)?1:0)+(dupPhones.has(b.phone1)?1:0)
+        const aI = (isIncomplete(a, memsByFamF[a.id])?1:0)+(dupIds.has(a.id)?1:0)+(dupPhones.has(a.id)?1:0)
+        const bI = (isIncomplete(b, memsByFamF[b.id])?1:0)+(dupIds.has(b.id)?1:0)+(dupPhones.has(b.id)?1:0)
         return bI - aI
       })
     } else {
@@ -346,8 +367,11 @@ export default function FamiliesList() {
           <option value="dup_phone">📞 جوال مكرر ({counts.dup_phone})</option>
         </select>
         <select value={filterCamp} onChange={e => setFilterCamp(e.target.value)} className={SEL}>
-          <option value="">كل المخيمات</option>
-          {campsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">كل المخيمات ({families.length})</option>
+          {campsList.map(c => {
+            const cnt = families.filter(f => f.camp_id === c.id).length
+            return <option key={c.id} value={c.id}>{c.name} ({cnt})</option>
+          })}
         </select>
         <select value={filterGender} onChange={e => setFilterGender(e.target.value)} className={SEL}>
           <option value="">كل الجنس</option>
@@ -420,7 +444,8 @@ export default function FamiliesList() {
             </thead>
             <tbody>
               {filtered.map((f, i) => {
-                const incomplete = isIncomplete(f)
+                const fMems = allMembers.filter(m => m.family_id === f.id)
+                const incomplete = isIncomplete(f, fMems)
                 const isDupId    = dupIds.has(f.head_id)
                 const isDupPhone = dupPhones.has(f.phone1)
                 const hasWarn    = incomplete || isDupId || isDupPhone
@@ -530,14 +555,29 @@ function DuplicateWarnings({ family, families, allMembers }) {
   const issues = []
 
   // ── النواقص ──
+  // النواقص الأساسية
   const missing = REQUIRED_FIELDS.filter(f => !family[f]?.toString().trim())
   if (missing.length) {
     issues.push({
-      color: 'red',
-      icon: '⚠️',
+      color: 'red', icon: '⚠️',
       title: 'بيانات ناقصة',
-      detail: missing.map(f => FIELD_LABELS[f]).join('، ')
+      detail: [missing.map(f => FIELD_LABELS[f]).join('، ')]
     })
+  }
+
+  // النواقص الذكية — زوجة مفقودة
+  const marital = (family.head_marital || '').trim()
+  if (marital === 'متزوج' || marital === 'متزوجة') {
+    const hasSpouse = allMembers.some(m =>
+      m.family_id === family.id && (m.relation === 'زوجة' || m.relation === 'زوج')
+    )
+    if (!hasSpouse) {
+      issues.push({
+        color: 'red', icon: '⚠️',
+        title: 'ناقص — بيانات الزوجة',
+        detail: ['رب الأسرة متزوج ولم تُضف بيانات الزوجة']
+      })
+    }
   }
 
   // ── تكرار هوية رب الأسرة ──
