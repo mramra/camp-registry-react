@@ -8,16 +8,9 @@ import { useApp } from '../../context/AppContext'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import SearchBar from '../../components/ui/SearchBar'
-import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
-
-const STATUS_MAP = {
-  active:   { label: 'نشط',   color: 'green',  dot: '🟢' },
-  pending:  { label: 'معلق',  color: 'accent', dot: '🟡' },
-  departed: { label: 'مغادر', color: 'red',    dot: '🔴' },
-}
 
 // حقول النواقص
 const REQUIRED_FIELDS = ['head_name','head_id','phone1','camp_id']
@@ -52,19 +45,15 @@ function calcAge(dob) {
 export default function FamiliesList() {
   const [families,     setFamilies]     = useState([])
   const [campMap,      setCampMap]      = useState({})
+  const [campsList,    setCampsList]    = useState([])
   const [memberCount,  setMemberCount]  = useState({})
   const [search,       setSearch]       = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
   const [filterCamp,   setFilterCamp]   = useState('all')
-  const [filterQuality,setFilterQuality]= useState('')   // ناقص/مكتمل/dup_id/dup_phone
-  const [filterGender, setFilterGender] = useState('')   // ذكر/أنثى
-  const [ageMin,       setAgeMin]       = useState('')
-  const [ageMax,       setAgeMax]       = useState('')
+  const [filterQuality,setFilterQuality]= useState('')
   const [loading,      setLoading]      = useState(true)
   const [syncing,      setSyncing]      = useState(false)
   const [selected,     setSelected]     = useState(null)
   const [members,      setMembers]      = useState([])
-  const [showFilters,  setShowFilters]  = useState(false)
 
   const { canWrite, canDelete } = useAuth()
   const { showToast } = useApp()
@@ -75,6 +64,7 @@ export default function FamiliesList() {
   async function loadAll() {
     setLoading(true)
     try {
+      // Dexie أولاً — فوري
       const [lFams, lCamps, lMems] = await Promise.all([
         localDB.families.toArray().catch(() => []),
         localDB.camps.toArray().catch(() => []),
@@ -82,6 +72,8 @@ export default function FamiliesList() {
       ])
       applyData(lFams, lCamps, lMems)
       setLoading(false)
+
+      // ثم Supabase في الخلفية
       if (!navigator.onLine) return
       setSyncing(true)
       try {
@@ -106,7 +98,7 @@ export default function FamiliesList() {
           res.forEach(r => { if (!r.error && r.data) sm.push(...r.data) })
           if (sm.length) mems = sm
         }
-        if (fams.length)  try { await localDB.families.bulkPut(fams) }        catch {}
+        if (fams.length)  try { await localDB.families.bulkPut(fams) }       catch {}
         if (camps.length) try { await localDB.camps.bulkPut(camps) }          catch {}
         if (mems.length)  try { await localDB.family_members.bulkPut(mems) }  catch {}
         applyData(fams, camps, mems)
@@ -119,6 +111,7 @@ export default function FamiliesList() {
     const cm = {}
     camps.forEach(c => { cm[c.id] = c.name })
     setCampMap(cm)
+    setCampsList(camps)
     const mc = {}
     fams.forEach(f => { mc[f.id] = countMembers(mems, f) })
     setMemberCount(mc)
@@ -171,34 +164,15 @@ export default function FamiliesList() {
     return dups
   }, [families])
 
-  const allCampIds = useMemo(
-    () => [...new Set(families.map(f => f.camp_id).filter(Boolean))],
-    [families]
-  )
-
-  // فلترة شاملة
+  // فلترة
   const filtered = useMemo(() => {
     return families
       .filter(f => {
-        // حالة
-        if (filterStatus !== 'all' && f.status !== filterStatus) return false
-        // مخيم
         if (filterCamp !== 'all' && f.camp_id !== filterCamp) return false
-        // جودة البيانات
         if (filterQuality === 'incomplete' && !isIncomplete(f)) return false
         if (filterQuality === 'complete'   && isIncomplete(f))  return false
         if (filterQuality === 'dup_id'     && !dupIds.has(f.head_id))   return false
         if (filterQuality === 'dup_phone'  && !dupPhones.has(f.phone1)) return false
-        // الجنس
-        if (filterGender && f.head_gender !== filterGender) return false
-        // العمر
-        if (ageMin || ageMax) {
-          const age = calcAge(f.head_dob)
-          if (age === null) return false
-          if (ageMin && age < parseInt(ageMin)) return false
-          if (ageMax && age > parseInt(ageMax)) return false
-        }
-        // بحث
         if (!search) return true
         const q = search.toLowerCase()
         return (f.head_name||'').toLowerCase().includes(q) ||
@@ -209,186 +183,103 @@ export default function FamiliesList() {
         const d = (memberCount[b.id]||0) - (memberCount[a.id]||0)
         return d !== 0 ? d : new Date(b.updated_at||0) - new Date(a.updated_at||0)
       })
-  }, [families, filterStatus, filterCamp, filterQuality, filterGender,
-      ageMin, ageMax, search, memberCount, dupIds, dupPhones])
+  }, [families, filterCamp, filterQuality, search, memberCount, dupIds, dupPhones])
 
   const gc = useMemo(() => ({
     all:        families.length,
-    active:     families.filter(f => f.status === 'active').length,
-    pending:    families.filter(f => f.status === 'pending').length,
-    departed:   families.filter(f => f.status === 'departed').length,
     incomplete: families.filter(f => isIncomplete(f)).length,
     dup_id:     families.filter(f => dupIds.has(f.head_id)).length,
     dup_phone:  families.filter(f => dupPhones.has(f.phone1)).length,
   }), [families, dupIds, dupPhones])
 
-  const hasActiveFilter = filterStatus!=='all' || filterCamp!=='all' ||
-    filterQuality || filterGender || ageMin || ageMax
+  const hasFilter = filterCamp !== 'all' || filterQuality !== ''
 
   function resetFilters() {
-    setFilterStatus('all'); setFilterCamp('all')
-    setFilterQuality(''); setFilterGender('')
-    setAgeMin(''); setAgeMax(''); setSearch('')
+    setFilterCamp('all')
+    setFilterQuality('')
+    setSearch('')
   }
 
-  const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"
+  const QUALITY_FILTERS = [
+    { key: 'incomplete', icon: '⚠️', label: 'ناقص',         count: gc.incomplete, color: 'red'    },
+    { key: 'dup_id',     icon: '🔁', label: 'هوية مكررة',   count: gc.dup_id,     color: 'accent' },
+    { key: 'dup_phone',  icon: '📞', label: 'جوال مكرر',    count: gc.dup_phone,  color: 'blue'   },
+  ]
 
   return (
     <div>
       <PageHeader icon="👨‍👩‍👧‍👦" title="قائمة الأسر"
-        subtitle={<span className="flex items-center gap-2">
-          <span>{filtered.length}/{families.length} أسرة</span>
-          {syncing && <span className="text-[10px] text-accent animate-pulse">🔄</span>}
-          {!navigator.onLine && <span className="text-[10px] text-red">📴</span>}
-        </span>}
+        subtitle={
+          <span className="flex items-center gap-2">
+            <span>{filtered.length}/{families.length} أسرة</span>
+            {syncing && <span className="text-[10px] text-accent animate-pulse">🔄</span>}
+            {!navigator.onLine && <span className="text-[10px] text-red">📴</span>}
+          </span>
+        }
         action={canWrite && (
           <button onClick={() => navigate('/families/add')}
             className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">＋ إضافة</button>
         )}
       />
 
-      {/* إحصائيات */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        {[['الكل',gc.all,'accent'],['نشط',gc.active,'green'],['مغادر',gc.departed,'red']].map(([l,v,c]) => (
-          <div key={l} className="bg-surface border border-border rounded-xl p-2 text-center">
-            <div className={`text-lg font-black text-${c}`}>{v}</div>
-            <div className="text-muted text-[9px] mt-0.5">{l}</div>
-          </div>
+      {/* اختيار المخيم */}
+      <select
+        value={filterCamp}
+        onChange={e => setFilterCamp(e.target.value)}
+        className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent mb-3">
+        <option value="all">🏕️ كل المخيمات ({families.length})</option>
+        {campsList.map(c => (
+          <option key={c.id} value={c.id}>
+            {c.name} ({families.filter(f => f.camp_id === c.id).length})
+          </option>
         ))}
-      </div>
+      </select>
 
-      {/* تحذيرات سريعة */}
-      {(gc.incomplete > 0 || gc.dup_id > 0 || gc.dup_phone > 0) && (
-        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-          {gc.incomplete > 0 && (
-            <button onClick={() => setFilterQuality(q => q==='incomplete'?'':'incomplete')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all
-                ${filterQuality==='incomplete'?'bg-red/20 text-red border-red':'bg-red/10 border-red/30 text-red'}`}>
-              ⚠️ ناقص ({gc.incomplete})
-            </button>
-          )}
-          {gc.dup_id > 0 && (
-            <button onClick={() => setFilterQuality(q => q==='dup_id'?'':'dup_id')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all
-                ${filterQuality==='dup_id'?'bg-accent/20 text-accent border-accent':'bg-accent/10 border-accent/30 text-accent'}`}>
-              🔁 هوية مكررة ({gc.dup_id})
-            </button>
-          )}
-          {gc.dup_phone > 0 && (
-            <button onClick={() => setFilterQuality(q => q==='dup_phone'?'':'dup_phone')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all
-                ${filterQuality==='dup_phone'?'bg-blue/20 text-blue border-blue':'bg-blue/10 border-blue/30 text-blue'}`}>
-              📞 جوال مكرر ({gc.dup_phone})
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* فلاتر الحالة */}
-      <div className="flex gap-1.5 mb-2">
-        {[{key:'all',label:'الكل',count:gc.all},{key:'active',label:'🟢 نشط',count:gc.active},
-          {key:'pending',label:'🟡 معلق',count:gc.pending},{key:'departed',label:'🔴 مغادر',count:gc.departed}
-        ].map(f => (
-          <button key={f.key} onClick={() => setFilterStatus(f.key)}
-            className={`flex-1 px-1 py-2 rounded-xl text-[10px] font-bold border transition-all
-              ${filterStatus===f.key?'bg-accent text-bg border-accent':'bg-surface2 border-border text-muted'}`}>
-            {f.label}<br/><span className="text-[9px]">{f.count}</span>
+      {/* أيقونات الفلاتر */}
+      <div className="flex gap-2 mb-3">
+        {QUALITY_FILTERS.filter(f => f.count > 0).map(f => (
+          <button key={f.key}
+            onClick={() => setFilterQuality(q => q === f.key ? '' : f.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all
+              ${filterQuality === f.key
+                ? `bg-${f.color}/25 text-${f.color} border-${f.color}`
+                : `bg-${f.color}/10 border-${f.color}/30 text-${f.color}`}`}>
+            <span className="text-base">{f.icon}</span>
+            <span>{f.count}</span>
           </button>
         ))}
+        {hasFilter && (
+          <button onClick={resetFilters}
+            className="mr-auto px-3 py-2 rounded-xl text-xs font-bold border border-border text-muted bg-surface2">
+            ↺ مسح
+          </button>
+        )}
       </div>
 
       <SearchBar value={search} onChange={setSearch} placeholder="بحث بالاسم أو الهوية أو الجوال..." />
 
-      {/* فلاتر متقدمة */}
-      <div className="mb-3">
-        <button onClick={() => setShowFilters(v => !v)}
-          className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border transition-all
-            ${hasActiveFilter?'bg-accent/15 text-accent border-accent':'bg-surface2 border-border text-muted'}`}>
-          🔽 فلاتر متقدمة
-          {hasActiveFilter && <span className="bg-accent text-bg rounded-full px-1.5 text-[9px]">نشط</span>}
-        </button>
-      </div>
-
-      {showFilters && (
-        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-accent text-xs font-bold">🔽 فلاتر متقدمة</span>
-            {hasActiveFilter && (
-              <button onClick={resetFilters}
-                className="text-muted text-[11px] border border-border px-2.5 py-1 rounded-lg">
-                ↺ إعادة تعيين
-              </button>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-3">
-            {/* المخيم */}
-            <div>
-              <label className="text-[10px] font-bold text-muted block mb-1">🏕️ المخيم</label>
-              <select value={filterCamp} onChange={e => setFilterCamp(e.target.value)} className={SEL}>
-                <option value="all">كل المخيمات ({families.length})</option>
-                {allCampIds.map(cid => (
-                  <option key={cid} value={cid}>{campMap[cid]||'—'} ({families.filter(f=>f.camp_id===cid).length})</option>
-                ))}
-              </select>
-            </div>
-
-            {/* جودة البيانات */}
-            <div>
-              <label className="text-[10px] font-bold text-muted block mb-1">📋 جودة البيانات</label>
-              <select value={filterQuality} onChange={e => setFilterQuality(e.target.value)} className={SEL}>
-                <option value="">كل الأسر</option>
-                <option value="incomplete">⚠️ ناقص ({gc.incomplete})</option>
-                <option value="complete">✅ مكتمل ({families.length - gc.incomplete})</option>
-                <option value="dup_id">🔁 هوية مكررة ({gc.dup_id})</option>
-                <option value="dup_phone">📞 جوال مكرر ({gc.dup_phone})</option>
-              </select>
-            </div>
-
-            {/* الجنس */}
-            <div>
-              <label className="text-[10px] font-bold text-muted block mb-1">🚻 جنس رب الأسرة</label>
-              <select value={filterGender} onChange={e => setFilterGender(e.target.value)} className={SEL}>
-                <option value="">الكل</option>
-                <option value="ذكر">👨 ذكر ({families.filter(f=>f.head_gender==='ذكر'||f.head_gender==='male').length})</option>
-                <option value="أنثى">👩 أنثى ({families.filter(f=>f.head_gender==='أنثى'||f.head_gender==='female').length})</option>
-              </select>
-            </div>
-
-            {/* فلتر العمر */}
-            <div>
-              <label className="text-[10px] font-bold text-muted block mb-1">🎂 عمر رب الأسرة</label>
-              <div className="flex items-center gap-2">
-                <input type="number" value={ageMin} onChange={e => setAgeMin(e.target.value)}
-                  min="0" max="120" placeholder="من" dir="ltr"
-                  className="w-20 bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none focus:border-accent" />
-                <span className="text-muted text-xs">—</span>
-                <input type="number" value={ageMax} onChange={e => setAgeMax(e.target.value)}
-                  min="0" max="120" placeholder="إلى" dir="ltr"
-                  className="w-20 bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none focus:border-accent" />
-                <span className="text-muted text-xs">سنة</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* عداد النتائج */}
-      {hasActiveFilter && (
+      {hasFilter && (
         <div className="text-muted text-xs text-center mb-2">
           نتائج: <span className="text-white font-bold">{filtered.length}</span> من {families.length}
         </div>
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16"><Spinner /></div>
+        <div className="flex flex-col gap-2">
+          {[...Array(6)].map((_,i) => (
+            <div key={i} className="bg-surface border border-border rounded-xl p-4 animate-pulse">
+              <div className="h-4 bg-surface2 rounded w-2/3 mb-2"/>
+              <div className="h-3 bg-surface2 rounded w-1/3"/>
+            </div>
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState icon="👨‍👩‍👧‍👦"
           title={!navigator.onLine && families.length===0 ? 'لا توجد بيانات محلية' : 'لا توجد نتائج'}
           subtitle={!navigator.onLine && families.length===0
             ? 'افتح التطبيق مع الإنترنت لتخزين البيانات'
-            : hasActiveFilter ? 'جرب تغيير الفلاتر' : 'ابدأ بإضافة أسرة'}
-          action={hasActiveFilter && (
+            : hasFilter ? 'جرب تغيير الفلاتر' : 'ابدأ بإضافة أسرة'}
+          action={hasFilter && (
             <button onClick={resetFilters}
               className="bg-surface2 border border-border text-white px-4 py-2 rounded-xl text-sm mt-2">
               ↺ مسح الفلاتر
@@ -398,9 +289,8 @@ export default function FamiliesList() {
       ) : (
         <div className="flex flex-col gap-2">
           {filtered.map(family => {
-            const sm  = STATUS_MAP[family.status] || STATUS_MAP.active
-            const mc  = memberCount[family.id] || 0
-            const cn  = campMap[family.camp_id]
+            const mc         = memberCount[family.id] || 0
+            const cn         = campMap[family.camp_id]
             const incomplete = isIncomplete(family)
             const isDupId    = dupIds.has(family.head_id)
             const isDupPhone = dupPhones.has(family.phone1)
@@ -411,13 +301,12 @@ export default function FamiliesList() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-white text-sm mb-1.5 truncate">
-                      {sm.dot} {family.head_name||'—'}
+                      {family.head_name||'—'}
                     </div>
                     <div className="text-white text-xs font-medium" dir="ltr">🪪 {family.head_id||'—'}</div>
                     {cn && <div className="text-blue text-xs mt-1 font-bold">🏕️ {cn}</div>}
                     {family.phone1 && <div className="text-white text-xs mt-0.5 font-medium" dir="ltr">📞 {family.phone1}</div>}
                     {family.tent && <div className="text-muted text-[10px] mt-0.5">⛺ {family.tent}</div>}
-                    {/* تحذيرات */}
                     <div className="flex gap-1 mt-1.5 flex-wrap">
                       {incomplete && <span className="text-[9px] bg-red/15 text-red border border-red/20 px-1.5 py-0.5 rounded-full font-bold">⚠️ ناقص</span>}
                       {isDupId    && <span className="text-[9px] bg-accent/15 text-accent border border-accent/20 px-1.5 py-0.5 rounded-full font-bold">🔁 هوية مكررة</span>}
@@ -425,7 +314,6 @@ export default function FamiliesList() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 mr-2 flex-shrink-0">
-                    <Badge color={sm.color}>{sm.label}</Badge>
                     <span className="bg-accent/15 text-accent border border-accent/30 rounded-full px-2 py-0.5 text-[10px] font-bold">
                       👥 {mc+1} فرد
                     </span>
@@ -440,7 +328,6 @@ export default function FamiliesList() {
       <Modal open={!!selected} onClose={() => { setSelected(null); setMembers([]) }} title="تفاصيل الأسرة" size="lg">
         {selected && (
           <div className="flex flex-col gap-4">
-            {/* تحذيرات */}
             {(isIncomplete(selected)||dupIds.has(selected.head_id)||dupPhones.has(selected.phone1)) && (
               <div className="bg-red/10 border border-red/30 rounded-xl p-3 flex flex-col gap-1">
                 {isIncomplete(selected) && <span className="text-red text-xs">⚠️ بيانات ناقصة: {REQUIRED_FIELDS.filter(f=>!selected[f]?.toString().trim()).join(', ')}</span>}
@@ -470,13 +357,16 @@ export default function FamiliesList() {
                 ))}
               </div>
             </div>
+
             <FamilyMembersView members={members} family={selected} />
+
             {selected.notes && (
               <div className="bg-surface2 rounded-xl p-3">
                 <div className="text-muted text-[10px] mb-1">📝 ملاحظات</div>
                 <div className="text-white text-xs">{selected.notes}</div>
               </div>
             )}
+
             <div className="flex gap-2 pt-1">
               <button onClick={() => { navigate(`/families/edit/${selected.id}`); setSelected(null) }}
                 className="flex-1 bg-accent text-bg font-black py-2.5 rounded-xl text-sm">✏️ تعديل</button>
@@ -521,8 +411,7 @@ function FamilyMembersView({ members, family }) {
             <div>
               <div className="text-white text-xs font-bold">{m.name}</div>
               <div className="text-muted text-[10px]">
-                {m.relation}{m.national_id?` · ${m.national_id}`:''}
-                {m.dob?` · ${formatDate(m.dob)}`:''}
+                {m.relation}{m.national_id?` · ${m.national_id}`:''}{m.dob?` · ${formatDate(m.dob)}`:''}
               </div>
             </div>
             <div className="flex flex-col items-end gap-0.5">
