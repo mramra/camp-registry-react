@@ -159,15 +159,60 @@ export default function FamiliesList() {
   }
 
   // ── حساب التكرارات ───────────────────────────────────
-  const { dupIds, dupPhones } = useMemo(() => {
-    const seenId = {}, seenPh = {}
-    const dId = new Set(), dPh = new Set()
+  // حساب التكرارات شاملاً أفراد الأسرة
+  const { dupFamilyIds, dupPhoneFamilyIds, counts } = useMemo(() => {
+    // ── تكرار الهويات (رب الأسرة + الأفراد) ──
+    const idToFams = {}  // هوية → Set من family_ids
     families.forEach(f => {
-      if (f.head_id) { if (seenId[f.head_id]) dId.add(f.head_id); else seenId[f.head_id] = true }
-      if (f.phone1)  { if (seenPh[f.phone1])  dPh.add(f.phone1);  else seenPh[f.phone1]  = true }
+      if (f.head_id) {
+        if (!idToFams[f.head_id]) idToFams[f.head_id] = new Set()
+        idToFams[f.head_id].add(f.id)
+      }
     })
-    return { dupIds: dId, dupPhones: dPh }
-  }, [families])
+    allMembers.forEach(m => {
+      if (m.national_id && m.family_id) {
+        if (!idToFams[m.national_id]) idToFams[m.national_id] = new Set()
+        idToFams[m.national_id].add(m.family_id)
+      }
+    })
+    // أسر فيها تكرار هوية
+    const dupFamilyIds = new Set()
+    families.forEach(f => {
+      if (f.head_id && (idToFams[f.head_id]?.size||0) > 1) dupFamilyIds.add(f.id)
+      // إذا أي فرد من أسرته لديه هوية مكررة
+      allMembers.filter(m => m.family_id === f.id).forEach(m => {
+        if (m.national_id && (idToFams[m.national_id]?.size||0) > 1) dupFamilyIds.add(f.id)
+      })
+    })
+
+    // ── تكرار الجوال ──
+    const cleanPh = p => (p||'').replace(/\s/g,'')
+    const phCount = {}
+    families.forEach(f => {
+      if (f.phone1) { const p = cleanPh(f.phone1); phCount[p] = (phCount[p]||0)+1 }
+    })
+    const dupPhoneFamilyIds = new Set(
+      families.filter(f => f.phone1 && (phCount[cleanPh(f.phone1)]||0) > 1).map(f => f.id)
+    )
+
+    // ── الأسر الناقصة ──
+    const incompleteCount = families.filter(f => isIncomplete(f)).length
+
+    return {
+      dupFamilyIds,
+      dupPhoneFamilyIds,
+      counts: {
+        incomplete: incompleteCount,
+        complete:   families.length - incompleteCount,
+        dup_id:     dupFamilyIds.size,
+        dup_phone:  dupPhoneFamilyIds.size,
+      }
+    }
+  }, [families, allMembers])
+
+  // للتوافق مع باقي الكود
+  const dupIds    = dupFamilyIds
+  const dupPhones = dupPhoneFamilyIds
 
   // ── حساب عدد الأفراد لكل أسرة ───────────────────────
   const memberCount = useMemo(() => {
@@ -213,7 +258,7 @@ export default function FamiliesList() {
       list.sort((a,b) => (memberCount[b.id]||0) - (memberCount[a.id]||0))
     }
     return list
-  }, [families, filterCamp, filterGender, filterMiss, ageMin, ageMax, search, dupIds, dupPhones, memberCount])
+  }, [families, allMembers, filterCamp, filterGender, filterMiss, ageMin, ageMax, search, dupFamilyIds, dupPhoneFamilyIds, memberCount])
 
   const hasFilter = filterCamp || filterMiss || filterGender || ageMin || ageMax || search
 
@@ -255,11 +300,11 @@ export default function FamiliesList() {
       {/* الفلاتر — صف واحد */}
       <div className="flex gap-2 mb-3 flex-wrap items-center">
         <select value={filterMiss} onChange={e => setFilterMiss(e.target.value)} className={SEL}>
-          <option value="">كل الأسر</option>
-          <option value="incomplete">⚠️ ناقص</option>
-          <option value="complete">✅ مكتمل</option>
-          <option value="dup_id">🔁 هوية مكررة</option>
-          <option value="dup_phone">📞 جوال مكرر</option>
+          <option value="">كل الأسر ({families.length})</option>
+          <option value="incomplete">⚠️ ناقص ({counts.incomplete})</option>
+          <option value="complete">✅ مكتمل ({counts.complete})</option>
+          <option value="dup_id">🔁 هوية مكررة ({counts.dup_id})</option>
+          <option value="dup_phone">📞 جوال مكرر ({counts.dup_phone})</option>
         </select>
         <select value={filterCamp} onChange={e => setFilterCamp(e.target.value)} className={SEL}>
           <option value="">كل المخيمات</option>
