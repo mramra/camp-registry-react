@@ -278,7 +278,7 @@ export default function Dashboard() {
       {/* آخر الأسر المضافة */}
       {recent.length > 0 && (
         <div className="bg-surface border border-border rounded-xl p-4 mb-4">
-          <div className="text-accent text-sm font-bold mb-3">📋 آخر الأسر المضافة</div>
+          <div className="text-accent text-sm font-bold mb-3">📋 آخر تعديلات الأسر</div>
           <div className="flex flex-col gap-2">
             {recent.map(f => (
               <div key={f.id}
