@@ -245,7 +245,7 @@ export default function UsersList() {
   const isMe = (id) => id === profile?.id
 
   return (
-    <div>
+    <>
       <PageHeader icon="👥" title="إدارة المستخدمين" subtitle={`${users.length} مستخدم`}
         action={(isOwner || isSuperAdmin) && (
           <button onClick={() => { setForm(EMPTY_FORM); setErrors({}); setShowAdd(true) }}
@@ -503,9 +503,7 @@ export default function UsersList() {
           </div>
         )}
       </Modal>
-    </div>
 
-      {/* معاينة المستخدم الكاملة */}
       {previewUser && (
         <UserPreviewPage
           user={previewUser}
@@ -514,6 +512,7 @@ export default function UsersList() {
           onClose={() => setPreviewUser(null)}
         />
       )}
+    </>
   )
 }
 
@@ -763,7 +762,7 @@ function UserPreviewPage({ user, camps, users, onClose }) {
 
 function Field({ label, value, onChange, type='text', error, ...props }) {
   return (
-    <div>
+    <>
       <label className="text-xs font-bold text-muted block mb-1.5">{label}</label>
       <input type={type} value={value} onChange={e=>onChange(e.target.value)}
         className={`w-full bg-surface2 border ${error?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}
