@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { localDB } from '../../lib/db'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { processSyncQueue, getSyncStats } from '../../lib/sync'
 
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [loading,  setLoading]  = useState(true)
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
+  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { online, showToast } = useApp()
   const navigate = useNavigate()
 
@@ -49,14 +51,20 @@ export default function Dashboard() {
         localDB.camps.toArray().catch(()=>[]),
         localDB.family_members.toArray().catch(()=>[]),
       ])
-      applyStats(fams, camps, members)
+      const campIds = getAllowedCampIds(camps)
+      const filteredFams = filterLocal(fams, campIds)
+      applyStats(filteredFams, camps, members)
       setLoading(false)
       // مزامنة في الخلفية
       if (navigator.onLine) {
-        const [fRes, cRes] = await Promise.all([
-          supabase.from('families').select('*').eq('org_id', ORG_ID).limit(1000),
-          supabase.from('camps').select('*').eq('org_id', ORG_ID),
-        ])
+        const { data: allCampsD } = await supabase.from('camps').select('*').eq('org_id', ORG_ID)
+      const campIds = getAllowedCampIds(allCampsD || [])
+      let famQ = supabase.from('families').select('*').eq('org_id', ORG_ID).limit(1000)
+      famQ = applyScope(famQ, campIds)
+      const [fRes, cRes] = await Promise.all([
+        famQ,
+        Promise.resolve({ data: allCampsD, error: null }),
+      ])
         const f2 = !fRes.error && fRes.data?.length ? fRes.data : fams
         const c2 = !cRes.error && cRes.data?.length ? cRes.data : camps
         if (f2.length) try { await localDB.families.bulkPut(f2) } catch {}
