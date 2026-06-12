@@ -112,19 +112,30 @@ export default function FamiliesList() {
   const location = useLocation()
 
   useEffect(() => {
-    // استقبال state من Dashboard
     const st = location?.state
-    if (st?.filterMiss) setFilterMiss(st.filterMiss)
-    if (st?.filterCamp) setFilterCamp(st.filterCamp)
-    if (st?.openFamily) {
-      // افتح الأسرة مباشرة بعد التحميل
-      loadLocal().then(async () => {
-        await syncBackground()
-        const fams = await localDB.families.toArray().catch(()=>[])
-        const fam  = fams.find(f => f.id === st.openFamily)
-        if (fam) openFamily(fam)
-      })
-      return
+    if (!st) return
+    if (st.filterMiss) setFilterMiss(st.filterMiss)
+    if (st.filterCamp) setFilterCamp(st.filterCamp)
+    if (st.openFamily) {
+      // انتظر تحميل البيانات ثم افتح الأسرة مباشرة
+      const tryOpen = async () => {
+        let fams = await localDB.families.toArray().catch(()=>[])
+        let fam = fams.find(f => f.id === st.openFamily)
+        if (fam) {
+          openFamily(fam)
+          return
+        }
+        // إذا لم تجد في Dexie، اجلب من Supabase
+        if (navigator.onLine) {
+          const { data } = await supabase.from('families').select('*').eq('id', st.openFamily).single()
+          if (data) {
+            try { await localDB.families.put(data) } catch {}
+            openFamily(data)
+          }
+        }
+      }
+      // نفّذ بعد تحميل الصفحة
+      setTimeout(tryOpen, 300)
     }
   }, [location?.state])
 
