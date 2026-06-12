@@ -1,252 +1,394 @@
-import { useState, useEffect } from 'react'
-import { supabase, ORG_ID } from '../../lib/supabase'
+import { useState, useRef } from 'react'
 import { localDB } from '../../lib/db'
-import { useApp } from '../../context/AppContext'
+import { supabase, ORG_ID } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 
-function calcAge(dob) {
-  if (!dob) return null
-  const b=new Date(dob),t=new Date()
-  let a=t.getFullYear()-b.getFullYear()
-  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--
-  return a>=0&&a<120?a:null
-}
-
-const COLUMNS = [
-  { key:'head_name',   label:'اسم رب الأسرة',    default:true  },
-  { key:'head_id',     label:'رقم الهوية',        default:true  },
-  { key:'phone1',      label:'الجوال',             default:true  },
-  { key:'phone2',      label:'جوال بديل',          default:false },
-  { key:'camp_name',   label:'المخيم',             default:true  },
-  { key:'tent',        label:'رقم الخيمة',         default:true  },
-  { key:'head_gender', label:'الجنس',              default:false },
-  { key:'head_marital',label:'الحالة الاجتماعية',  default:false },
-  { key:'head_dob',    label:'تاريخ الميلاد',      default:false },
-  { key:'head_age',    label:'العمر',              default:false },
-  { key:'original_address', label:'العنوان الأصلي',default:false },
-  { key:'address_details',  label:'تفاصيل العنوان',default:false },
-  { key:'members_count',    label:'عدد الأفراد',   default:true  },
-  { key:'notes',       label:'الملاحظات',          default:false },
-]
+const REQUIRED = ['head_name','head_id','phone1','camp_id']
 
 export default function DataPage() {
-  const [selCols,   setSelCols]   = useState(COLUMNS.filter(c=>c.default).map(c=>c.key))
-  const [exporting, setExporting] = useState(false)
-  const [syncing,   setSyncing]   = useState(false)
-  const [backing,   setBacking]   = useState(false)
-  const [restoring, setRestoring] = useState(false)
-  const [pending,   setPending]   = useState([])
-  const [dbStats,   setDbStats]   = useState({})
-  const [filterCamp, setFilterCamp] = useState('')
-  const [camps,     setCamps]     = useState([])
+  const [loading,        setLoading]        = useState(false)
+  const [filterCamp,     setFilterCamp]     = useState('')
+  const [camps,          setCamps]          = useState([])
+  const [importPreview,  setImportPreview]  = useState(null)
+  const [importing,      setImporting]      = useState(false)
+  const [backupStats,    setBackupStats]    = useState(null)
+  const importRef = useRef()
 
-  const { showToast, online } = useApp()
-  const { canExport, canImport } = useAuth()
+  const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
+  const { showToast } = useApp()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
 
-  useEffect(() => { loadStats() }, [])
+  // جلب المخيمات عند الفتح
+  useState(() => {
+    localDB.camps.toArray().catch(()=>[]).then(c => {
+      setCamps(c)
+      if (profile?.camp_id) setFilterCamp(profile.camp_id)
+    })
+  })
 
-  async function loadStats() {
-    const [f,c,m,q] = await Promise.all([
-      localDB.families.count().catch(()=>0),
-      localDB.camps.count().catch(()=>0),
-      localDB.family_members.count().catch(()=>0),
-      localDB.sync_queue.where('status').equals('pending').count().catch(()=>0),
-    ])
-    setDbStats({families:f,camps:c,members:m,pending:q})
-    const campsData = await localDB.camps.toArray().catch(()=>[])
-    setCamps(campsData)
-    const pq = await localDB.sync_queue.where('status').equals('pending').toArray().catch(()=>[])
-    setPending(pq)
+  // ══ جلب البيانات ══
+  async function getData() {
+    const allFams = await localDB.families.toArray().catch(()=>[])
+    const allMems = await localDB.family_members.toArray().catch(()=>[])
+    const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+    const campIds = getAllowedCampIds(camps)
+    let fams = filterLocal(allFams, campIds)
+    if (filterCamp) fams = fams.filter(f => f.camp_id === filterCamp)
+    const famIds = new Set(fams.map(f=>f.id))
+    const mems = allMems.filter(m => famIds.has(m.family_id))
+    return { fams, mems, campMap }
   }
 
-  async function exportExcel() {
-    if (!canExport) return showToast('ليس لديك صلاحية التصدير',true)
-    setExporting(true)
+  // ══ تصدير الأسر Excel ══
+  async function exportFamilies() {
+    setLoading(true)
     try {
-      const [families, camps, members] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
-      ])
-      const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
-      const memsByFamily = {}
-      members.forEach(m=>{ if(!memsByFamily[m.family_id]) memsByFamily[m.family_id]=[]; memsByFamily[m.family_id].push(m) })
+      const { fams, mems, campMap } = await getData()
+      const memCount = {}
+      mems.forEach(m => { memCount[m.family_id] = (memCount[m.family_id]||0)+1 })
 
-      let fams = filterCamp ? families.filter(f=>f.camp_id===filterCamp) : families
-
-      const headers = COLUMNS.filter(c=>selCols.includes(c.key)).map(c=>c.label)
-      const rows = fams.map(f=>{
-        const mems = memsByFamily[f.id]||[]
-        const mc = mems.filter(m=>{
-          const mn=(m.name||'').trim(),hn=(f.head_name||'').trim()
-          return !['رب الأسرة','head'].includes(m.relation) && !(f.head_id&&m.national_id&&m.national_id.trim()===f.head_id.trim()) && mn!==hn
-        }).length
-        return COLUMNS.filter(c=>selCols.includes(c.key)).map(c=>{
-          switch(c.key){
-            case 'camp_name':    return campMap[f.camp_id]||''
-            case 'head_age':     return calcAge(f.head_dob)??''
-            case 'members_count':return mc+1
-            default:             return f[c.key]||''
-          }
-        })
+      const rows = [
+        ['#','اسم رب الأسرة','رقم الهوية','الجوال','جوال بديل','المخيم','الخيمة','الجنس','الحالة الاجتماعية','الأفراد','المنطقة الأصلية','ملاحظات']
+      ]
+      fams.forEach((f,i) => {
+        rows.push([
+          i+1, f.head_name||'', f.head_id||'', f.phone1||'', f.phone2||'',
+          campMap[f.camp_id]||'', f.tent||'', f.head_gender||'',
+          f.head_marital||'', (memCount[f.id]||0)+1,
+          f.original_address||'', f.notes||''
+        ])
       })
-
-      const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
-      const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href=url; a.download=`families_${new Date().toISOString().slice(0,10)}.csv`
-      a.click(); URL.revokeObjectURL(url)
+      downloadCSV(rows, `أسر_${new Date().toLocaleDateString('ar')}.csv`)
       showToast(`✅ تم تصدير ${fams.length} أسرة`)
-    } catch(err) { showToast('خطأ: '+err.message,true) }
-    finally { setExporting(false) }
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
   }
 
-  async function backupJSON() {
-    setBacking(true)
+  // ══ تصدير الأفراد Excel ══
+  async function exportMembers() {
+    setLoading(true)
     try {
-      const [families, camps, members, movements] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
-        localDB.family_movements.toArray().catch(()=>[]),
-      ])
-      const backup = { version:1, date:new Date().toISOString(), families, camps, members, movements }
-      const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'})
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href=url; a.download=`backup_${new Date().toISOString().slice(0,10)}.json`
-      a.click(); URL.revokeObjectURL(url)
-      showToast(`✅ تم تصدير النسخة الاحتياطية (${families.length} أسرة)`)
-    } catch(err) { showToast('خطأ: '+err.message,true) }
-    finally { setBacking(false) }
+      const { fams, mems, campMap } = await getData()
+      const famMap = Object.fromEntries(fams.map(f=>[f.id,f]))
+
+      const rows = [
+        ['#','اسم الفرد','رقم الهوية','الصلة','تاريخ الميلاد','الجنس','الحالة الصحية','اسم رب الأسرة','المخيم']
+      ]
+      // رب الأسرة
+      fams.forEach((f,i) => {
+        rows.push([i+1, f.head_name||'', f.head_id||'', 'رب الأسرة',
+          f.head_dob||'', f.head_gender||'', 'سليم',
+          f.head_name||'', campMap[f.camp_id]||''])
+      })
+      // الأفراد
+      mems.forEach((m,i) => {
+        const fam = famMap[m.family_id] || {}
+        rows.push([fams.length+i+1, m.name||'', m.national_id||'',
+          m.relation||'', m.dob||'', m.gender||'', m.health||'سليم',
+          fam.head_name||'', campMap[fam.camp_id]||''])
+      })
+      downloadCSV(rows, `أفراد_${new Date().toLocaleDateString('ar')}.csv`)
+      showToast(`✅ تم تصدير ${fams.length + mems.length} فرد`)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
   }
 
-  async function restoreJSON(e) {
+  // ══ تصدير الناقصة ══
+  async function exportMissing() {
+    setLoading(true)
+    try {
+      const { fams, campMap } = await getData()
+      const missing = fams.filter(f => REQUIRED.some(k => !f[k]?.toString().trim()))
+      const rows = [['#','اسم رب الأسرة','رقم الهوية','الجوال','المخيم','النواقص']]
+      missing.forEach((f,i) => {
+        const lacks = REQUIRED.filter(k=>!f[k]?.toString().trim())
+          .map(k=>({head_name:'الاسم',head_id:'الهوية',phone1:'الجوال',camp_id:'المخيم'}[k]))
+          .join(' + ')
+        rows.push([i+1, f.head_name||'—', f.head_id||'—', f.phone1||'—',
+          campMap[f.camp_id]||'—', lacks])
+      })
+      downloadCSV(rows, `ناقصة_${new Date().toLocaleDateString('ar')}.csv`)
+      showToast(`✅ ${missing.length} أسرة ناقصة`)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  // ══ تحميل قالب الاستيراد ══
+  function downloadTemplate() {
+    const rows = [
+      ['اسم رب الأسرة*','رقم الهوية*','رقم الجوال*','جوال بديل','الجنس','الحالة الاجتماعية','تاريخ الميلاد','اسم المخيم*','الخيمة','المنطقة الأصلية','ملاحظات'],
+      ['محمد أحمد علي محمود','123456789','0599000000','','ذكر','متزوج','1980-01-15','مخيم السلام','A1','غزة','']
+    ]
+    downloadCSV(rows, 'قالب_استيراد_الأسر.csv')
+    showToast('✅ تم تحميل القالب')
+  }
+
+  // ══ معالجة ملف الاستيراد ══
+  async function handleImportFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!window.confirm('استيراد النسخة الاحتياطية سيُضاف للبيانات الحالية. هل أنت متأكد؟')) return
-    setRestoring(true)
+    setLoading(true)
     try {
       const text = await file.text()
-      const data = JSON.parse(text)
-      let count = 0
-      if (data.families?.length) { await localDB.families.bulkPut(data.families); count+=data.families.length }
-      if (data.camps?.length)    { await localDB.camps.bulkPut(data.camps) }
-      if (data.members?.length)  { await localDB.family_members.bulkPut(data.members) }
-      await loadStats()
-      showToast(`✅ تم استيراد ${count} أسرة`)
-    } catch(err) { showToast('خطأ في الملف: '+err.message,true) }
-    finally { setRestoring(false); e.target.value='' }
+      const lines = text.split('\n').filter(l=>l.trim())
+      if (lines.length < 2) return showToast('الملف فارغ', true)
+
+      const headers = lines[0].split(',').map(h=>h.trim().replace(/"/g,''))
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(',').map(v=>v.trim().replace(/"/g,''))
+        return Object.fromEntries(headers.map((h,i)=>[h,vals[i]||'']))
+      }).filter(r => r['اسم رب الأسرة*']?.trim())
+
+      // تحقق من التكرار
+      const existingFams = await localDB.families.toArray().catch(()=>[])
+      const existingIds = new Set(existingFams.map(f=>f.head_id).filter(Boolean))
+      const campMap = Object.fromEntries(camps.map(c=>[c.name,c.id]))
+
+      const preview = rows.map(r => {
+        const headId = r['رقم الهوية*']?.trim()
+        const dup = existingIds.has(headId)
+        const campName = r['اسم المخيم*']?.trim()
+        const campId = campMap[campName] || null
+        return {
+          head_name: r['اسم رب الأسرة*'],
+          head_id:   headId,
+          phone1:    r['رقم الجوال*'],
+          phone2:    r['جوال بديل'],
+          head_gender:  r['الجنس'] || 'ذكر',
+          head_marital: r['الحالة الاجتماعية'],
+          head_dob:     r['تاريخ الميلاد'],
+          camp_id:   campId,
+          campName:  campName,
+          tent:      r['الخيمة'],
+          original_address: r['المنطقة الأصلية'],
+          notes:     r['ملاحظات'],
+          dup, campId,
+          valid: !!r['اسم رب الأسرة*'] && !!headId && !!r['رقم الجوال*'],
+        }
+      })
+
+      setImportPreview(preview)
+    } catch(e) { showToast('خطأ في قراءة الملف: '+e.message, true) }
+    finally { setLoading(false); if(importRef.current) importRef.current.value='' }
   }
 
-  async function syncFromServer() {
-    if (!online) return showToast('يتطلب اتصالاً',true)
-    setSyncing(true)
+  // ══ تأكيد الاستيراد ══
+  async function confirmImport() {
+    if (!importPreview) return
+    setImporting(true)
     try {
-      const [fRes,cRes,mRes] = await Promise.all([
-        supabase.from('families').select('*').eq('org_id',ORG_ID),
-        supabase.from('camps').select('*').eq('org_id',ORG_ID),
-        supabase.from('org_members').select('*').eq('org_id',ORG_ID),
-      ])
-      if (fRes.data) await localDB.families.bulkPut(fRes.data)
-      if (cRes.data) await localDB.camps.bulkPut(cRes.data)
-      if (mRes.data) await localDB.org_members.bulkPut(mRes.data)
-      await loadStats()
-      showToast(`✅ تمت المزامنة: ${fRes.data?.length||0} أسرة، ${cRes.data?.length||0} مخيم`)
-    } catch(err) { showToast('خطأ: '+err.message,true) }
-    finally { setSyncing(false) }
+      const toImport = importPreview.filter(r => r.valid && !r.dup)
+      let ok=0, skip=0, err=0
+
+      for (const row of toImport) {
+        try {
+          const fam = {
+            id: crypto.randomUUID(), org_id: ORG_ID,
+            head_name: row.head_name, head_id: row.head_id,
+            phone1: row.phone1, phone2: row.phone2||null,
+            head_gender: row.head_gender, head_marital: row.head_marital||null,
+            head_dob: row.head_dob||null, camp_id: row.camp_id||null,
+            tent: row.tent||null, original_address: row.original_address||null,
+            notes: row.notes||null, category_tags: [],
+            created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          }
+          await localDB.families.put(fam)
+          if (navigator.onLine) {
+            await supabase.from('families').insert(fam)
+          }
+          ok++
+        } catch { err++ }
+      }
+      skip = importPreview.filter(r=>r.dup).length
+
+      showToast(`✅ استُورد ${ok} | تخطى ${skip} مكرر | خطأ ${err}`)
+      setImportPreview(null)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setImporting(false) }
   }
+
+  // ══ نسخة احتياطية ══
+  async function createBackup() {
+    setLoading(true)
+    try {
+      const [fams, mems, camps2, rounds, distFams] = await Promise.all([
+        localDB.families.toArray().catch(()=>[]),
+        localDB.family_members.toArray().catch(()=>[]),
+        localDB.camps.toArray().catch(()=>[]),
+        localDB.dist_rounds.toArray().catch(()=>[]),
+        localDB.camp_dist_families.toArray().catch(()=>[]),
+      ])
+      const backup = {
+        version: 1, org_id: ORG_ID,
+        created_at: new Date().toISOString(),
+        created_by: profile?.full_name,
+        counts: { families: fams.length, members: mems.length, camps: camps2.length },
+        data: { families: fams, family_members: mems, camps: camps2,
+                dist_rounds: rounds, camp_dist_families: distFams }
+      }
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url
+      a.download = `backup_${new Date().toLocaleDateString('ar').replace(/\//g,'-')}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setBackupStats({ families: fams.length, members: mems.length })
+      showToast('✅ تم إنشاء النسخة الاحتياطية')
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  // ══ استعادة نسخة احتياطية ══
+  const restoreRef = useRef()
+  async function handleRestoreFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!window.confirm('سيتم استبدال البيانات المحلية بالنسخة الاحتياطية. هل أنت متأكد؟')) return
+    setLoading(true)
+    try {
+      const text   = await file.text()
+      const backup = JSON.parse(text)
+      if (!backup.data) return showToast('ملف غير صالح', true)
+      if (backup.data.families?.length)        await localDB.families.bulkPut(backup.data.families).catch(()=>{})
+      if (backup.data.family_members?.length)  await localDB.family_members.bulkPut(backup.data.family_members).catch(()=>{})
+      if (backup.data.camps?.length)           await localDB.camps.bulkPut(backup.data.camps).catch(()=>{})
+      showToast(`✅ استُعيدت ${backup.data.families?.length||0} أسرة`)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false); if(restoreRef.current) restoreRef.current.value='' }
+  }
+
+  // ══ مساعد: تحميل CSV ══
+  function downloadCSV(rows, filename) {
+    const csv = rows.map(r =>
+      r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')
+    ).join('\n')
+    const bom  = '\uFEFF'
+    const blob = new Blob([bom+csv], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"
+  const BTN_P = "w-full py-2.5 rounded-xl text-sm font-black text-bg bg-accent"
+  const BTN_B = "w-full py-2.5 rounded-xl text-sm font-bold border"
 
   return (
     <div>
-      <PageHeader icon="💾" title="استيراد / تصدير البيانات"/>
+      <PageHeader icon="📁" title="استيراد وتصدير البيانات" />
 
-      {/* إحصائيات محلية */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {[['👨‍👩‍👧‍👦','أسرة',dbStats.families||0,'accent'],['👤','فرد',dbStats.members||0,'blue'],['🏕️','مخيم',dbStats.camps||0,'green'],['⏳','معلق',dbStats.pending||0,dbStats.pending>0?'red':'muted']].map(([i,l,v,c])=>(
-          <div key={l} className="bg-surface border border-border rounded-xl p-2 text-center">
-            <div className={`text-lg font-black text-${c}`}>{v}</div>
-            <div className="text-muted text-[9px] mt-0.5">{l}</div>
-          </div>
-        ))}
-      </div>
+      {/* فلتر المخيم */}
+      <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL + ' mb-4'}>
+        <option value="">كل المخيمات</option>
+        {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
 
-      {/* تصدير CSV */}
-      <Card title="تصدير CSV / Excel" icon="📤">
-        <div className="mb-3">
-          <label className="text-xs font-bold text-muted block mb-1.5">المخيم</label>
-          <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)}
-            className="w-full bg-surface2 border border-border rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-accent">
-            <option value="">كل المخيمات</option>
-            {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div className="mb-3">
-          <label className="text-xs font-bold text-muted block mb-2">الأعمدة</label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {COLUMNS.map(col=>(
-              <label key={col.key} className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={selCols.includes(col.key)}
-                  onChange={e=>setSelCols(s=>e.target.checked?[...s,col.key]:s.filter(k=>k!==col.key))}
-                  className="w-3.5 h-3.5 accent-amber-500"/>
-                <span className="text-xs text-white">{col.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <button onClick={exportExcel} disabled={exporting||!selCols.length}
-          className="w-full bg-green/15 border border-green/30 text-green font-bold py-2.5 rounded-xl text-sm disabled:opacity-60">
-          {exporting?'جاري التصدير...':'📥 تصدير CSV'}
-        </button>
-      </Card>
-
-      {/* نسخة احتياطية */}
-      <Card title="النسخة الاحتياطية" icon="💾">
-        <p className="text-muted text-xs mb-3">تصدير كامل البيانات بصيغة JSON للحفظ أو النقل</p>
-        <div className="flex gap-2">
-          <button onClick={backupJSON} disabled={backing}
-            className="flex-1 bg-blue/15 border border-blue/30 text-blue font-bold py-2.5 rounded-xl text-sm disabled:opacity-60">
-            {backing?'جاري التصدير...':'⬇️ تصدير JSON'}
-          </button>
-          <label className="flex-1">
-            <input type="file" accept=".json" onChange={restoreJSON} className="hidden"/>
-            <div className={`text-center bg-accent/15 border border-accent/30 text-accent font-bold py-2.5 rounded-xl text-sm cursor-pointer ${restoring?'opacity-60':''}`}>
-              {restoring?'جاري الاستيراد...':'⬆️ استيراد JSON'}
-            </div>
-          </label>
-        </div>
-      </Card>
-
-      {/* مزامنة السيرفر */}
-      <Card title="مزامنة البيانات" icon="🔄">
-        <p className="text-muted text-xs mb-3">جلب أحدث البيانات من السيرفر وتخزينها محلياً</p>
-        <button onClick={syncFromServer} disabled={syncing||!online}
-          className="w-full bg-accent/15 border border-accent/30 text-accent font-bold py-2.5 rounded-xl text-sm disabled:opacity-60">
-          {syncing?'جاري المزامنة...':online?'⬇️ جلب من السيرفر':'لا يوجد اتصال'}
-        </button>
-      </Card>
-
-      {/* التعديلات المعلقة */}
-      {pending.length>0 && (
-        <Card title={`التعديلات المعلقة (${pending.length})`} icon="⏳">
+      {/* ══ تصدير ══ */}
+      <Card title="📥 تصدير البيانات" icon="">
+        {canExport || isOwner || isSuperAdmin ? (
           <div className="flex flex-col gap-2">
-            {pending.slice(0,10).map(item=>{
-              const payload = typeof item.payload==='string'?JSON.parse(item.payload||'{}'):item.payload||{}
-              return (
-                <div key={item.id} className="bg-surface2 rounded-xl px-3 py-2">
-                  <div className="text-white text-xs font-bold">{item.action}</div>
-                  <div className="text-muted text-[10px]">{payload.head_name||payload.name||'—'} · {new Date(item.created_at).toLocaleDateString('ar')}</div>
-                  {item.error && <div className="text-red text-[10px] mt-0.5">❌ {item.error}</div>}
+            <p className="text-muted text-xs mb-2">صدّر بيانات الأسر أو الأفراد إلى CSV</p>
+            <button onClick={exportFamilies} disabled={loading} className={BTN_P}>
+              {loading ? '⏳ جارٍ...' : '👨‍👩‍👧 كشف الأسر'}
+            </button>
+            <button onClick={exportMembers} disabled={loading}
+              className={BTN_B + ' border-blue/40 text-blue'} style={{background:'rgba(59,130,246,0.08)'}}>
+              👤 كشف الأفراد
+            </button>
+            <button onClick={exportMissing} disabled={loading}
+              className={BTN_B + ' border-red/40 text-red'} style={{background:'rgba(239,68,68,0.08)'}}>
+              ⚠️ الأسر الناقصة
+            </button>
+          </div>
+        ) : (
+          <div className="text-center text-red text-xs py-4">🔒 لا تملك صلاحية التصدير</div>
+        )}
+      </Card>
+
+      {/* ══ استيراد ══ */}
+      <Card title="📤 استيراد البيانات" icon="">
+        {canImport || isOwner || isSuperAdmin ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-muted text-xs mb-1">استيراد أسر من CSV — يتحقق من التكرار تلقائياً</p>
+            <button onClick={downloadTemplate}
+              className={BTN_B + ' border-accent/40 text-accent'} style={{background:'rgba(245,158,11,0.08)'}}>
+              📋 تحميل قالب الاستيراد
+            </button>
+            <button onClick={()=>importRef.current?.click()} disabled={loading} className={BTN_P}>
+              📂 اختيار ملف CSV
+            </button>
+            <input ref={importRef} type="file" accept=".csv,.xlsx,.xls"
+              className="hidden" onChange={handleImportFile}/>
+
+            {/* معاينة الاستيراد */}
+            {importPreview && (
+              <div className="mt-2">
+                <div className="text-white text-xs font-bold mb-2">
+                  معاينة: {importPreview.length} سجل
+                  <span className="text-green mr-2">✅ {importPreview.filter(r=>r.valid&&!r.dup).length} جديد</span>
+                  <span className="text-accent mr-2">🔁 {importPreview.filter(r=>r.dup).length} مكرر</span>
+                  <span className="text-red mr-2">❌ {importPreview.filter(r=>!r.valid).length} ناقص</span>
                 </div>
-              )
-            })}
-            {pending.length>10 && <div className="text-muted text-xs text-center">و {pending.length-10} أخرى...</div>}
+                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  {importPreview.map((r,i) => (
+                    <div key={i} className="text-xs px-3 py-1.5 rounded-lg flex justify-between"
+                      style={{background: r.dup?'rgba(245,158,11,0.1)':r.valid?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)'}}>
+                      <span className="text-white">{r.head_name}</span>
+                      <span>{r.dup?'🔁 مكرر':r.valid?'✅':'❌ ناقص'}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={confirmImport} disabled={importing} className={BTN_P + ' flex-1'}>
+                    {importing ? '⏳ جارٍ...' : '✅ تأكيد الاستيراد'}
+                  </button>
+                  <button onClick={()=>setImportPreview(null)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-border text-muted">
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center text-red text-xs py-4">🔒 لا تملك صلاحية الاستيراد</div>
+        )}
+      </Card>
+
+      {/* ══ نسخة احتياطية ══ */}
+      {(isOwner || isSuperAdmin) && (
+        <Card title="💾 النسخة الاحتياطية" icon="">
+          <div className="flex flex-col gap-2">
+            <p className="text-muted text-xs mb-1">حفظ أو استعادة كل البيانات</p>
+            <button onClick={createBackup} disabled={loading} className={BTN_P}>
+              💾 إنشاء نسخة احتياطية
+            </button>
+            <button onClick={()=>restoreRef.current?.click()} disabled={loading}
+              className={BTN_B + ' border-accent/40 text-accent'} style={{background:'rgba(245,158,11,0.08)'}}>
+              📂 استعادة من نسخة احتياطية
+            </button>
+            <input ref={restoreRef} type="file" accept=".json"
+              className="hidden" onChange={handleRestoreFile}/>
+            {backupStats && (
+              <div className="text-green text-xs text-center">
+                ✅ نسخة: {backupStats.families} أسرة · {backupStats.members} فرد
+              </div>
+            )}
           </div>
         </Card>
+      )}
+
+      {loading && (
+        <div className="flex justify-center py-4">
+          <Spinner />
+        </div>
       )}
     </div>
   )
