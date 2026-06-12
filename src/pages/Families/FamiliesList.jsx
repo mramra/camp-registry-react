@@ -308,7 +308,6 @@ export default function FamiliesList() {
     allMembers.forEach(m => { if (!memsByFam[m.family_id]) memsByFam[m.family_id] = []; memsByFam[m.family_id].push(m) })
     return {
       incomplete: base.filter(f => isIncomplete(f, memsByFam[f.id])).length,
-      complete:   base.filter(f => !isIncomplete(f, memsByFam[f.id]) && !dupFamilyIds.has(f.id) && !dupPhoneFamilyIds.has(f.id)).length,
       dup_id:     base.filter(f => dupFamilyIds.has(f.id)).length,
       dup_phone:  base.filter(f => dupPhoneFamilyIds.has(f.id)).length,
     }
@@ -416,7 +415,6 @@ export default function FamiliesList() {
         <select value={filterMiss} onChange={e => setFilterMiss(e.target.value)} className={SEL}>
           <option value="">{filterCamp ? `كل الأسر (${(filterCamp ? families.filter(f=>f.camp_id===filterCamp) : families).length})` : `كل الأسر (${families.length})`}</option>
           <option value="incomplete">⚠️ ناقص ({counts.incomplete})</option>
-          <option value="complete">✅ مكتمل ({counts.complete})</option>
           <option value="dup_id">🔁 هوية مكررة ({counts.dup_id})</option>
           <option value="dup_phone">📞 جوال مكرر ({counts.dup_phone})</option>
         </select>
