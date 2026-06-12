@@ -780,16 +780,16 @@ function calcMemberAge(dob) {
 function FamilyMembersView({ members, family }) {
   const HEALTH_ICONS = { مريض:'🤒', معاق:'♿', مزمن:'💊', مصاب:'🩹' }
 
-  // ترتيب: زوجة أولاً، ثم حسب تاريخ الميلاد (الأكبر أولاً)
-  const REL_ORDER = { 'زوجة':0, 'زوج':0, 'ابن':1, 'ولد':1, 'ابنة':1, 'بنت':1 }
+  // ترتيب: زوجة أولاً، ثم حسب تاريخ الميلاد (الأكبر سناً أولاً)
+  const REL_ORDER = { 'زوجة':0, 'زوج':0 }
   const sorted = [...members].sort((a, b) => {
-    const ra = REL_ORDER[a.relation?.trim()] ?? 2
-    const rb = REL_ORDER[b.relation?.trim()] ?? 2
+    const ra = REL_ORDER[a.relation?.trim()] ?? 1
+    const rb = REL_ORDER[b.relation?.trim()] ?? 1
     if (ra !== rb) return ra - rb
-    // نفس الفئة → ترتيب حسب تاريخ الميلاد (الأكبر سناً أولاً)
-    const da = a.dob ? new Date(a.dob).getTime() : 0
-    const db = b.dob ? new Date(b.dob).getTime() : 0
-    return da - db  // الأقدم تاريخاً = الأكبر سناً أولاً
+    // نفس الفئة → تاريخ ميلاد أقدم = أكبر سناً = يأتي أولاً
+    const da = a.dob ? new Date(a.dob).getTime() : Infinity
+    const db = b.dob ? new Date(b.dob).getTime() : Infinity
+    return da - db
   })
 
   if (!members.length) return (
