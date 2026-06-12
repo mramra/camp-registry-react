@@ -585,16 +585,30 @@ export default function FamilyForm() {
                 لا يوجد أفراد مضافون بعد
               </div>
             ) : (
-              members.map((m, i) => (
-                <MemberRow
-                  key={m.id}
-                  member={m}
-                  index={i}
-                  onUpdate={updateMember}
-                  onRemove={removeMember}
-                  errors={errors}
-                />
-              ))
+              // ترتيب عرضي فقط — زوجة أولاً ثم حسب تاريخ الميلاد
+              [...members]
+                .sort((a, b) => {
+                  const relOrder = { 'زوجة':0, 'زوج':0 }
+                  const ra = relOrder[a.relation?.trim()] ?? 1
+                  const rb = relOrder[b.relation?.trim()] ?? 1
+                  if (ra !== rb) return ra - rb
+                  const da = a.dob ? new Date(a.dob).getTime() : Infinity
+                  const db = b.dob ? new Date(b.dob).getTime() : Infinity
+                  return da - db
+                })
+                .map((m) => {
+                  const i = members.findIndex(x => x.id === m.id)
+                  return (
+                    <MemberRow
+                      key={m.id}
+                      member={m}
+                      index={i}
+                      onUpdate={updateMember}
+                      onRemove={removeMember}
+                      errors={errors}
+                    />
+                  )
+                })
             )}
             <button type="button" onClick={addMember}
               className="w-full py-2.5 border border-dashed border-green rounded-xl text-green text-sm font-bold bg-green/5">
