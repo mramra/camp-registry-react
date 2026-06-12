@@ -23,7 +23,7 @@ export default function CampsList() {
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
   const [editCamp,    setEditCamp]    = useState(null)
-  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active' })
+  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', latitude:'', longitude:'' })
   const [saving,      setSaving]      = useState(false)
 
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
@@ -86,7 +86,7 @@ export default function CampsList() {
 
   function openEdit(camp) {
     setEditCamp(camp)
-    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active' })
+    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active', latitude:camp.latitude||'', longitude:camp.longitude||'' })
     setShowForm(true)
   }
 
@@ -104,6 +104,8 @@ export default function CampsList() {
         address:        form.address        || null,
         capacity:       form.capacity       ? parseInt(form.capacity) : null,
         status:         form.status         || 'active',
+        latitude:       form.latitude ? parseFloat(form.latitude) : (editCamp?.latitude || null),
+        longitude:      form.longitude ? parseFloat(form.longitude) : (editCamp?.longitude || null),
         created_at:     editCamp?.created_at || new Date().toISOString(),
         // احتفظ بالحقول الموجودة مسبقاً
         ...(editCamp ? {
@@ -223,6 +225,37 @@ export default function CampsList() {
               className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
           </div>
           <div>
+            <label className="text-xs font-bold text-muted block mb-1.5">📍 إحداثيات GPS</label>
+            <div className="flex gap-2">
+              <input value={form.latitude} onChange={e=>setForm(f=>({...f,latitude:e.target.value}))}
+                placeholder="خط العرض" type="number" step="any" dir="ltr"
+                className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
+              <input value={form.longitude} onChange={e=>setForm(f=>({...f,longitude:e.target.value}))}
+                placeholder="خط الطول" type="number" step="any" dir="ltr"
+                className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
+            </div>
+            <button type="button"
+              onClick={() => {
+                if (!navigator.geolocation) return
+                navigator.geolocation.getCurrentPosition(
+                  pos => setForm(f=>({...f, latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6)})),
+                  () => alert('تعذّر الحصول على الموقع')
+                )
+              }}
+              className="mt-2 w-full py-2 rounded-xl text-xs font-bold border border-blue/40 text-blue"
+              style={{background:'rgba(59,130,246,0.08)'}}>
+              📡 استخدام موقعي الحالي
+            </button>
+            {(form.latitude && form.longitude) && (
+              <a href={`https://maps.google.com/?q=${form.latitude},${form.longitude}`}
+                target="_blank" rel="noreferrer"
+                className="mt-1.5 flex items-center justify-center gap-1 text-[11px] text-blue py-1.5 rounded-xl border border-blue/30"
+                style={{background:'rgba(59,130,246,0.05)'}}>
+                🗺️ عرض على الخريطة
+              </a>
+            )}
+          </div>
+          <div>
             <label className="text-xs font-bold text-muted block mb-1.5">الطاقة الاستيعابية (أسرة)</label>
             <input type="number" value={form.capacity} onChange={e=>setForm(f=>({...f,capacity:e.target.value}))}
               placeholder="0 = غير محدد" min="0"
@@ -266,7 +299,13 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
               👥 {fc} أسرة{camp.capacity ? ` من ${camp.capacity}` : ''}
               {sub.length > 0 && ` • 🏕️ ${sub.length} فرع`}
             </div>
-            {camp.notes && <div className="text-muted text-[10px] mt-1 bg-surface2 rounded-lg px-2 py-1">{camp.notes}</div>}
+            {camp.latitude && camp.longitude && (
+              <a href={`https://maps.google.com/?q=${camp.latitude},${camp.longitude}`}
+                target="_blank" rel="noreferrer"
+                className="text-[10px] text-blue mt-1 inline-block">
+                🗺️ عرض على الخريطة
+              </a>
+            )}
           </div>
           <span className="text-[10px] font-bold flex-shrink-0" style={{color:st.color}}>{st.label}</span>
         </div>
