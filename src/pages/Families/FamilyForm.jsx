@@ -199,6 +199,18 @@ function MemberRow({ member, index, onUpdate, onRemove, errors }) {
 // ══════════════════════════════════════
 // المكوّن الرئيسي
 // ══════════════════════════════════════
+function sortMembers(mems) {
+  return [...mems].sort((a, b) => {
+    const ro = { 'زوجة':0, 'زوج':0 }
+    const ra = ro[a.relation?.trim()] ?? 1
+    const rb = ro[b.relation?.trim()] ?? 1
+    if (ra !== rb) return ra - rb
+    const da = a.dob ? new Date(a.dob).getTime() : Infinity
+    const db = b.dob ? new Date(b.dob).getTime() : Infinity
+    return da - db
+  })
+}
+
 export default function FamilyForm() {
   const { id } = useParams()
   const isEdit = !!id
@@ -225,7 +237,7 @@ export default function FamilyForm() {
         })
       })
       localDB.family_members.where('family_id').equals(id)
-        .toArray().catch(()=>[]).then(setMembers)
+        .toArray().catch(()=>[]).then(d => setMembers(sortMembers(d)))
 
       // ② جلب من Supabase للتأكد من البيانات الكاملة
       if (navigator.onLine) {
@@ -244,7 +256,7 @@ export default function FamilyForm() {
         supabase.from('family_members').select('*').eq('family_id', id)
           .then(({ data }) => {
             if (data?.length) {
-              setMembers(data)
+              setMembers(sortMembers(data))
               localDB.family_members.bulkPut(data).catch(()=>{})
             }
           })
@@ -585,30 +597,16 @@ export default function FamilyForm() {
                 لا يوجد أفراد مضافون بعد
               </div>
             ) : (
-              // ترتيب عرضي فقط — زوجة أولاً ثم حسب تاريخ الميلاد
-              [...members]
-                .sort((a, b) => {
-                  const relOrder = { 'زوجة':0, 'زوج':0 }
-                  const ra = relOrder[a.relation?.trim()] ?? 1
-                  const rb = relOrder[b.relation?.trim()] ?? 1
-                  if (ra !== rb) return ra - rb
-                  const da = a.dob ? new Date(a.dob).getTime() : Infinity
-                  const db = b.dob ? new Date(b.dob).getTime() : Infinity
-                  return da - db
-                })
-                .map((m) => {
-                  const i = members.findIndex(x => x.id === m.id)
-                  return (
-                    <MemberRow
-                      key={m.id}
-                      member={m}
-                      index={i}
-                      onUpdate={updateMember}
-                      onRemove={removeMember}
-                      errors={errors}
-                    />
-                  )
-                })
+              members.map((m, i) => (
+                <MemberRow
+                  key={m.id}
+                  member={m}
+                  index={i}
+                  onUpdate={updateMember}
+                  onRemove={removeMember}
+                  errors={errors}
+                />
+              ))
             )}
             <button type="button" onClick={addMember}
               className="w-full py-2.5 border border-dashed border-green rounded-xl text-green text-sm font-bold bg-green/5">
