@@ -29,7 +29,8 @@ function calcAge(dob) {
 
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
-  const [syncInfo, setSyncInfo] = useState({ pending:0, failed:0 })
+  const [syncInfo, setSyncInfo] = useState({ pending:0, failed:0, conflicts:0 })
+  const [recent,   setRecent]   = useState([])
   const [syncing,  setSyncing]  = useState(false)
   const [loading,  setLoading]  = useState(true)
 
@@ -90,6 +91,10 @@ export default function Dashboard() {
       .map(c => ({ name:c.name, count:campCount[c.id]||0, pct:Math.round((campCount[c.id]||0)/Math.max(fams.length,1)*100) }))
     setStats({ families:fams.length, members:fams.length+members.length, camps:camps.length, incomplete, children, adults, elderly, noAge, total, campBars })
     getSyncStats().then(setSyncInfo).catch(()=>{})
+    // آخر 5 أسر
+    const campMap2 = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+    const sorted = [...fams].sort((a,b)=>new Date(b.updated_at||0)-new Date(a.updated_at||0)).slice(0,5)
+    setRecent(sorted.map(f=>({...f, campName:campMap2[f.camp_id]||'—'})))
   }
 
   async function handleSync() {
@@ -180,27 +185,63 @@ export default function Dashboard() {
       )}
 
       {/* المزامنة */}
-      <div className="bg-surface border border-border rounded-xl p-3 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full" style={{background: online ? '#10b981' : '#ef4444'}}/>
-            <span className="text-white text-xs font-bold">{online ? 'متصل' : 'أوف لاين'}</span>
-            {(syncInfo.pending > 0 || syncInfo.failed > 0) && (
-              <span className="text-[10px] text-accent">• {syncInfo.pending} معلق</span>
-            )}
+      <div className="bg-surface border border-border rounded-xl p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-accent text-sm font-bold flex items-center gap-2">
+            🔄 المزامنة
           </div>
-          {online && (
-            <button onClick={handleSync} disabled={syncing}
-              className="text-xs font-bold px-3 py-1.5 rounded-xl border border-accent/40 text-accent disabled:opacity-50"
-              style={{background:'rgba(245,158,11,0.1)'}}>
-              {syncing ? '⏳ جارٍ...' : '🔄 مزامنة'}
-            </button>
-          )}
+          <button onClick={handleSync} disabled={syncing || !online}
+            className="font-black px-4 py-2 rounded-xl text-xs disabled:opacity-50"
+            style={{background: online ? 'rgba(245,158,11,0.15)' : 'rgba(100,100,100,0.15)',
+                    color: online ? '#f59e0b' : '#6b7280',
+                    border: `1px solid ${online ? 'rgba(245,158,11,0.4)' : 'rgba(100,100,100,0.3)'}`}}>
+            {syncing ? '⏳ جارٍ...' : '🔄 مزامنة'}
+          </button>
+        </div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{background: online ? '#10b981' : '#ef4444'}}/>
+            <span className="text-white text-sm font-bold">{online ? 'متصل' : 'أوف لاين'}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label:'⏳ انتظار', value: syncInfo.pending,   color: syncInfo.pending   > 0 ? '#f59e0b' : '#6b7280' },
+            { label:'❌ فشل',    value: syncInfo.failed,    color: syncInfo.failed    > 0 ? '#ef4444' : '#6b7280' },
+            { label:'⚠️ تعارض', value: syncInfo.conflicts, color: syncInfo.conflicts > 0 ? '#f59e0b' : '#6b7280' },
+          ].map(s => (
+            <div key={s.label} className="bg-surface2 border border-border rounded-xl p-2.5 text-center">
+              <div className="text-xl font-black" style={{color:s.color}}>{s.value}</div>
+              <div className="text-muted text-[10px] mt-0.5">{s.label}</div>
+            </div>
+          ))}
         </div>
         {!online && (
-          <p className="text-muted text-[10px]">تعمل البيانات محلياً · ستُزامَن عند الاتصال</p>
+          <p className="text-muted text-[10px] text-center mt-2">البيانات محلية · ستُزامَن عند الاتصال</p>
         )}
       </div>
+
+      {/* آخر الأسر المضافة */}
+      {recent.length > 0 && (
+        <div className="bg-surface border border-border rounded-xl p-4 mb-4">
+          <div className="text-accent text-sm font-bold mb-3">📋 آخر الأسر المضافة</div>
+          <div className="flex flex-col gap-2">
+            {recent.map(f => (
+              <div key={f.id} onClick={() => navigate('/families')}
+                className="flex items-center justify-between bg-surface2 rounded-xl px-3 py-2.5 cursor-pointer active:scale-98">
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-xs font-bold truncate">{f.head_name}</div>
+                  <div className="text-muted text-[10px]">🏕️ {f.campName}</div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-accent font-black text-sm">{(f.members_count||1)}</span>
+                  <span className="text-blue text-sm">👥</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* إجراءات سريعة */}
       <div className="bg-surface border border-border rounded-xl p-3 mb-4">
