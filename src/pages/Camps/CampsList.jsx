@@ -23,7 +23,7 @@ export default function CampsList() {
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
   const [editCamp,    setEditCamp]    = useState(null)
-  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', latitude:'', longitude:'' })
+  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', coordinates:'' })
   const [saving,      setSaving]      = useState(false)
 
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
@@ -86,7 +86,7 @@ export default function CampsList() {
 
   function openEdit(camp) {
     setEditCamp(camp)
-    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active', latitude:camp.latitude||'', longitude:camp.longitude||'' })
+    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active', coordinates: camp.latitude && camp.longitude ? `${camp.latitude},${camp.longitude}` : '' })
     setShowForm(true)
   }
 
@@ -104,14 +104,24 @@ export default function CampsList() {
         address:        form.address        || null,
         capacity:       form.capacity       ? parseInt(form.capacity) : null,
         status:         form.status         || 'active',
-        latitude:       form.latitude ? parseFloat(form.latitude) : (editCamp?.latitude || null),
-        longitude:      form.longitude ? parseFloat(form.longitude) : (editCamp?.longitude || null),
+        latitude:       (() => {
+          const c = form.coordinates?.trim()
+          if (!c) return editCamp?.latitude || null
+          const parts = c.split(',')
+          const v = parseFloat(parts[0]?.trim())
+          return isNaN(v) ? null : v
+        })(),
+        longitude:      (() => {
+          const c = form.coordinates?.trim()
+          if (!c) return editCamp?.longitude || null
+          const parts = c.split(',')
+          const v = parseFloat(parts[1]?.trim())
+          return isNaN(v) ? null : v
+        })(),
         created_at:     editCamp?.created_at || new Date().toISOString(),
         // احتفظ بالحقول الموجودة مسبقاً
         ...(editCamp ? {
           manager_id:  editCamp.manager_id  || null,
-          latitude:    editCamp.latitude    || null,
-          longitude:   editCamp.longitude   || null,
           facilities:  editCamp.facilities  || 0,
           portal_open: editCamp.portal_open || false,
         } : {
@@ -226,19 +236,15 @@ export default function CampsList() {
           </div>
           <div>
             <label className="text-xs font-bold text-muted block mb-1.5">📍 إحداثيات GPS</label>
-            <div className="flex gap-2">
-              <input value={form.latitude} onChange={e=>setForm(f=>({...f,latitude:e.target.value}))}
-                placeholder="خط العرض" type="number" step="any" dir="ltr"
-                className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
-              <input value={form.longitude} onChange={e=>setForm(f=>({...f,longitude:e.target.value}))}
-                placeholder="خط الطول" type="number" step="any" dir="ltr"
-                className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
-            </div>
+            <input value={form.coordinates} onChange={e=>setForm(f=>({...f,coordinates:e.target.value}))}
+              placeholder="31.547565,34.461274" dir="ltr"
+              className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-accent"/>
+            <div className="text-muted text-[10px] mt-1">الصيغة: خط_العرض,خط_الطول مثل 31.547565,34.461274</div>
             <button type="button"
               onClick={() => {
                 if (!navigator.geolocation) return
                 navigator.geolocation.getCurrentPosition(
-                  pos => setForm(f=>({...f, latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6)})),
+                  pos => setForm(f=>({...f, coordinates: `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`})),
                   () => alert('تعذّر الحصول على الموقع')
                 )
               }}
@@ -246,12 +252,12 @@ export default function CampsList() {
               style={{background:'rgba(59,130,246,0.08)'}}>
               📡 استخدام موقعي الحالي
             </button>
-            {(form.latitude && form.longitude) && (
-              <a href={`https://maps.google.com/?q=${form.latitude},${form.longitude}`}
+            {form.coordinates && form.coordinates.includes(',') && (
+              <a href={`https://maps.google.com/?q=${form.coordinates.trim()}`}
                 target="_blank" rel="noreferrer"
                 className="mt-1.5 flex items-center justify-center gap-1 text-[11px] text-blue py-1.5 rounded-xl border border-blue/30"
                 style={{background:'rgba(59,130,246,0.05)'}}>
-                🗺️ عرض على الخريطة
+                🗺️ معاينة على الخريطة
               </a>
             )}
           </div>
@@ -300,7 +306,7 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
               {sub.length > 0 && ` • 🏕️ ${sub.length} فرع`}
             </div>
             {camp.latitude && camp.longitude && (
-              <a href={`https://maps.google.com/?q=${camp.latitude},${camp.longitude}`}
+              <a href={`https://maps.google.com/?q=${Number(camp.latitude).toFixed(6)},${Number(camp.longitude).toFixed(6)}`}
                 target="_blank" rel="noreferrer"
                 className="text-[10px] text-blue mt-1 inline-block">
                 🗺️ عرض على الخريطة
