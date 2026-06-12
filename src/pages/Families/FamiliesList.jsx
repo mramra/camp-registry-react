@@ -4,6 +4,7 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
+import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
@@ -104,6 +105,7 @@ export default function FamiliesList() {
   const [selMembers,  setSelMembers]  = useState([])
 
   const { canWrite, canDelete } = useAuth()
+  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { showToast } = useApp()
   const navigate = useNavigate()
 
