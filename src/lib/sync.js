@@ -44,8 +44,20 @@ async function handleSyncItem(item) {
   switch (action) {
     // ── الأسر ──────────────────────────────────────────────
     case 'insert_family':
-    case 'update_family':
-      return await upsertWithConflict('families', data)
+    case 'update_family': {
+      // إزالة الحقول غير المدعومة
+      const ALLOWED = ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
+        'head_marital','phone1','phone2','tent','original_address','address_details',
+        'status','notes','category_tags','economic_level','version','created_at','updated_at','created_by']
+      const cleanFam = {}
+      ALLOWED.forEach(k => { if (data[k] !== undefined) cleanFam[k] = data[k] })
+      // تصحيح categories → category_tags
+      if (data.categories && !cleanFam.category_tags) cleanFam.category_tags = data.categories
+      cleanFam.org_id = ORG_ID
+      const { error } = await supabase.from('families').upsert(cleanFam)
+      if (error) throw error
+      break
+    }
 
     case 'delete_family': {
       const { error } = await supabase.from('families').delete().eq('id', data.id)
@@ -55,8 +67,18 @@ async function handleSyncItem(item) {
 
     // ── المخيمات ───────────────────────────────────────────
     case 'insert_camp':
-    case 'update_camp':
-      return await upsertWithConflict('camps', data)
+    case 'update_camp': {
+      // المخيمات لا تحتاج conflict resolution — المستخدم قصد التعديل
+      const cleanCamp = Object.fromEntries(
+        Object.entries(data).filter(([,v]) => v !== undefined)
+      )
+      const { error } = await supabase.from('camps').upsert({
+        ...cleanCamp,
+        org_id: ORG_ID,
+      })
+      if (error) throw error
+      break
+    }
 
     case 'delete_camp': {
       const { error } = await supabase.from('camps').delete().eq('id', data.id)
@@ -125,20 +147,7 @@ async function upsertWithConflict(table, localData) {
   const { data: serverData } = await supabase
     .from(table).select('id, version, updated_at').eq('id', id).single()
 
-  if (serverData) {
-    const serverVersion = serverData.version   || 0
-    const localVersion  = localData.version    || 0
-    const serverUpdated = new Date(serverData.updated_at || 0).getTime()
-    const localUpdated  = new Date(localData.updated_at  || 0).getTime()
-
-    if (serverVersion > localVersion || serverUpdated > localUpdated + 5000) {
-      console.warn(`[sync] conflict: ${table}/${id}`)
-      try {
-        await localDB[table === 'families' ? 'families' : 'camps'].put(serverData)
-      } catch {}
-      return 'conflict'
-    }
-  }
+  // لا نتحقق من version — المستخدم قصد التعديل دائماً
 
   const { error } = await supabase.from(table).upsert({
     ...localData,
