@@ -488,22 +488,34 @@ export default function FamiliesList() {
                 return (
                   <tr key={f.id} onClick={() => openFamily(f)}
                     className="border-t border-border cursor-pointer transition-all hover:opacity-90"
-                    style={{
-                      backgroundColor: incomplete
-                        ? 'rgba(239,68,68,0.08)'
-                        : isDupId
-                          ? 'rgba(168,85,247,0.08)'
-                          : isDupPhone
-                            ? 'rgba(59,130,246,0.08)'
-                            : 'transparent',
-                      borderRight: incomplete
-                        ? '3px solid rgba(239,68,68,0.7)'
-                        : isDupId
-                          ? '3px solid rgba(168,85,247,0.7)'
-                          : isDupPhone
-                            ? '3px solid rgba(59,130,246,0.7)'
-                            : 'none',
-                    }}>
+                    style={(() => {
+                      // ألوان: أحمر=ناقص، بنفسجي=هوية، أزرق=جوال
+                      const colors = []
+                      if (incomplete) colors.push({bg:'rgba(239,68,68,0.08)',  border:'rgba(239,68,68,0.8)'})
+                      if (isDupId)    colors.push({bg:'rgba(168,85,247,0.08)', border:'rgba(168,85,247,0.8)'})
+                      if (isDupPhone) colors.push({bg:'rgba(59,130,246,0.08)', border:'rgba(59,130,246,0.8)'})
+                      if (!colors.length) return {}
+                      // خلفية: مزج الألوان
+                      const bgColor = colors.length === 1
+                        ? colors[0].bg
+                        : `rgba(${colors.map(c=>c.bg.match(/[\d.]+/g).slice(0,3).join(',')).join('),rgba(')},.06)`
+                      // شريط يمين: gradient إذا أكثر من لون
+                      const borderColor = colors.length === 1
+                        ? `3px solid ${colors[0].border}`
+                        : `3px solid`
+                      const borderImage = colors.length > 1
+                        ? `linear-gradient(to bottom, ${colors.map(c=>c.border).join(', ')}) 1`
+                        : undefined
+                      return {
+                        backgroundColor: colors[0].bg,
+                        borderRight: `3px solid ${colors[0].border}`,
+                        ...(colors.length > 1 && {
+                          background: `linear-gradient(135deg, ${colors.map((c,i)=>`${c.bg} ${i*100/(colors.length-1)}%`).join(', ')})`,
+                          borderRight: `3px solid ${colors[0].border}`,
+                          borderBottom: colors[1] ? `1px solid ${colors[1].border}22` : undefined,
+                        })
+                      }
+                    })()}>
                     <td className="px-2 py-2.5 text-muted text-[11px]">{i+1}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-bold text-white text-[13px] leading-snug">{f.head_name||'—'}</div>
