@@ -1,5 +1,15 @@
 import { useState, useRef } from 'react'
-import * as XLSX from 'xlsx'
+// SheetJS يُحمَّل ديناميكياً
+async function getXLSX() {
+  if (window.XLSX) return window.XLSX
+  await new Promise((res, rej) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+    s.onload = res; s.onerror = rej
+    document.head.appendChild(s)
+  })
+  return window.XLSX
+}
 import { localDB } from '../../lib/db'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -133,6 +143,7 @@ export default function DataPage() {
         return row
       })
 
+      const XLSX = await getXLSX()
       const ws = XLSX.utils.json_to_sheet(rows)
       styleSheet(ws, selected.length)
       const wb = XLSX.utils.book_new()
@@ -192,6 +203,7 @@ export default function DataPage() {
         })
       })
 
+      const XLSX = await getXLSX()
       const ws = XLSX.utils.json_to_sheet(memRows)
       styleSheet(ws, selected.length)
       const wb = XLSX.utils.book_new()
@@ -210,6 +222,7 @@ export default function DataPage() {
     setLoading(true)
     try {
       const { fams, campMap } = await getData()
+      const XLSX = await getXLSX()
       const missing = fams.filter(f => REQUIRED.some(k=>!f[k]?.toString().trim()))
       const rows = missing.map((f,i) => ({
         '#': i+1,
@@ -266,6 +279,7 @@ export default function DataPage() {
 
   // ── تحميل القالب ──
   function downloadTemplate() {
+    const XLSX = await getXLSX()
     const headers = ['اسم رب الأسرة*','رقم الهوية*','رقم الجوال*','جوال بديل','الجنس','الحالة الاجتماعية','تاريخ الميلاد','اسم المخيم*','الخيمة','المنطقة الأصلية','ملاحظات']
     const example = ['محمد أحمد علي محمود','123456789','0599000000','','ذكر','متزوج','1980-01-15','مخيم السلام','A1','غزة','']
     const ws = XLSX.utils.aoa_to_sheet([headers, example])
@@ -282,6 +296,7 @@ export default function DataPage() {
     if (!file) return
     setLoading(true)
     try {
+      const XLSX = await getXLSX()
       const buf  = await file.arrayBuffer()
       const wb   = XLSX.read(buf, { type:'array' })
       const ws   = wb.Sheets[wb.SheetNames[0]]
