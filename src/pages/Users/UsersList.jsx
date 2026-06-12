@@ -42,7 +42,7 @@ export default function UsersList() {
   const [collapsed, setCollapsed] = useState({})
   const [previewUser, setPreviewUser] = useState(null)
 
-  const { profile, isOwner, isSuperAdmin, setPreviewAs } = useAuth()
+  const { profile, isOwner, isSuperAdmin, setPreviewAs, realProfile } = useAuth()
   const navigate = useNavigate()
   const { showToast, online } = useApp()
 
@@ -216,6 +216,17 @@ export default function UsersList() {
     finally { setSaving(false) }
   }
 
+  function handlePreview(user) {
+    // إذا المستخدم هو مالك المنصة لا يمكن محاكاته
+    if (user.role === 'platform_owner') {
+      setPreviewUser(user)  // افتح الصفحة الثابتة فقط
+      return
+    }
+    // فعّل المحاكاة الحقيقية
+    setPreviewAs(user)
+    navigate('/')
+  }
+
   function openEdit(user) {
     let allowedPages = {}
     try { allowedPages = JSON.parse(user.allowed_pages || '{}') } catch {}
@@ -287,7 +298,7 @@ export default function UsersList() {
                 <UserCard user={admin} cfg={cfg} campMap={campMap} isMe={isMe(admin.id)}
                   onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                  onPreview={setPreviewUser}
+                  onPreview={handlePreview}
                   isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                   childCount={adminDelegates.length} isOpen={isOpen}
                   onToggleOpen={() => setCollapsed(c => ({ ...c, [admin.id]: !c[admin.id] }))}
@@ -303,7 +314,7 @@ export default function UsersList() {
                         <UserCard user={delegate} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
                           onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                           onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                          onPreview={setPreviewUser}
+                          onPreview={handlePreview}
                           isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                           childCount={delegateAssistants.length} isOpen={isDOpen}
                           onToggleOpen={() => setCollapsed(c => ({ ...c, [delegate.id]: !c[delegate.id] }))}
