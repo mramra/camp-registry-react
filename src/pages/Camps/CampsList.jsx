@@ -23,7 +23,7 @@ export default function CampsList() {
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
   const [editCamp,    setEditCamp]    = useState(null)
-  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', notes:'' })
+  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active' })
   const [saving,      setSaving]      = useState(false)
 
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
@@ -86,7 +86,7 @@ export default function CampsList() {
 
   function openEdit(camp) {
     setEditCamp(camp)
-    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active', notes:camp.notes||'' })
+    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active' })
     setShowForm(true)
   }
 
@@ -96,15 +96,25 @@ export default function CampsList() {
     setSaving(true)
     try {
       const data = {
-        ...(editCamp || { id: crypto.randomUUID(), org_id: ORG_ID, created_at: new Date().toISOString() }),
+        id:             editCamp?.id || crypto.randomUUID(),
+        org_id:         ORG_ID,
         name:           form.name.trim(),
-        camp_type:      form.camp_type,
+        camp_type:      form.camp_type      || 'main',
         parent_camp_id: form.parent_camp_id || null,
-        address:        form.address || null,
-        capacity:       form.capacity ? parseInt(form.capacity) : null,
-        status:         form.status,
-        notes:          form.notes || null,
-        updated_at:     new Date().toISOString(),
+        address:        form.address        || null,
+        capacity:       form.capacity       ? parseInt(form.capacity) : null,
+        status:         form.status         || 'active',
+        created_at:     editCamp?.created_at || new Date().toISOString(),
+        // احتفظ بالحقول الموجودة مسبقاً
+        ...(editCamp ? {
+          manager_id:  editCamp.manager_id  || null,
+          latitude:    editCamp.latitude    || null,
+          longitude:   editCamp.longitude   || null,
+          facilities:  editCamp.facilities  || 0,
+          portal_open: editCamp.portal_open || false,
+        } : {
+          facilities: 0, portal_open: false,
+        }),
       }
       await localDB.camps.put(data)
       await enqueue(editCamp ? 'update_camp' : 'insert_camp', data)
@@ -218,11 +228,7 @@ export default function CampsList() {
               placeholder="0 = غير محدد" min="0"
               className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
           </div>
-          <div>
-            <label className="text-xs font-bold text-muted block mb-1.5">ملاحظات</label>
-            <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-              rows={2} className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent resize-none"/>
-          </div>
+
           <div className="flex gap-2 pt-1">
             <button type="submit" disabled={saving}
               className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
