@@ -1,172 +1,199 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase, ORG_ID } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
+import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
+function checkIssues(f, mems) {
+  const issues = []
+  REQUIRED.forEach(k => { if (!f[k]?.toString().trim()) issues.push(k) })
+  const m = (f.head_marital||'').trim()
+  if ((m==='متزوج'||m==='متزوجة') && !(mems||[]).some(x=>x.relation==='زوجة'||x.relation==='زوج'))
+    issues.push('زوجة')
+  return issues
+}
+
+const LEVEL_STYLE = {
+  red:    { bg:'rgba(239,68,68,0.08)',    border:'rgba(239,68,68,0.4)',    text:'#ef4444' },
+  yellow: { bg:'rgba(245,158,11,0.08)',   border:'rgba(245,158,11,0.4)',   text:'#f59e0b' },
+  blue:   { bg:'rgba(59,130,246,0.08)',   border:'rgba(59,130,246,0.4)',   text:'#3b82f6' },
+  green:  { bg:'rgba(16,185,129,0.08)',   border:'rgba(16,185,129,0.4)',   text:'#10b981' },
+}
 
 export default function Alerts() {
-  const [alerts,  setAlerts]  = useState([])
-  const [loading, setLoading] = useState(true)
-  const { showToast } = useApp()
+  const [alerts,   setAlerts]  = useState([])
+  const [loading,  setLoading] = useState(true)
+  const { isOwner, isSuperAdmin, isCampDelegate, profile } = useAuth()
+  const { online } = useApp()
+  const navigate = useNavigate()
 
   useEffect(() => { loadAlerts() }, [])
 
   async function loadAlerts() {
     setLoading(true)
     try {
-      const [families, camps, members, dist] = await Promise.all([
+      const [fams, camps, members] = await Promise.all([
         localDB.families.toArray().catch(()=>[]),
         localDB.camps.toArray().catch(()=>[]),
         localDB.family_members.toArray().catch(()=>[]),
-        localDB.dist_rounds.toArray().catch(()=>[]),
       ])
+
       const campMap = Object.fromEntries(camps.map(c=>[c.id,c]))
-      const newAlerts = []
+      const mByFam  = {}
+      members.forEach(m => { if(!mByFam[m.family_id]) mByFam[m.family_id]=[]; mByFam[m.family_id].push(m) })
 
-      // 1. أسر بيانات ناقصة
-      const incomplete = families.filter(f=>REQUIRED.some(k=>!f[k]?.toString().trim()))
-      if (incomplete.length>0) newAlerts.push({
-        id:'incomplete', type:'data', level:'warning',
-        icon:'⚠️', title:`${incomplete.length} أسرة ببيانات ناقصة`,
-        desc:`تحتاج إكمال: ${incomplete.slice(0,3).map(f=>f.head_name||'—').join('، ')}${incomplete.length>3?'...':''}`,
-        action:'/families', actionLabel:'عرض'
-      })
-
-      // 2. مخيمات ممتلئة أو قاربت الامتلاء
-      const campCounts = {}
-      families.forEach(f=>{ campCounts[f.camp_id]=(campCounts[f.camp_id]||0)+1 })
-      camps.forEach(camp=>{
-        if (camp.capacity>0) {
-          const count = campCounts[camp.id]||0
-          const pct = Math.round(count/camp.capacity*100)
-          if (pct>=100) newAlerts.push({
-            id:'full_'+camp.id, type:'capacity', level:'danger',
-            icon:'🔴', title:`مخيم ${camp.name} ممتلئ (${pct}%)`,
-            desc:`${count} أسرة من أصل ${camp.capacity}`,
-            action:'/camps', actionLabel:'المخيمات'
-          })
-          else if (pct>=85) newAlerts.push({
-            id:'near_'+camp.id, type:'capacity', level:'warning',
-            icon:'🟡', title:`مخيم ${camp.name} شبه ممتلئ (${pct}%)`,
-            desc:`${count} أسرة من أصل ${camp.capacity}`,
-            action:'/camps', actionLabel:'المخيمات'
-          })
-        }
-      })
-
-      // 3. أسر بدون مخيم
-      const nocamp = families.filter(f=>!f.camp_id)
-      if (nocamp.length>0) newAlerts.push({
-        id:'nocamp', type:'data', level:'warning',
-        icon:'🏕️', title:`${nocamp.length} أسرة بدون مخيم`,
-        desc:'يجب تعيين مخيم لهذه الأسر',
-        action:'/families', actionLabel:'عرض'
-      })
-
-      // 4. هويات مكررة
-      const idCount = {}
-      families.forEach(f=>{ if(f.head_id) idCount[f.head_id]=(idCount[f.head_id]||0)+1 })
-      const dupIds = Object.entries(idCount).filter(([,v])=>v>1)
-      if (dupIds.length>0) newAlerts.push({
-        id:'dup_id', type:'duplicate', level:'danger',
-        icon:'🔁', title:`${dupIds.length} رقم هوية مكرر`,
-        desc:`أرقام مكررة: ${dupIds.slice(0,2).map(([k])=>k).join('، ')}...`,
-        action:'/families', actionLabel:'عرض'
-      })
-
-      // 5. جوالات مكررة
-      const phoneCount = {}
-      families.forEach(f=>{ if(f.phone1) phoneCount[f.phone1]=(phoneCount[f.phone1]||0)+1 })
-      const dupPhones = Object.entries(phoneCount).filter(([,v])=>v>1)
-      if (dupPhones.length>0) newAlerts.push({
-        id:'dup_phone', type:'duplicate', level:'warning',
-        icon:'📞', title:`${dupPhones.length} رقم جوال مكرر`,
-        desc:'قد يكون خطأ في الإدخال',
-        action:'/families', actionLabel:'عرض'
-      })
-
-      // 6. حالات صحية تحتاج انتباه
-      const healthCases = members.filter(m=>['مصاب','معاق','مزمن'].includes(m.health))
-      if (healthCases.length>0) newAlerts.push({
-        id:'health', type:'health', level:'info',
-        icon:'🏥', title:`${healthCases.length} حالة صحية تحتاج متابعة`,
-        desc:`معاق: ${healthCases.filter(m=>m.health==='معاق').length} · مصاب: ${healthCases.filter(m=>m.health==='مصاب').length} · مزمن: ${healthCases.filter(m=>m.health==='مزمن').length}`,
-        action:'/analysis', actionLabel:'التقارير'
-      })
-
-      // 7. توزيعات مفتوحة قديمة
-      const openDist = dist.filter(d=>d.status==='active')
-      if (openDist.length>0) {
-        const old = openDist.filter(d=>{ const days=(Date.now()-new Date(d.created_at))/86400000; return days>7 })
-        if (old.length>0) newAlerts.push({
-          id:'old_dist', type:'distribution', level:'warning',
-          icon:'📦', title:`${old.length} جولة توزيع مفتوحة منذ أكثر من أسبوع`,
-          desc:old.map(d=>d.name).join('، '),
-          action:'/distributions', actionLabel:'التوزيعات'
-        })
+      // فلتر حسب الدور
+      let myFams = fams
+      if (isCampDelegate && profile?.camp_id) {
+        const myCamps = new Set([profile.camp_id, ...camps.filter(c=>c.parent_camp_id===profile.camp_id).map(c=>c.id)])
+        myFams = fams.filter(f => myCamps.has(f.camp_id))
       }
 
-      // 8. أسر مغادرة
-      const departed = families.filter(f=>['departed','inactive'].includes(f.status))
-      if (departed.length>0) newAlerts.push({
-        id:'departed', type:'info', level:'info',
-        icon:'📤', title:`${departed.length} أسرة مسجلة كمغادرة`,
-        desc:'يمكن مراجعتها في قائمة الأسر',
-        action:'/families', actionLabel:'عرض'
+      const list = []
+
+      // ① بيانات ناقصة
+      const incomplete = myFams.filter(f => checkIssues(f, mByFam[f.id]).length > 0)
+      if (incomplete.length) list.push({
+        level:'yellow', icon:'⚠️',
+        title:`${incomplete.length} أسرة ببيانات ناقصة`,
+        desc:'تحتاج استكمال البيانات',
+        action: () => navigate('/families')
       })
 
-      setAlerts(newAlerts)
-    } catch(err) { showToast('خطأ: '+err.message,true) }
+      // ② بدون جوال
+      const noPhone = myFams.filter(f => !f.phone1?.trim())
+      if (noPhone.length) list.push({
+        level:'yellow', icon:'📵',
+        title:`${noPhone.length} أسرة بدون رقم جوال`,
+        desc:'لا يمكن التواصل معهم'
+      })
+
+      // ③ هويات مكررة
+      const idMap = {}
+      myFams.forEach(f => { if(f.head_id) { idMap[f.head_id]=(idMap[f.head_id]||0)+1 } })
+      members.forEach(m => { if(m.national_id) { idMap[m.national_id]=(idMap[m.national_id]||0)+1 } })
+      const dupIds = myFams.filter(f => f.head_id && (idMap[f.head_id]||0) > 1)
+      if (dupIds.length) list.push({
+        level:'red', icon:'🔁',
+        title:`${dupIds.length} أسرة بهوية مكررة`,
+        desc: dupIds.slice(0,3).map(f=>f.head_name).join('، ') + (dupIds.length>3?' وآخرون':''),
+        action: () => navigate('/families')
+      })
+
+      // ④ جوالات مكررة
+      const phMap = {}
+      myFams.forEach(f => { if(f.phone1) { const p=(f.phone1||'').replace(/\s/g,''); phMap[p]=(phMap[p]||0)+1 } })
+      const dupPh = myFams.filter(f => f.phone1 && (phMap[(f.phone1||'').replace(/\s/g,'')]||0)>1)
+      if (dupPh.length) list.push({
+        level:'yellow', icon:'📞',
+        title:`${dupPh.length} أسرة بجوال مكرر`,
+        desc: dupPh.slice(0,3).map(f=>f.head_name).join('، ') + (dupPh.length>3?' وآخرون':''),
+        action: () => navigate('/families')
+      })
+
+      // ⑤ سعة المخيمات
+      const campCount = {}
+      myFams.forEach(f => { campCount[f.camp_id]=(campCount[f.camp_id]||0)+1 })
+      camps.forEach(c => {
+        if (!c.capacity) return
+        const n = campCount[c.id]||0
+        const pct = Math.round(n/c.capacity*100)
+        if (pct >= 100) list.push({
+          level:'red', icon:'🏕️',
+          title:`مخيم ${c.name} ممتلئ`,
+          desc:`${n} أسرة من ${c.capacity} (${pct}%)`,
+          action: () => navigate('/families')
+        })
+        else if (pct >= 90) list.push({
+          level:'yellow', icon:'🏕️',
+          title:`مخيم ${c.name} شبه ممتلئ (${pct}%)`,
+          desc:`${n} من ${c.capacity} أسرة`
+        })
+      })
+
+      // ⑥ آخر توزيع
+      if (online) {
+        try {
+          const { data:lastDist } = await supabase.from('camp_dist_families')
+            .select('received_at').eq('org_id',ORG_ID)
+            .order('received_at',{ascending:false}).limit(1)
+          if (lastDist?.[0]?.received_at) {
+            const days = Math.floor((Date.now()-new Date(lastDist[0].received_at))/86400000)
+            if (days > 30) list.push({
+              level:'yellow', icon:'📦',
+              title:`لم يُسجَّل توزيع منذ ${days} يوم`,
+              desc:'قد تحتاج جولة توزيع جديدة',
+              action: () => navigate('/distributions')
+            })
+          }
+        } catch(e) {}
+      }
+
+      // ⑦ مستخدمون لم يغيّروا كلمة المرور
+      if ((isOwner||isSuperAdmin) && online) {
+        try {
+          const { data:pending } = await supabase.from('org_members')
+            .select('full_name').eq('org_id',ORG_ID).eq('must_change_pass',true)
+          if (pending?.length) list.push({
+            level:'blue', icon:'🔑',
+            title:`${pending.length} مستخدم لم يغيّر كلمة المرور`,
+            desc: pending.slice(0,3).map(u=>u.full_name).join('، '),
+            action: () => navigate('/users')
+          })
+        } catch(e) {}
+      }
+
+      if (!list.length) list.push({
+        level:'green', icon:'✅',
+        title:'كل شيء على ما يرام',
+        desc:'لا توجد تنبيهات تحتاج انتباهك'
+      })
+
+      setAlerts(list)
+    } catch(e) { console.error(e) }
     finally { setLoading(false) }
   }
 
-  const LEVEL_STYLE = {
-    danger:  { border:'border-red/30',   bg:'bg-red/5',   icon_bg:'bg-red/15'    },
-    warning: { border:'border-accent/30',bg:'bg-accent/5',icon_bg:'bg-accent/15' },
-    info:    { border:'border-blue/30',  bg:'bg-blue/5',  icon_bg:'bg-blue/15'   },
-  }
-
-  const dangerCount  = alerts.filter(a=>a.level==='danger').length
-  const warningCount = alerts.filter(a=>a.level==='warning').length
-
   return (
     <div>
-      <PageHeader icon="🔔" title="التنبيهات الذكية"
-        subtitle={`${alerts.length} تنبيه`}
-        action={<button onClick={loadAlerts} className="bg-surface2 border border-border text-muted px-3 py-1.5 rounded-xl text-xs font-bold">🔄 تحديث</button>}
+      <PageHeader icon="🔔" title="التنبيهات"
+        subtitle={<span className="text-muted text-xs">{alerts.length} تنبيه</span>}
+        action={
+          <button onClick={loadAlerts}
+            className="bg-surface2 border border-border text-white font-bold w-9 h-9 rounded-xl text-sm flex items-center justify-center">
+            🔄
+          </button>
+        }
       />
 
-      {/* ملخص */}
-      {alerts.length>0 && (
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          {[['🔴 حرج',dangerCount,'red'],['🟡 تحذير',warningCount,'accent'],['🔵 معلومة',alerts.length-dangerCount-warningCount,'blue']].map(([l,v,c])=>(
-            <div key={l} className="bg-surface border border-border rounded-xl p-2 text-center">
-              <div className={`text-lg font-black text-${c}`}>{v}</div>
-              <div className="text-muted text-[9px] mt-0.5">{l}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {loading ? <div className="flex justify-center py-16"><Spinner/></div>
-      : alerts.length===0 ? <EmptyState icon="✅" title="لا توجد تنبيهات" subtitle="كل شيء على ما يرام!"/>
+      {loading ? <div className="flex justify-center py-16"><Spinner /></div>
       : (
-        <div className="flex flex-col gap-3">
-          {alerts.sort((a,b)=>['danger','warning','info'].indexOf(a.level)-['danger','warning','info'].indexOf(b.level)).map(alert=>{
-            const s = LEVEL_STYLE[alert.level]||LEVEL_STYLE.info
+        <div className="flex flex-col gap-2">
+          {alerts.map((a,i) => {
+            const s = LEVEL_STYLE[a.level] || LEVEL_STYLE.blue
             return (
-              <div key={alert.id} className={`border rounded-xl p-4 ${s.border} ${s.bg}`}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${s.icon_bg}`}>
-                    {alert.icon}
+              <div key={i}
+                className="rounded-xl p-4 border"
+                style={{background:s.bg, borderColor:s.border}}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="font-bold text-sm mb-1" style={{color:s.text}}>
+                      {a.icon} {a.title}
+                    </div>
+                    <div className="text-muted text-xs">{a.desc}</div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-sm">{alert.title}</div>
-                    <div className="text-muted text-xs mt-0.5 leading-relaxed">{alert.desc}</div>
-                  </div>
+                  {a.action && (
+                    <button onClick={a.action}
+                      className="text-[11px] font-bold px-3 py-1.5 rounded-lg flex-shrink-0"
+                      style={{background:`${s.text}22`,color:s.text,border:`1px solid ${s.border}`}}>
+                      عرض
+                    </button>
+                  )}
                 </div>
               </div>
             )
