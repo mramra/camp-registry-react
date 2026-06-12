@@ -38,12 +38,30 @@ const TABS = [
 ]
 
 // ── DrillDown Modal ─────────────────────────────────────────
-function DrillDownModal({ title, families, campMap, onClose, onOpenFamily }) {
+// items: قائمة أفراد { personName, personId, personGender, personDob, famId, famName, famHeadId, campName }
+// أو أسر عادية { head_name, head_id, phone1, camp_id, id }
+function DrillDownModal({ title, items, campMap, onClose, onOpenFamily }) {
   const [search, setSearch] = useState('')
-  const filtered = families.filter(f =>
-    !search || (f.head_name||'').toLowerCase().includes(search.toLowerCase()) ||
-    (f.head_id||'').includes(search)
-  )
+
+  const filtered = items.filter(item => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    const name = item.personName || item.head_name || ''
+    const id   = item.personId   || item.head_id   || ''
+    return name.toLowerCase().includes(q) || id.includes(q)
+  })
+
+  function getIcon(item) {
+    const g = item.personGender || item.head_gender || ''
+    const age = item.personDob ? calcAge(item.personDob) : null
+    if (age !== null && age < 3)  return '👶'
+    if (age !== null && age < 13) return '🧒'
+    if (age !== null && age < 18) return '🧑'
+    if (g==='ذكر'||g==='male')   return '👨'
+    if (g==='أنثى'||g==='female') return '👩'
+    return '👤'
+  }
+
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0'}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -52,7 +70,7 @@ function DrillDownModal({ title, families, campMap, onClose, onOpenFamily }) {
         <div style={{padding:'16px',borderBottom:'1px solid #374151',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
           <div>
             <div style={{color:'#f59e0b',fontWeight:'900',fontSize:'14px'}}>{title}</div>
-            <div style={{color:'#9ca3af',fontSize:'11px',marginTop:'2px'}}>{families.length} أسرة</div>
+            <div style={{color:'#9ca3af',fontSize:'11px',marginTop:'2px'}}>{items.length} فرد/أسرة</div>
           </div>
           <button onClick={onClose}
             style={{background:'#1f2937',border:'1px solid #374151',color:'#9ca3af',borderRadius:'10px',padding:'6px 14px',fontSize:'12px',cursor:'pointer',fontFamily:'Cairo,sans-serif'}}>
@@ -62,7 +80,7 @@ function DrillDownModal({ title, families, campMap, onClose, onOpenFamily }) {
         {/* بحث */}
         <div style={{padding:'10px 16px',flexShrink:0}}>
           <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="🔍 بحث باسم رب الأسرة أو الهوية..."
+            placeholder="🔍 بحث بالاسم أو الهوية..."
             style={{width:'100%',background:'#1f2937',border:'1px solid #374151',borderRadius:'10px',padding:'8px 12px',color:'white',fontSize:'12px',fontFamily:'Cairo,sans-serif',outline:'none',boxSizing:'border-box'}}
           />
         </div>
@@ -70,21 +88,35 @@ function DrillDownModal({ title, families, campMap, onClose, onOpenFamily }) {
         <div style={{overflowY:'auto',flex:1,padding:'0 16px 16px'}}>
           {filtered.length === 0
             ? <div style={{color:'#9ca3af',textAlign:'center',padding:'20px',fontSize:'12px'}}>لا توجد نتائج</div>
-            : filtered.map((f, i) => (
-              <div key={f.id} onClick={()=>{ onClose(); onOpenFamily(f) }}
-                style={{background:'#1f2937',border:'1px solid #374151',borderRadius:'12px',padding:'12px',marginBottom:'8px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div>
-                  <div style={{color:'white',fontWeight:'bold',fontSize:'13px'}}>{i+1}. {f.head_name}</div>
-                  <div style={{color:'#9ca3af',fontSize:'10px',marginTop:'2px',direction:'ltr',textAlign:'right'}}>
-                    {f.head_id} {f.phone1 ? `· ${f.phone1}` : ''}
+            : filtered.map((item, i) => {
+              const isPerson = !!item.personName
+              const name     = item.personName || item.head_name
+              const subId    = item.personId   || item.head_id
+              const famName  = item.famName
+              const camp     = item.campName   || (item.camp_id && campMap[item.camp_id])
+              const icon     = getIcon(item)
+              const age      = calcAge(item.personDob || item.head_dob)
+              const relation = item.relation
+              return (
+                <div key={i} onClick={()=>{ onClose(); onOpenFamily(item.famId || item.id, item) }}
+                  style={{background:'#1f2937',border:'1px solid #374151',borderRadius:'12px',padding:'10px 14px',marginBottom:'8px',cursor:'pointer',display:'flex',gap:'10px',alignItems:'center'}}>
+                  <span style={{fontSize:'24px',flexShrink:0}}>{icon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:'white',fontWeight:'bold',fontSize:'13px'}}>{i+1}. {name}</div>
+                    {isPerson && famName && (
+                      <div style={{color:'#f59e0b',fontSize:'10px',marginTop:'1px'}}>
+                        👨‍👩‍👧‍👦 أسرة: {famName}
+                      </div>
+                    )}
+                    <div style={{color:'#9ca3af',fontSize:'10px',marginTop:'1px',direction:'ltr',textAlign:'right'}}>
+                      {subId}{age !== null ? ` · ${age} سنة` : ''}{relation ? ` · ${relation}` : ''}
+                    </div>
+                    {camp && <div style={{color:'#3b82f6',fontSize:'10px',marginTop:'1px'}}>🏕️ {camp}</div>}
                   </div>
-                  {f.camp_id && campMap[f.camp_id] && (
-                    <div style={{color:'#3b82f6',fontSize:'10px',marginTop:'1px'}}>🏕️ {campMap[f.camp_id]}</div>
-                  )}
+                  <span style={{color:'#f59e0b',fontSize:'18px',flexShrink:0}}>←</span>
                 </div>
-                <span style={{color:'#f59e0b',fontSize:'18px'}}>←</span>
-              </div>
-            ))
+              )
+            })
           }
         </div>
       </div>
@@ -147,9 +179,26 @@ export default function Analysis() {
       const famIds = new Set(fams.map(f => f.id))
       const mems = members.filter(m => famIds.has(m.family_id))
 
+      const famNameMap = Object.fromEntries(fams.map(f=>[f.id, f.head_name]))
       const allPersons = [
-        ...fams.map(f => ({ dob: f.head_dob, gender: f.head_gender, famId: f.id })),
-        ...mems.map(m => ({ dob: m.dob, gender: m.gender, famId: m.family_id, health: m.health }))
+        // رب الأسرة
+        ...fams.map(f => ({
+          personName: f.head_name, personId: f.head_id,
+          personGender: f.head_gender, personDob: f.head_dob,
+          famId: f.id, famName: f.head_name,
+          campName: campMap[f.camp_id],
+          relation: 'رب الأسرة', isHead: true,
+          dob: f.head_dob, gender: f.head_gender, health: null,
+        })),
+        // الأفراد
+        ...mems.map(m => ({
+          personName: m.name, personId: m.national_id,
+          personGender: m.gender, personDob: m.dob,
+          famId: m.family_id, famName: famNameMap[m.family_id]||'—',
+          campName: campMap[fams.find(f=>f.id===m.family_id)?.camp_id],
+          relation: m.relation, isHead: false,
+          dob: m.dob, gender: m.gender, health: m.health,
+        }))
       ]
 
 
@@ -161,12 +210,13 @@ export default function Analysis() {
       const ageData = AGE_GROUPS.map(g => ({
         label: g.label,
         count: allPersons.filter(p => { const a = calcAge(p.dob); return a !== null && a >= g.min && a <= g.max }).length,
-        famIds: [...new Set(allPersons.filter(p => { const a = calcAge(p.dob); return a !== null && a >= g.min && a <= g.max }).map(p => p.famId))]
+        persons: allPersons.filter(p => { const a = calcAge(p.dob); return a !== null && a >= g.min && a <= g.max }),
       }))
 
-      const males   = allPersons.filter(p => p.gender === 'ذكر'   || p.gender === 'male')
-      const females = allPersons.filter(p => p.gender === 'أنثى' || p.gender === 'female')
-      const noGender = allPersons.length - males.length - females.length
+      const males    = allPersons.filter(p => p.personGender === 'ذكر'   || p.personGender === 'male')
+      const females  = allPersons.filter(p => p.personGender === 'أنثى' || p.personGender === 'female')
+      const noGenderP = allPersons.filter(p => p.personGender!=='ذكر'&&p.personGender!=='male'&&p.personGender!=='أنثى'&&p.personGender!=='female')
+      const noGender  = noGenderP.length
 
       const healthData = {
         'سليم': mems.filter(m => !m.health || m.health === 'سليم').length,
@@ -176,14 +226,15 @@ export default function Analysis() {
         'مصاب': mems.filter(m => m.health === 'مصاب').length,
       }
 
-      const women = allPersons.filter(p => p.gender === 'أنثى' || p.gender === 'female')
+      const women = allPersons.filter(p => p.personGender === 'أنثى' || p.personGender === 'female')
       const womenGroups = AGE_GROUPS.map(g => ({
         label: g.label,
-        count: women.filter(w => { const a = calcAge(w.dob); return a !== null && a >= g.min && a <= g.max }).length,
-        famIds: [...new Set(women.filter(w => { const a = calcAge(w.dob); return a !== null && a >= g.min && a <= g.max }).map(w => w.famId))]
+        count:   women.filter(w => { const a = calcAge(w.dob); return a !== null && a >= g.min && a <= g.max }).length,
+        persons: women.filter(w => { const a = calcAge(w.dob); return a !== null && a >= g.min && a <= g.max }),
       }))
 
       const children = allPersons.filter(p => { const a = calcAge(p.dob); return a !== null && a < 18 })
+      const childPersons = children
       const orphans  = mems.filter(m => m.orphan_status).length
 
       const REQUIRED = ['head_name', 'head_id', 'phone1', 'camp_id']
@@ -203,9 +254,10 @@ export default function Analysis() {
         camps, campMap, allFams: fams,
         rounds: rounds.length, activeRounds, receivedCount, notReceived,
         // famIds للـ drill-down
-        maleFamIds:    [...new Set(males.map(p=>p.famId))],
-        femaleFamIds:  [...new Set(females.map(p=>p.famId))],
-        noGenderFamIds:[...new Set(allPersons.filter(p=>p.gender!=='ذكر'&&p.gender!=='male'&&p.gender!=='أنثى'&&p.gender!=='female').map(p=>p.famId))],
+        malePersons:    males,
+        femalePersons:  females,
+        noGenderPersons:noGenderP,
+        childPersons:   childPersons,
         childFamIds:  [...new Set(children.map(p=>p.famId))],
         healthFamIds: Object.fromEntries(
           ['مريض','معاق','مزمن','مصاب'].map(h => [
@@ -217,16 +269,31 @@ export default function Analysis() {
     finally { setLoading(false) }
   }
 
+  // openDrillDown للأسر (famIds)
   function openDrillDown(title, famIds) {
     if (!famIds || famIds.length === 0) return
     const idSet = new Set(famIds)
-    const filtered = allFamilies.filter(f => idSet.has(f.id))
-    setDrillDown({ title, families: filtered })
+    const famMap2 = Object.fromEntries(allFamilies.map(f=>[f.id,f]))
+    const campMap2 = stats ? stats.campMap : {}
+    const items = allFamilies
+      .filter(f => idSet.has(f.id))
+      .map(f => ({ ...f }))
+    setDrillDown({ title, items })
   }
 
-  async function openFamily(family) {
-    setSelFamily(family)
-    const mems = await localDB.family_members.where('family_id').equals(family.id).toArray().catch(()=>[])
+  // openDrillDownPersons للأفراد (مع بيانات الفرد نفسه)
+  function openDrillDownPersons(title, persons) {
+    if (!persons || persons.length === 0) return
+    setDrillDown({ title, items: persons })
+  }
+
+  async function openFamily(famIdOrId, item) {
+    // famIdOrId: إما family.id مباشرة أو من item.famId
+    const famId = famIdOrId
+    const fam = allFamilies.find(f => f.id === famId)
+    if (!fam) return
+    setSelFamily(fam)
+    const mems = await localDB.family_members.where('family_id').equals(famId).toArray().catch(()=>[])
     setSelMembers(mems)
   }
 
@@ -264,10 +331,10 @@ export default function Analysis() {
             {[
               { icon:'👨‍👩‍👧‍👦', label:'الأسر',    value:stats.total,        color:'accent', famIds: stats.allFams.map(f=>f.id) },
               { icon:'👤',       label:'الأفراد', value:stats.totalPersons, color:'blue',   famIds: stats.allFams.map(f=>f.id) },
-              { icon:'👩',       label:'نساء',    value:stats.females,      color:'purple', famIds: stats.femaleFamIds },
-              { icon:'🧒',       label:'أطفال',   value:stats.children,     color:'green',  famIds: stats.childFamIds  },
+              { icon:'👩',       label:'نساء',    value:stats.females,      color:'purple', persons: stats.femalePersons },
+              { icon:'🧒',       label:'أطفال',   value:stats.children,     color:'green',  persons: stats.childPersons  },
             ].map(s => (
-              <div key={s.label} onClick={() => openDrillDown(s.icon + ' ' + s.label, s.famIds)}
+              <div key={s.label} onClick={() => s.persons ? openDrillDownPersons(s.icon+' '+s.label, s.persons) : openDrillDown(s.icon+' '+s.label, s.famIds)}
                 className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer active:scale-95 transition-all hover:border-accent/40">
                 <div className="text-2xl mb-1">{s.icon}</div>
                 <div className={`text-2xl font-black text-${s.color}`}>{s.value}</div>
@@ -278,9 +345,9 @@ export default function Analysis() {
 
           <Card title="توزيع الجنس" icon="🚻">
             <BarChart data={[
-              { label:'👨 ذكور',    value:stats.males,    famIds:stats.maleFamIds   },
-              { label:'👩 إناث',    value:stats.females,  famIds:stats.femaleFamIds },
-              { label:'⬜ غير محدد', value:stats.noGender, famIds:stats.noGenderFamIds },
+              { label:'👨 ذكور',    value:stats.males,    persons:stats.malePersons   },
+              { label:'👩 إناث',    value:stats.females,  persons:stats.femalePersons },
+              { label:'⬜ غير محدد', value:stats.noGender, persons:stats.noGenderPersons },
             ]} total={stats.males+stats.females+stats.noGender} onDrill={openDrillDown} />
           </Card>
 
@@ -291,8 +358,8 @@ export default function Analysis() {
       {/* ══ الأعمار ══ */}
       {tab === 'age' && (
         <Card title="توزيع الفئات العمرية" icon="🎂">
-          <BarChart data={stats.ageData.map(a=>({ label:a.label, value:a.count, famIds:a.famIds }))}
-            total={stats.totalPersons} onDrill={openDrillDown} />
+          <BarChart data={stats.ageData.map(a=>({ label:a.label, value:a.count, persons:a.persons }))}
+            total={stats.totalPersons} onDrill={(t,_,p)=>openDrillDownPersons(t,p)} />
         </Card>
       )}
 
@@ -324,14 +391,14 @@ export default function Analysis() {
       {/* ══ النساء ══ */}
       {tab === 'women' && (
         <div>
-          <div onClick={() => openDrillDown('👩 النساء', stats.femaleFamIds)}
+          <div onClick={() => openDrillDownPersons('👩 النساء', stats.femalePersons)}
             className="bg-surface border border-border rounded-xl p-4 text-center mb-4 cursor-pointer active:scale-95">
             <div className="text-4xl font-black text-purple-400">{stats.women}</div>
             <div className="text-muted text-sm mt-1">إجمالي النساء والفتيات</div>
           </div>
           <Card title="الفئات العمرية للنساء" icon="👩">
-            <BarChart data={stats.womenGroups.map(g=>({ label:g.label, value:g.count, famIds:g.famIds }))}
-              total={stats.women} onDrill={openDrillDown} />
+            <BarChart data={stats.womenGroups.map(g=>({ label:g.label, value:g.count, persons:g.persons }))}
+              total={stats.women} onDrill={(t,_,p)=>openDrillDownPersons(t,p)} />
           </Card>
         </div>
       )}
@@ -340,7 +407,7 @@ export default function Analysis() {
       {tab === 'children' && (
         <div>
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <div onClick={() => openDrillDown('🧒 الأطفال', stats.childFamIds)}
+            <div onClick={() => openDrillDownPersons('🧒 الأطفال', stats.childPersons)}
               className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer active:scale-95">
               <div className="text-3xl font-black text-green">{stats.children}</div>
               <div className="text-muted text-xs mt-1">أطفال (أقل من 18)</div>
@@ -351,8 +418,8 @@ export default function Analysis() {
             </div>
           </div>
           <Card title="الفئات العمرية للأطفال" icon="🧒">
-            <BarChart data={stats.ageData.slice(0,3).map(a=>({ label:a.label, value:a.count, famIds:a.famIds }))}
-              total={stats.children} onDrill={openDrillDown} />
+            <BarChart data={stats.ageData.slice(0,3).map(a=>({ label:a.label, value:a.count, persons:a.persons }))}
+              total={stats.children} onDrill={(t,_,p)=>openDrillDownPersons(t,p)} />
           </Card>
         </div>
       )}
@@ -409,7 +476,7 @@ export default function Analysis() {
       {drillDown && (
         <DrillDownModal
           title={drillDown.title}
-          families={drillDown.families}
+          items={drillDown.items}
           campMap={campMap}
           onClose={() => setDrillDown(null)}
           onOpenFamily={openFamily}
@@ -485,11 +552,18 @@ function BarChart({ data, total, onDrill }) {
   return (
     <div className="flex flex-col gap-2.5">
       {data.map(item => {
-        const pct   = total > 0 ? Math.round(item.value / total * 100) : 0
-        const width = Math.round(item.value / max * 100)
-        const clickable = item.famIds?.length > 0
+        const pct      = total > 0 ? Math.round(item.value / total * 100) : 0
+        const width    = Math.round(item.value / max * 100)
+        const hasPersons = item.persons?.length > 0
+        const hasFams    = item.famIds?.length > 0
+        const clickable  = hasPersons || hasFams
         return (
-          <div key={item.label} onClick={() => clickable && onDrill?.(item.label, item.famIds)}
+          <div key={item.label}
+            onClick={() => {
+              if (!clickable) return
+              if (hasPersons) onDrill?.(item.label, item.famIds, item.persons)
+              else            onDrill?.(item.label, item.famIds)
+            }}
             className={clickable ? 'cursor-pointer active:opacity-80' : ''}>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-white font-medium truncate max-w-[160px]">{item.label}</span>
@@ -499,7 +573,7 @@ function BarChart({ data, total, onDrill }) {
               <div className="h-full bg-accent rounded-full transition-all duration-500"
                 style={{ width: `${width}%` }} />
             </div>
-            {clickable && <div className="text-[9px] text-accent mt-0.5">← اضغط لعرض الأسر</div>}
+            {clickable && <div className="text-[9px] text-accent mt-0.5">← اضغط لعرض القائمة</div>}
           </div>
         )
       })}
