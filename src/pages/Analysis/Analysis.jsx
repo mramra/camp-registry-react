@@ -152,11 +152,7 @@ export default function Analysis() {
         ...mems.map(m => ({ dob: m.dob, gender: m.gender, famId: m.family_id, health: m.health }))
       ]
 
-      const byStatus = {
-        active:   fams.filter(f => f.status === 'active').length,
-        pending:  fams.filter(f => f.status === 'pending').length,
-        departed: fams.filter(f => f.status === 'departed').length,
-      }
+
 
       const byCamp = camps
         .map(c => ({ id: c.id, name: c.name, count: fams.filter(f => f.camp_id === c.id).length }))
@@ -200,15 +196,16 @@ export default function Analysis() {
 
       setStats({
         total: fams.length, totalPersons: fams.length + mems.length,
-        byStatus, byCamp, ageData,
+        byCamp, ageData,
         males: males.length, females: females.length, noGender,
         healthData, women: women.length, womenGroups,
         children: children.length, orphans, incomplete,
         camps, campMap, allFams: fams,
         rounds: rounds.length, activeRounds, receivedCount, notReceived,
         // famIds للـ drill-down
-        maleFamIds:   [...new Set(males.map(p=>p.famId))],
-        femaleFamIds: [...new Set(females.map(p=>p.famId))],
+        maleFamIds:    [...new Set(males.map(p=>p.famId))],
+        femaleFamIds:  [...new Set(females.map(p=>p.famId))],
+        noGenderFamIds:[...new Set(allPersons.filter(p=>p.gender!=='ذكر'&&p.gender!=='male'&&p.gender!=='أنثى'&&p.gender!=='female').map(p=>p.famId))],
         childFamIds:  [...new Set(children.map(p=>p.famId))],
         healthFamIds: Object.fromEntries(
           ['مريض','معاق','مزمن','مصاب'].map(h => [
@@ -283,17 +280,11 @@ export default function Analysis() {
             <BarChart data={[
               { label:'👨 ذكور',    value:stats.males,    famIds:stats.maleFamIds   },
               { label:'👩 إناث',    value:stats.females,  famIds:stats.femaleFamIds },
-              { label:'⬜ غير محدد', value:stats.noGender, famIds:[] },
+              { label:'⬜ غير محدد', value:stats.noGender, famIds:stats.noGenderFamIds },
             ]} total={stats.males+stats.females+stats.noGender} onDrill={openDrillDown} />
           </Card>
 
-          <Card title="حالة الأسر" icon="📊">
-            <BarChart data={[
-              { label:'🟢 نشط',   value:stats.byStatus.active,   famIds:stats.allFams.filter(f=>f.status==='active').map(f=>f.id)   },
-              { label:'🟡 معلق',  value:stats.byStatus.pending,  famIds:stats.allFams.filter(f=>f.status==='pending').map(f=>f.id)  },
-              { label:'🔴 مغادر', value:stats.byStatus.departed, famIds:stats.allFams.filter(f=>f.status==='departed').map(f=>f.id) },
-            ]} total={stats.total} onDrill={openDrillDown} />
-          </Card>
+
         </div>
       )}
 
