@@ -39,6 +39,7 @@ export default function UsersList() {
   const [form,     setForm]     = useState(EMPTY_FORM)
   const [errors,   setErrors]   = useState({})
   const [collapsed, setCollapsed] = useState({})
+  const [previewUser, setPreviewUser] = useState(null)
 
   const { profile, isOwner, isSuperAdmin } = useAuth()
   const { showToast, online } = useApp()
@@ -299,6 +300,7 @@ export default function UsersList() {
                 <UserCard user={admin} cfg={cfg} campMap={campMap} isMe={isMe(admin.id)}
                   onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
+                  onPreview={setPreviewUser}
                   isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                   childCount={adminDelegates.length} isOpen={isOpen}
                   onToggleOpen={() => setCollapsed(c => ({ ...c, [admin.id]: !c[admin.id] }))}
@@ -314,6 +316,7 @@ export default function UsersList() {
                         <UserCard user={delegate} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
                           onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                           onReset={u => { setReset(u); setNewPass(randomPassword()) }}
+                          onPreview={setPreviewUser}
                           isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                           childCount={delegateAssistants.length} isOpen={isDOpen}
                           onToggleOpen={() => setCollapsed(c => ({ ...c, [delegate.id]: !c[delegate.id] }))}
@@ -495,6 +498,97 @@ export default function UsersList() {
         </form>
       </Modal>
 
+      {/* Modal عرض صفحة المستخدم */}
+      {previewUser && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:1000,overflow:'auto'}}
+          onClick={e=>e.target===e.currentTarget&&setPreviewUser(null)}>
+          <div style={{background:'#0f0f1a',minHeight:'100vh',padding:'16px',maxWidth:'430px',margin:'0 auto'}}>
+            {/* شريط المحاكاة */}
+            <div className="flex items-center justify-between mb-4 bg-surface2 rounded-xl p-3 border border-accent/30">
+              <span className="text-accent text-xs font-bold">👁️ معاينة كما يرى {previewUser.full_name}</span>
+              <button onClick={()=>setPreviewUser(null)}
+                className="bg-surface border border-border text-muted text-xs px-3 py-1.5 rounded-xl">✕ إغلاق</button>
+            </div>
+
+            {/* بيانات المستخدم */}
+            <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                  style={{background: ROLE_CONFIG[previewUser.role]?.badge?.split(' ')[0] || 'rgba(245,158,11,0.15)'}}>
+                  {ROLE_CONFIG[previewUser.role]?.icon}
+                </div>
+                <div>
+                  <div className="text-white font-black">{previewUser.full_name}</div>
+                  <div className={`text-xs font-bold ${ROLE_CONFIG[previewUser.role]?.color}`}>
+                    {ROLE_CONFIG[previewUser.role]?.label}
+                  </div>
+                  {previewUser.camp_id && campMap[previewUser.camp_id] && (
+                    <div className="text-muted text-xs">🏕️ {campMap[previewUser.camp_id]}</div>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ['رقم الهوية', previewUser.national_id],
+                  ['الجوال',     previewUser.phone],
+                  ['الحالة',     previewUser.is_active !== false ? '✅ نشط' : '🚫 موقوف'],
+                  ['تغيير كلمة المرور', previewUser.must_change_pass ? '⚠️ مطلوب' : '✅ تم'],
+                ].filter(([,v])=>v).map(([k,v])=>(
+                  <div key={k} className="bg-surface2 rounded-xl p-2.5">
+                    <div className="text-muted text-[9px] mb-0.5">{k}</div>
+                    <div className="text-white text-xs font-bold">{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* الصلاحيات */}
+            <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+              <div className="text-accent text-xs font-bold mb-3">🔐 الصلاحيات</div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ['➕ إضافة',  previewUser.can_add],
+                  ['✏️ تعديل',  previewUser.can_edit],
+                  ['🗑️ حذف',    previewUser.can_delete],
+                  ['📤 تصدير', previewUser.can_export],
+                  ['📥 استيراد',previewUser.can_import],
+                ].map(([label, allowed])=>(
+                  <span key={label} className="text-[11px] px-2.5 py-1 rounded-lg font-bold border"
+                    style={{
+                      background: allowed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.08)',
+                      color:      allowed ? '#10b981' : '#ef4444',
+                      borderColor:allowed ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.2)',
+                    }}>
+                    {label} {allowed ? '✓' : '✗'}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* الشجرة الهرمية */}
+            <div className="bg-surface border border-border rounded-xl p-4">
+              <div className="text-accent text-xs font-bold mb-2">👥 الموقع التنظيمي</div>
+              {users.filter(u=>['super_admin','platform_owner'].includes(u.role)).map(admin=>{
+                const isMyAdmin = admin.id === previewUser.supervisor_id ||
+                  (previewUser.role==='camp_delegate' && admin.id===previewUser.supervisor_id)
+                return (
+                  <div key={admin.id} className="flex items-center gap-2 mb-1.5">
+                    <span className="text-yellow-400 text-sm">{ROLE_CONFIG[admin.role]?.icon}</span>
+                    <span className={`text-xs font-bold ${isMyAdmin?'text-white':'text-muted'}`}>{admin.full_name}</span>
+                    {isMyAdmin && <span className="text-[9px] text-accent bg-accent/10 px-1.5 rounded">مشرفي</span>}
+                  </div>
+                )
+              })}
+              <div className="flex items-center gap-2 mt-2 bg-accent/10 rounded-xl px-3 py-2 border border-accent/30">
+                <span className="text-xl">{ROLE_CONFIG[previewUser.role]?.icon}</span>
+                <span className="text-white text-xs font-bold">{previewUser.full_name}</span>
+                <span className="text-[9px] text-accent bg-accent/15 px-1.5 rounded mr-auto">أنت</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Modal open={!!resetTarget} onClose={()=>setReset(null)} title="🔑 إعادة تعيين كلمة المرور" size="sm">
         {resetTarget && (
           <div className="flex flex-col gap-4">
@@ -516,7 +610,7 @@ export default function UsersList() {
   )
 }
 
-function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onReset, isOwner, isSuperAdmin, childCount, isOpen, onToggleOpen, fullWidth, online }) {
+function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onReset, onPreview, isOwner, isSuperAdmin, childCount, isOpen, onToggleOpen, fullWidth, online }) {
   return (
     <div className={`bg-surface border border-border rounded-xl overflow-hidden mb-1.5 border-r-4 ${cfg.bg} ${!user.is_active?'opacity-60':''} ${fullWidth?'w-full':''}`}>
       <div className="flex items-center gap-3 p-3">
@@ -543,6 +637,7 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
       {user.role !== 'platform_owner' && (
         <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
           <button onClick={()=>onEdit(user)} className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>
+          <button onClick={()=>onPreview(user)} className="bg-green/10 border border-green/30 text-green px-2.5 py-1 rounded-lg text-[11px] font-bold">👁️</button>
           {!isMe && <button onClick={()=>onToggle(user)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${user.is_active!==false?'bg-red/10 border-red/30 text-red':'bg-green/10 border-green/30 text-green'}`}>{user.is_active!==false?'🚫':'✅'}</button>}
           <button onClick={()=>onReset(user)} className="bg-accent/10 border border-accent/30 text-accent px-2.5 py-1 rounded-lg text-[11px] font-bold">🔑</button>
           {!isMe && (isOwner||isSuperAdmin) && <button onClick={()=>onDelete(user)} className="bg-red/10 border border-red/30 text-red px-2.5 py-1 rounded-lg text-[11px] font-bold">🗑️</button>}
