@@ -40,6 +40,7 @@ export default function UsersList() {
   const [form,     setForm]     = useState(EMPTY_FORM)
   const [errors,   setErrors]   = useState({})
   const [collapsed, setCollapsed] = useState({})
+  const [previewUser, setPreviewUser] = useState(null)
 
   const { profile, isOwner, isSuperAdmin, setPreviewAs } = useAuth()
   const navigate = useNavigate()
@@ -286,7 +287,7 @@ export default function UsersList() {
                 <UserCard user={admin} cfg={cfg} campMap={campMap} isMe={isMe(admin.id)}
                   onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                  onPreview={u => { setPreviewAs(u); navigate('/') }}
+                  onPreview={setPreviewUser}
                   isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                   childCount={adminDelegates.length} isOpen={isOpen}
                   onToggleOpen={() => setCollapsed(c => ({ ...c, [admin.id]: !c[admin.id] }))}
@@ -302,7 +303,7 @@ export default function UsersList() {
                         <UserCard user={delegate} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
                           onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                           onReset={u => { setReset(u); setNewPass(randomPassword()) }}
-                          onPreview={u => { setPreviewAs(u); navigate('/') }}
+                          onPreview={setPreviewUser}
                           isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                           childCount={delegateAssistants.length} isOpen={isDOpen}
                           onToggleOpen={() => setCollapsed(c => ({ ...c, [delegate.id]: !c[delegate.id] }))}
@@ -503,6 +504,16 @@ export default function UsersList() {
         )}
       </Modal>
     </div>
+
+      {/* معاينة المستخدم الكاملة */}
+      {previewUser && (
+        <UserPreviewPage
+          user={previewUser}
+          camps={camps}
+          users={users}
+          onClose={() => setPreviewUser(null)}
+        />
+      )}
   )
 }
 
@@ -539,6 +550,213 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
           {!isMe && (isOwner||isSuperAdmin) && <button onClick={()=>onDelete(user)} className="bg-red/10 border border-red/30 text-red px-2.5 py-1 rounded-lg text-[11px] font-bold">🗑️</button>}
         </div>
       )}
+    </div>
+  )
+}
+
+// ══ صفحة معاينة المستخدم الكاملة ══════════════════════════
+function UserPreviewPage({ user, camps, users, onClose }) {
+  const campMap = Object.fromEntries(camps.map(c => [c.id, c.name]))
+
+  const role = user.role
+  const isOwnerRole    = role === 'platform_owner'
+  const isAdminRole    = role === 'super_admin'
+  const isDelegateRole = role === 'camp_delegate'
+  const isAssistantRole= role === 'assistant'
+
+  // الصفحات المتاحة حسب الدور
+  const ALL_PAGES = [
+    { icon:'📊', label:'لوحة التحكم',   path:'/',              roles:['all'] },
+    { icon:'👨‍👩‍👧‍👦', label:'قائمة الأسر',  path:'/families',     roles:['all'], perm:'view' },
+    { icon:'➕', label:'إضافة أسرة',    path:'/families/add', roles:['all'], perm:'add' },
+    { icon:'🔄', label:'حركات الأسر',   path:'/movements',    roles:['all'] },
+    { icon:'🏕️', label:'المخيمات',      path:'/camps',        roles:['all'] },
+    { icon:'📦', label:'التوزيعات',     path:'/distributions',roles:['all'] },
+    { icon:'📈', label:'التقارير',      path:'/analysis',     roles:['all'] },
+    { icon:'🔔', label:'التنبيهات',     path:'/alerts',       roles:['all'] },
+    { icon:'💬', label:'رسائل SMS',     path:'/sms',          roles:['all'] },
+    { icon:'⚙️', label:'الإعدادات',     path:'/settings',     roles:['all'] },
+    { icon:'❓', label:'المساعدة',      path:'/help',         roles:['all'] },
+    { icon:'👥', label:'المستخدمون',    path:'/users',        roles:['platform_owner','super_admin'] },
+    { icon:'📋', label:'سجل النشاط',   path:'/audit',        roles:['platform_owner','super_admin'] },
+    { icon:'📱', label:'الأجهزة',       path:'/devices',      roles:['platform_owner','super_admin'] },
+    { icon:'💾', label:'استيراد/تصدير',path:'/data',         roles:['platform_owner','super_admin'] },
+    { icon:'💎', label:'الاشتراك',      path:'/subscription', roles:['platform_owner'] },
+  ]
+
+  // صلاحيات الأفعال
+  const PERMS = [
+    { key:'can_add',    label:'➕ إضافة',   value: user.can_add    },
+    { key:'can_edit',   label:'✏️ تعديل',   value: user.can_edit   },
+    { key:'can_delete', label:'🗑️ حذف',     value: user.can_delete },
+    { key:'can_export', label:'📤 تصدير',   value: user.can_export },
+    { key:'can_import', label:'📥 استيراد', value: user.can_import },
+  ]
+
+  // المشرف
+  const supervisor = users.find(u => u.id === user.supervisor_id)
+
+  // المخيمات التي يراها
+  const myCamps = isDelegateRole || isAssistantRole
+    ? camps.filter(c => c.id === user.camp_id || c.parent_camp_id === user.camp_id)
+    : camps
+
+  function canSeePage(page) {
+    if (page.roles.includes('all')) return true
+    return page.roles.includes(role)
+  }
+
+  const ROLE_LABELS = {
+    platform_owner: { label:'مالك المنصة',  icon:'👑', color:'#f59e0b' },
+    super_admin:    { label:'مدير الإيواء', icon:'🔴', color:'#ef4444' },
+    camp_delegate:  { label:'مندوب مخيم',   icon:'🟠', color:'#f59e0b' },
+    assistant:      { label:'مساعد',        icon:'🟡', color:'#3b82f6' },
+  }
+  const rc = ROLE_LABELS[role] || { label: role, icon:'👤', color:'#6b7280' }
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'#0a0a14',zIndex:2000,overflow:'auto',direction:'rtl'}}>
+      {/* شريط المعاينة */}
+      <div style={{background:'linear-gradient(135deg,#7c3aed,#4f46e5)',padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10}}>
+        <div style={{color:'white',fontSize:'12px',fontWeight:'bold'}}>
+          👁️ معاينة: {user.full_name}
+        </div>
+        <button onClick={onClose}
+          style={{background:'white',color:'#7c3aed',border:'none',borderRadius:'8px',padding:'5px 14px',fontSize:'12px',fontWeight:'900',cursor:'pointer'}}>
+          ← رجوع
+        </button>
+      </div>
+
+      <div style={{padding:'16px',maxWidth:'430px',margin:'0 auto'}}>
+
+        {/* بطاقة الهوية */}
+        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl"
+              style={{background:`${rc.color}22`,border:`2px solid ${rc.color}44`}}>
+              {rc.icon}
+            </div>
+            <div>
+              <div className="text-white font-black text-base">{user.full_name}</div>
+              <div className="text-xs font-bold mt-0.5" style={{color:rc.color}}>{rc.label}</div>
+              {user.camp_id && campMap[user.camp_id] && (
+                <div className="text-muted text-xs mt-0.5">🏕️ {campMap[user.camp_id]}</div>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {[
+              ['🪪 الهوية',   user.national_id],
+              ['📞 الجوال',   user.phone],
+              ['🟢 الحالة',   user.is_active !== false ? 'نشط' : 'موقوف'],
+              ['🔑 كلمة المرور', user.must_change_pass ? '⚠️ يجب تغييرها' : '✅ طبيعية'],
+            ].filter(([,v])=>v).map(([k,v])=>(
+              <div key={k} className="bg-surface2 rounded-xl p-2">
+                <div className="text-muted text-[9px]">{k}</div>
+                <div className="text-white font-bold text-xs mt-0.5">{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* التسلسل الوظيفي */}
+        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+          <div className="text-accent text-xs font-bold mb-3">👥 التسلسل الوظيفي</div>
+          <div className="flex flex-col gap-2">
+            {supervisor && (
+              <div className="flex items-center gap-2 bg-surface2 rounded-xl px-3 py-2">
+                <span className="text-lg">{ROLE_LABELS[supervisor.role]?.icon||'👤'}</span>
+                <div>
+                  <div className="text-white text-xs font-bold">{supervisor.full_name}</div>
+                  <div className="text-muted text-[10px]">{ROLE_LABELS[supervisor.role]?.label} — مشرفي</div>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2 border-2"
+              style={{background:`${rc.color}11`,borderColor:`${rc.color}44`}}>
+              <span className="text-lg">{rc.icon}</span>
+              <div>
+                <div className="text-white text-xs font-bold">{user.full_name}</div>
+                <div className="text-xs" style={{color:rc.color}}>{rc.label} ← أنت</div>
+              </div>
+            </div>
+            {/* المرؤوسون */}
+            {users.filter(u=>u.supervisor_id===user.id).slice(0,3).map(sub=>(
+              <div key={sub.id} className="flex items-center gap-2 bg-surface2 rounded-xl px-3 py-2 mr-4">
+                <span className="text-base">{ROLE_LABELS[sub.role]?.icon||'👤'}</span>
+                <div>
+                  <div className="text-white text-xs">{sub.full_name}</div>
+                  <div className="text-muted text-[10px]">{ROLE_LABELS[sub.role]?.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* المخيمات التي يراها */}
+        {(isDelegateRole||isAssistantRole) && (
+          <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+            <div className="text-accent text-xs font-bold mb-2">🏕️ المخيمات التي يراها</div>
+            {myCamps.length === 0
+              ? <div className="text-muted text-xs">لا يوجد مخيم محدد</div>
+              : myCamps.map(c=>(
+                <div key={c.id} className="flex items-center gap-2 bg-surface2 rounded-xl px-3 py-2 mb-1.5">
+                  <span>{c.parent_camp_id ? '🏕️' : '⛺'}</span>
+                  <div>
+                    <div className="text-white text-xs font-bold">{c.name}</div>
+                    {c.address && <div className="text-muted text-[10px]">📍 {c.address}</div>}
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {/* صلاحيات الأفعال */}
+        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+          <div className="text-accent text-xs font-bold mb-3">🔐 صلاحيات الأفعال</div>
+          <div className="flex flex-wrap gap-2">
+            {PERMS.map(p=>(
+              <div key={p.key} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold"
+                style={{
+                  background: p.value ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.08)',
+                  color:      p.value ? '#10b981' : '#ef4444',
+                  border:     `1px solid ${p.value ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.2)'}`,
+                }}>
+                {p.label} {p.value ? '✓' : '✗'}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* الصفحات المسموحة/الممنوعة */}
+        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+          <div className="text-accent text-xs font-bold mb-3">📱 الصفحات</div>
+          <div className="flex flex-col gap-1.5">
+            {ALL_PAGES.map(page => {
+              const allowed = canSeePage(page)
+              return (
+                <div key={page.path} className="flex items-center justify-between px-3 py-2 rounded-xl"
+                  style={{
+                    background: allowed ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.05)',
+                    borderRight: `3px solid ${allowed ? '#10b981' : '#ef4444'}`,
+                  }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{page.icon}</span>
+                    <span className="text-xs font-bold" style={{color: allowed ? 'white' : '#6b7280'}}>
+                      {page.label}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black" style={{color: allowed ? '#10b981' : '#ef4444'}}>
+                    {allowed ? '✓ مسموح' : '✗ ممنوع'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+      </div>
     </div>
   )
 }
