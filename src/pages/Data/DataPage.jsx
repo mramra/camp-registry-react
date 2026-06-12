@@ -278,7 +278,7 @@ export default function DataPage() {
   }
 
   // ── تحميل القالب ──
-  function downloadTemplate() {
+  async function downloadTemplate() {
     const XLSX = await getXLSX()
     const headers = ['اسم رب الأسرة*','رقم الهوية*','رقم الجوال*','جوال بديل','الجنس','الحالة الاجتماعية','تاريخ الميلاد','اسم المخيم*','الخيمة','المنطقة الأصلية','ملاحظات']
     const example = ['محمد أحمد علي محمود','123456789','0599000000','','ذكر','متزوج','1980-01-15','مخيم السلام','A1','غزة','']
