@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID, callAdminAPI } from '../../lib/supabase'
+import { enqueue } from '../../lib/sync'
 import { localDB } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -110,7 +111,7 @@ export default function UsersList() {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
-    if (!online) return showToast('إضافة مستخدم تتطلب اتصالاً', true)
+    if (!navigator.onLine) return showToast('إضافة مستخدم جديد تتطلب اتصالاً بالإنترنت', true)
     setSaving(true)
     try {
       const pass = randomPassword()
@@ -132,41 +133,80 @@ export default function UsersList() {
   async function handleEdit(e) {
     e.preventDefault()
     if (!editUser) return
-    if (!online) return showToast('التعديل يتطلب اتصالاً', true)
     setSaving(true)
     try {
       const updates = {
-        full_name: form.full_name.trim(), phone: form.phone?.trim() || null,
-        camp_id: form.camp_id || null,
-        can_add: form.can_add, can_edit: form.can_edit,
-        can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
+        ...editUser,
+        full_name:    form.full_name.trim(),
+        phone:        form.phone?.trim() || null,
+        camp_id:      form.camp_id || null,
+        can_add:      form.can_add,
+        can_edit:     form.can_edit,
+        can_delete:   form.can_delete,
+        can_export:   form.can_export,
+        can_import:   form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages),
       }
       if (isOwner) updates.role = form.role
-      const { error } = await supabase.from('org_members').update(updates).eq('id', editUser.id)
-      if (error) throw error
-      await localDB.org_members.update(editUser.id, updates)
-      showToast('✅ تم التحديث'); setEditUser(null); await loadData()
+
+      // حفظ محلي فوراً
+      await localDB.org_members.put(updates)
+      setUsers(u => u.map(x => x.id === editUser.id ? updates : x))
+
+      if (navigator.onLine) {
+        const { error } = await supabase.from('org_members')
+          .update(updates).eq('id', editUser.id)
+        if (error) {
+          await enqueue('update_member', updates)
+          showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
+        } else {
+          showToast('✅ تم التحديث')
+        }
+      } else {
+        await enqueue('update_member', updates)
+        showToast('💾 حُفظ محلياً — سيُزامَن عند الاتصال')
+      }
+      setEditUser(null)
     } catch(err) { showToast('خطأ: ' + err.message, true) }
     finally { setSaving(false) }
   }
 
   async function handleToggleStatus(user) {
-    if (!online) return showToast('يتطلب اتصالاً', true)
     const newStatus = !user.is_active
-    await supabase.from('org_members').update({ is_active: newStatus }).eq('id', user.id)
-    await localDB.org_members.update(user.id, { is_active: newStatus })
-    setUsers(u => u.map(x => x.id === user.id ? { ...x, is_active: newStatus } : x))
+    const updated = { ...user, is_active: newStatus }
+
+    // محلي فوراً
+    await localDB.org_members.put(updated)
+    setUsers(u => u.map(x => x.id === user.id ? updated : x))
+
+    if (navigator.onLine) {
+      const { error } = await supabase.from('org_members')
+        .update({ is_active: newStatus }).eq('id', user.id)
+      if (error) await enqueue('update_member', updated)
+    } else {
+      await enqueue('update_member', updated)
+    }
     showToast(newStatus ? '✅ تم التفعيل' : '🚫 تم الإيقاف')
   }
 
   async function handleDelete(user) {
     if (!window.confirm(`حذف "${user.full_name}"؟`)) return
-    if (!online) return showToast('يتطلب اتصالاً', true)
     try {
-      await callAdminAPI('delete_user', { user_id: user.user_id, member_id: user.id })
+      // محلي فوراً
       await localDB.org_members.delete(user.id)
       setUsers(u => u.filter(x => x.id !== user.id))
+
+      if (navigator.onLine) {
+        try {
+          await callAdminAPI('delete_user', { user_id: user.user_id, member_id: user.id })
+        } catch {
+          await enqueue('delete_member', { id: user.id, user_id: user.user_id })
+          showToast('⚠️ سيُحذف من السيرفر عند المزامنة')
+          return
+        }
+      } else {
+        await enqueue('delete_member', { id: user.id, user_id: user.user_id })
+      }
       showToast('✅ تم الحذف')
     } catch(err) { showToast('خطأ: ' + err.message, true) }
   }
@@ -212,15 +252,15 @@ export default function UsersList() {
   return (
     <div>
       <PageHeader icon="👥" title="إدارة المستخدمين" subtitle={`${users.length} مستخدم`}
-        action={(isOwner || isSuperAdmin) && online && (
+        action={(isOwner || isSuperAdmin) && (
           <button onClick={() => { setForm(EMPTY_FORM); setErrors({}); setShowAdd(true) }}
             className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">＋ إضافة</button>
         )}
       />
 
-      {!online && users.length > 0 && (
-        <div className="bg-surface2 border border-border text-muted text-xs rounded-xl p-2.5 mb-3 text-center">
-          📴 عرض للقراءة فقط — التعديل يتطلب اتصالاً
+      {!online && (
+        <div className="bg-surface2 border border-border text-muted text-[10px] rounded-xl p-2.5 mb-3 text-center">
+          📴 أوف لاين — التعديلات ستُزامَن عند الاتصال
         </div>
       )}
       {!online && users.length === 0 && (
@@ -447,7 +487,7 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
           </button>
         )}
       </div>
-      {user.role !== 'platform_owner' && online && (
+      {user.role !== 'platform_owner' && (
         <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
           <button onClick={()=>onEdit(user)} className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>
           {!isMe && <button onClick={()=>onToggle(user)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${user.is_active!==false?'bg-red/10 border-red/30 text-red':'bg-green/10 border-green/30 text-green'}`}>{user.is_active!==false?'🚫':'✅'}</button>}
