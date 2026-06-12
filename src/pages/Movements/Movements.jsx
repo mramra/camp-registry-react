@@ -57,7 +57,7 @@ export default function Movements() {
 
       // ثم Supabase
       if (!navigator.onLine) return
-      const campIds = getAllowedCampIds(camps)
+      // campIds مُعرَّفة مسبقاً أعلاه
       let q = supabase.from('family_movements')
         .select('*, families(head_name,head_id)')
         .eq('org_id', ORG_ID)
