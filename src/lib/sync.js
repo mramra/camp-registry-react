@@ -48,7 +48,7 @@ async function handleSyncItem(item) {
       // إزالة الحقول غير المدعومة
       const ALLOWED = ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
         'head_marital','phone1','phone2','tent','original_address','address_details',
-        'status','notes','category_tags','economic_level','version','created_at','updated_at','created_by']
+        'notes','category_tags','economic_level','version','created_at','updated_at','created_by']
       const cleanFam = {}
       ALLOWED.forEach(k => { if (data[k] !== undefined) cleanFam[k] = data[k] })
       // تصحيح categories → category_tags
