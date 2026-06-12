@@ -158,13 +158,14 @@ export default function Dashboard() {
       {/* إحصائيات رئيسية */}
       <div className="grid grid-cols-2 gap-2 mb-4" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
         {[
-          { icon:'👨‍👩‍👧‍👦', label:'الأسر',        value: stats?.families,  color:'#f59e0b', path:'/families' },
-          { icon:'👤',       label:'الأفراد',      value: stats?.members,   color:'#3b82f6', path:'/families' },
-          { icon:'⛺',       label:'المخيمات',     value: stats?.camps,     color:'#10b981', path:'/camps'    },
-          { icon:'⚠️',       label:'بيانات ناقصة', value: stats?.incomplete,color: stats?.incomplete > 0 ? '#ef4444' : '#6b7280', path:'/families' },
+          { icon:'👨‍👩‍👧‍👦', label:'الأسر',        value: stats?.families,  color:'#f59e0b', path:'/families',              state: null },
+          { icon:'👤',       label:'الأفراد',      value: stats?.members,   color:'#3b82f6', path:'/families',              state: null },
+          { icon:'⛺',       label:'المخيمات',     value: stats?.camps,     color:'#10b981', path:'/camps',                 state: null },
+          { icon:'⚠️',       label:'بيانات ناقصة', value: stats?.incomplete,color: stats?.incomplete > 0 ? '#ef4444' : '#6b7280', path:'/families', state: { filterMiss:'incomplete' } },
         ].map(s => (
-          <div key={s.label} onClick={() => navigate(s.path)}
-            className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer active:scale-95 transition-all">
+          <div key={s.label}
+            className="bg-surface border border-border rounded-xl p-3 text-center cursor-pointer active:scale-95 transition-all"
+            onClick={() => navigate(s.path, s.state ? { state: s.state } : undefined)}>
             <div className="text-2xl mb-1">{s.icon}</div>
             <div className="text-2xl font-black" style={{color:s.color}}>
               {loading ? '—' : (s.value ?? 0)}
@@ -270,7 +271,8 @@ export default function Dashboard() {
           <div className="text-accent text-sm font-bold mb-3">📋 آخر الأسر المضافة</div>
           <div className="flex flex-col gap-2">
             {recent.map(f => (
-              <div key={f.id} onClick={() => navigate('/families')}
+              <div key={f.id}
+                onClick={() => navigate('/families', { state: { openFamily: f.id } })}
                 className="flex items-center justify-between bg-surface2 rounded-xl px-3 py-2.5 cursor-pointer active:scale-98">
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-xs font-bold truncate">{f.head_name}</div>
