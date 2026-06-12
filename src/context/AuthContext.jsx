@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile]     = useState(null)
   const [loading, setLoading]     = useState(true)
   const [mustChange, setMustChange] = useState(false)
+  const [previewAs, setPreviewAs]     = useState(null) // محاكاة دور مستخدم آخر
 
   useEffect(() => {
     // استرجاع الجلسة الحالية
@@ -70,20 +71,27 @@ export function AuthProvider({ children }) {
   }
 
   // ======== صلاحيات ========
-  const role = profile?.role
+  // إذا previewAs مفعّل → استخدم بياناته بدل الحقيقي
+  const effectiveProfile = previewAs || profile
+  const role = effectiveProfile?.role
   const isOwner        = role === 'platform_owner'
   const isSuperAdmin   = role === 'super_admin' || isOwner
   const isCampDelegate = role === 'camp_delegate' || isSuperAdmin
   const isAssistant    = role === 'assistant'
 
-  const canWrite  = isOwner || isSuperAdmin || isCampDelegate || profile?.can_add
-  const canEdit   = isOwner || isSuperAdmin || isCampDelegate || profile?.can_edit
-  const canDelete = isOwner || isSuperAdmin || profile?.can_delete
-  const canExport = isOwner || isSuperAdmin || profile?.can_export
-  const canImport = isOwner || isSuperAdmin || profile?.can_import
+  const canWrite  = isOwner || isSuperAdmin || isCampDelegate || effectiveProfile?.can_add
+  const canEdit   = isOwner || isSuperAdmin || isCampDelegate || effectiveProfile?.can_edit
+  const canDelete = isOwner || isSuperAdmin || effectiveProfile?.can_delete
+  const canExport = isOwner || isSuperAdmin || effectiveProfile?.can_export
+  const canImport = isOwner || isSuperAdmin || effectiveProfile?.can_import
 
   const value = {
-    user, profile, loading, mustChange, setMustChange,
+    user,
+    profile: effectiveProfile,  // يرجع previewAs إذا مفعّل
+    realProfile: profile,       // الملف الشخصي الحقيقي دائماً
+    loading, mustChange, setMustChange,
+    previewAs, setPreviewAs,
+    isPreviewMode: !!previewAs,
     role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
     canWrite, canEdit, canDelete, canExport, canImport,
     signIn, signOut, refetchProfile: () => user && fetchProfile(user.id),
