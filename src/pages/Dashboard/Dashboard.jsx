@@ -282,7 +282,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-2">
             {recent.map(f => (
               <div key={f.id}
-                onClick={() => navigate('/families', { state: { openFamily: f.id } })}
+                onClick={() => navigate('/families', { state: { openFamily: f.id, autoOpen: true } })}
                 className="flex items-center justify-between bg-surface2 rounded-xl px-3 py-2.5 cursor-pointer active:scale-98">
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-xs font-bold truncate">{f.head_name}</div>
