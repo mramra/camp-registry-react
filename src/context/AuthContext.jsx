@@ -1,43 +1,89 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
+import { localDB } from '../lib/db'
 
 const AuthContext = createContext(null)
+const PROFILE_KEY = 'camp_profile'
 
 export function AuthProvider({ children }) {
-  const [user, setUser]           = useState(null)
-  const [profile, setProfile]     = useState(null)
-  const [loading, setLoading]     = useState(true)
+  const [user, setUser]             = useState(null)
+  const [profile, setProfile]       = useState(null)
+  const [loading, setLoading]       = useState(true)
   const [mustChange, setMustChange] = useState(false)
-  const [previewAs, setPreviewAs]     = useState(null) // محاكاة دور مستخدم آخر
+  const [previewAs, setPreviewAs]   = useState(null)
 
   useEffect(() => {
-    // استرجاع الجلسة الحالية
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    initAuth()
+  }, [])
+
+  async function initAuth() {
+    // ── أولاً: تحقق من الجلسة المحلية فوراً ──
+    try {
+      const cached = localStorage.getItem(PROFILE_KEY)
+      if (cached) {
+        const p = JSON.parse(cached)
+        setProfile(p)
+        setLoading(false)  // أظهر التطبيق فوراً من الكاش
+      }
+    } catch {}
+
+    // ── ثانياً: getSession مع timeout ──
+    try {
+      const sessionPromise = supabase.auth.getSession()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 5000)
+      )
+      const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise])
+
       if (session?.user) {
         setUser(session.user)
-        fetchProfile(session.user.id)
+        await fetchProfile(session.user.id)
       } else {
+        // لا جلسة → امسح الكاش وأظهر Login
+        localStorage.removeItem(PROFILE_KEY)
+        setProfile(null)
         setLoading(false)
       }
-    })
+    } catch (err) {
+      // timeout أو خطأ شبكة → استخدم الكاش إذا موجود
+      const cached = localStorage.getItem(PROFILE_KEY)
+      if (!cached) {
+        setProfile(null)
+        setLoading(false)
+      }
+      // إذا كاش موجود → loading=false تم أعلاه، التطبيق يعمل أوف لاين
+      console.warn('[auth] offline mode:', err.message)
+    }
 
-    // الاستماع لتغييرات المصادقة
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // ── ثالثاً: استمع لتغييرات المصادقة ──
+    supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
       } else {
         setUser(null)
         setProfile(null)
+        localStorage.removeItem(PROFILE_KEY)
         setLoading(false)
       }
     })
-
-    return () => subscription.unsubscribe()
-  }, [])
+  }
 
   async function fetchProfile(userId) {
     try {
+      // ① Dexie أولاً
+      const localMembers = await localDB.org_members
+        .filter(m => m.user_id === userId && m.org_id === ORG_ID)
+        .toArray().catch(() => [])
+      if (localMembers.length) {
+        const p = localMembers[0]
+        setProfile(p)
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
+        setLoading(false)
+      }
+
+      // ② Supabase في الخلفية
+      if (!navigator.onLine) return
       const { data, error } = await supabase
         .from('org_members')
         .select('*')
@@ -45,15 +91,16 @@ export function AuthProvider({ children }) {
         .eq('org_id', ORG_ID)
         .single()
 
-      if (error) throw error
-      setProfile(data)
-
-      // فحص must_change_pass من meta
-      const { data: meta } = await supabase.auth.getUser()
-      const userMeta = meta?.user?.user_metadata || {}
-      setMustChange(!!userMeta.must_change_pass)
+      if (!error && data) {
+        setProfile(data)
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(data))
+        try { await localDB.org_members.put(data) } catch {}
+        const { data: meta } = await supabase.auth.getUser()
+        const userMeta = meta?.user?.user_metadata || {}
+        setMustChange(!!userMeta.must_change_pass)
+      }
     } catch (err) {
-      console.error('fetchProfile error:', err)
+      console.warn('[fetchProfile]', err.message)
     } finally {
       setLoading(false)
     }
@@ -67,11 +114,11 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
+    localStorage.removeItem(PROFILE_KEY)
     await supabase.auth.signOut()
   }
 
   // ======== صلاحيات ========
-  // إذا previewAs مفعّل → استخدم بياناته بدل الحقيقي
   const effectiveProfile = previewAs || profile
   const role = effectiveProfile?.role
   const isOwner        = role === 'platform_owner'
@@ -88,14 +135,15 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     profile: effectiveProfile,
-    effectiveProfile,           // نفس profile — للاستخدام في useDataScope
+    effectiveProfile,
     realProfile: profile,
     loading, mustChange, setMustChange,
     previewAs, setPreviewAs,
     isPreviewMode: !!previewAs,
     role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
     canWrite, canEdit, canDelete, canExport, canImport,
-    signIn, signOut, refetchProfile: () => user && fetchProfile(user.id),
+    signIn, signOut,
+    refetchProfile: () => user && fetchProfile(user.id),
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
