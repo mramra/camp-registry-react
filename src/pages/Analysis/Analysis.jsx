@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { localDB } from '../../lib/db'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -40,6 +41,7 @@ export default function Analysis() {
   const [loading,    setLoading]    = useState(true)
   const [filterCamp, setFilterCamp] = useState('all')
   const { showToast, online } = useApp()
+  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
 
   useEffect(() => { loadStats() }, [filterCamp])
 
@@ -47,7 +49,7 @@ export default function Analysis() {
     setLoading(true)
     try {
       // جلب كل البيانات من Dexie أولاً
-      const [families, camps, members, rounds, distFams] = await Promise.all([
+      const [allFamiliesLocal, camps, members, rounds, distFams] = await Promise.all([
         localDB.families.toArray().catch(() => []),
         localDB.camps.toArray().catch(() => []),
         localDB.family_members.toArray().catch(() => []),
@@ -58,13 +60,20 @@ export default function Analysis() {
       // مزامنة في الخلفية إذا متصل
       if (online) {
         Promise.all([
-          supabase.from('families').select('*').eq('org_id', ORG_ID)
-            .then(({ data }) => data && localDB.families.bulkPut(data).catch(() => {})),
+  supabase.from('camps').select('*').eq('org_id', ORG_ID).then(async ({data: ac}) => {
+            const cIds = getAllowedCampIds(ac||[])
+            let q = supabase.from('families').select('*').eq('org_id', ORG_ID)
+            q = applyScope(q, cIds)
+            const {data} = await q
+            if (data) await localDB.families.bulkPut(data).catch(()=>{})
+          }),
           supabase.from('family_members').select('*')
             .then(({ data }) => data && localDB.family_members.bulkPut(data).catch(() => {})),
         ]).catch(() => {})
       }
 
+      const campIds = getAllowedCampIds(camps)
+      const families = filterLocal(allFamiliesLocal, campIds)
       const campMap = Object.fromEntries(camps.map(c => [c.id, c.name]))
 
       // فلتر مخيم
