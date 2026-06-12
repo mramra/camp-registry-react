@@ -137,9 +137,11 @@ export default function Dashboard() {
     setSyncing(true)
     try {
       const r = await processSyncQueue()
-      if (r.synced > 0)    showToast(`✅ تمت مزامنة ${r.synced} عنصر`)
-      if (r.conflicts > 0) showToast(`⚠️ ${r.conflicts} تعارض`, true)
-      if (!r.synced && !r.conflicts) showToast('لا يوجد شيء للمزامنة')
+      const total = r.synced + r.failed + r.conflicts
+      if (r.synced > 0)      showToast(`✅ تمت مزامنة ${r.synced} عنصر`)
+      if (r.failed > 0)      showToast(`❌ فشل ${r.failed} عنصر — اضغط على مربع الفشل للتفاصيل`, true)
+      if (r.conflicts > 0)   showToast(`⚠️ ${r.conflicts} تعارض`, true)
+      if (total === 0)        showToast('لا يوجد شيء في الطابور')
       await loadStats()
     } finally { setSyncing(false) }
   }
