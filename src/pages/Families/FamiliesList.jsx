@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
 import { enqueue } from '../../lib/sync'
@@ -106,6 +106,25 @@ export default function FamiliesList() {
   const { canWrite, canDelete } = useAuth()
   const { showToast } = useApp()
   const navigate = useNavigate()
+
+  const location = useLocation()
+
+  useEffect(() => {
+    // استقبال state من Dashboard
+    const st = location?.state
+    if (st?.filterMiss) setFilterMiss(st.filterMiss)
+    if (st?.filterCamp) setFilterCamp(st.filterCamp)
+    if (st?.openFamily) {
+      // افتح الأسرة مباشرة بعد التحميل
+      loadLocal().then(async () => {
+        await syncBackground()
+        const fams = await localDB.families.toArray().catch(()=>[])
+        const fam  = fams.find(f => f.id === st.openFamily)
+        if (fam) openFamily(fam)
+      })
+      return
+    }
+  }, [location?.state])
 
   useEffect(() => {
     loadLocal().then(async () => {
