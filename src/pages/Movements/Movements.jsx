@@ -3,6 +3,7 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
+import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
@@ -29,6 +30,7 @@ export default function Movements() {
   const [saving,     setSaving]     = useState(false)
 
   const { canWrite } = useAuth()
+  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { showToast } = useApp()
 
   useEffect(() => { loadData() }, [filterType, filterCamp])
@@ -43,6 +45,11 @@ export default function Movements() {
       // حركات — Dexie أولاً
       let movs = await localDB.family_movements.where('org_id').equals(ORG_ID).toArray().catch(()=>[])
       movs.sort((a,b) => (b.date||'').localeCompare(a.date||''))
+      const campIds = getAllowedCampIds(camps)
+      if (campIds !== null && campIds.length > 0 && !filterCamp) {
+        const cSet = new Set(campIds)
+        movs = movs.filter(m => cSet.has(m.from_camp) || cSet.has(m.to_camp))
+      }
       if (filterType) movs = movs.filter(m => m.type === filterType)
       if (filterCamp) movs = movs.filter(m => m.from_camp===filterCamp || m.to_camp===filterCamp)
       setMovements(movs.slice(0,100))
@@ -50,12 +57,16 @@ export default function Movements() {
 
       // ثم Supabase
       if (!navigator.onLine) return
+      const campIds = getAllowedCampIds(camps)
       let q = supabase.from('family_movements')
         .select('*, families(head_name,head_id)')
         .eq('org_id', ORG_ID)
         .order('date', { ascending: false }).limit(200)
       if (filterType) q = q.eq('type', filterType)
       if (filterCamp) q = q.or(`from_camp.eq.${filterCamp},to_camp.eq.${filterCamp}`)
+      else if (campIds !== null && campIds.length > 0) {
+        q = q.or(campIds.map(id=>`from_camp.eq.${id}`).concat(campIds.map(id=>`to_camp.eq.${id}`)).join(','))
+      }
       const { data } = await q
       if (data) {
         try { await localDB.family_movements.bulkPut(data.map(m=>({...m, family_name:m.families?.head_name}))) } catch {}
