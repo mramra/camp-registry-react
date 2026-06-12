@@ -68,15 +68,31 @@ async function handleSyncItem(item) {
     // ── المخيمات ───────────────────────────────────────────
     case 'insert_camp':
     case 'update_camp': {
-      // المخيمات لا تحتاج conflict resolution — المستخدم قصد التعديل
-      const cleanCamp = Object.fromEntries(
-        Object.entries(data).filter(([,v]) => v !== undefined)
-      )
-      const { error } = await supabase.from('camps').upsert({
-        ...cleanCamp,
-        org_id: ORG_ID,
-      })
+      const CAMP_FIELDS = ['id','org_id','name','camp_type','parent_camp_id',
+        'address','capacity','status','manager_id','latitude','longitude',
+        'facilities','portal_open','created_at']
+      const cleanCamp = { org_id: ORG_ID }
+      CAMP_FIELDS.forEach(k => { if (data[k] !== undefined) cleanCamp[k] = data[k] })
+      const { error } = await supabase.from('camps').upsert(cleanCamp)
       if (error) throw error
+      break
+    }
+    case 'delete_member':
+    case 'insert_member':
+    case 'update_member': {
+      const MEMBER_FIELDS = ['id','org_id','full_name','national_id','phone','role',
+        'camp_id','is_active','must_change_pass','created_by','supervisor_id',
+        'can_add','can_edit','can_delete','can_export','can_import',
+        'delegate_camps','created_at']
+      const cleanMember = { org_id: ORG_ID }
+      MEMBER_FIELDS.forEach(k => { if (data[k] !== undefined) cleanMember[k] = data[k] })
+      if (action === 'delete_member') {
+        const { error } = await supabase.from('org_members').delete().eq('id', data.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('org_members').upsert(cleanMember)
+        if (error) throw error
+      }
       break
     }
 
