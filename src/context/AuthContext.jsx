@@ -87,8 +87,9 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
-    profile: effectiveProfile,  // يرجع previewAs إذا مفعّل
-    realProfile: profile,       // الملف الشخصي الحقيقي دائماً
+    profile: effectiveProfile,
+    effectiveProfile,           // نفس profile — للاستخدام في useDataScope
+    realProfile: profile,
     loading, mustChange, setMustChange,
     previewAs, setPreviewAs,
     isPreviewMode: !!previewAs,
