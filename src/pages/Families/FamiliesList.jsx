@@ -239,7 +239,7 @@ export default function FamiliesList() {
 
   // ── حساب التكرارات ───────────────────────────────────
   // حساب التكرارات شاملاً أفراد الأسرة
-  const { dupFamilyIds, dupPhoneFamilyIds, counts } = useMemo(() => {
+  const { dupFamilyIds, dupPhoneFamilyIds } = useMemo(() => {
     // ── تكرار الهويات (رب الأسرة + الأفراد) ──
     const idToFams = {}  // هوية → Set من family_ids
     families.forEach(f => {
