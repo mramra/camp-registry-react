@@ -48,45 +48,34 @@ export default function UsersList() {
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
-    setLoading(true)
+    // ① Dexie فوراً
     try {
-      // ① محلي فوراً — عرض فوري بدون انتظار
-      const [localCamps, localUsers] = await Promise.all([
-        localDB.camps.toArray().catch(() => []),
-        localDB.org_members.toArray().catch(() => []),
+      const [lCamps, lUsers] = await Promise.all([
+        localDB.camps.toArray().catch(()=>[]),
+        localDB.org_members.toArray().catch(()=>[]),
       ])
-      setCamps(localCamps)
-      if (localUsers.length) {
-        setUsers(localUsers)
-        setLoading(false)   // أظهر البيانات المحلية فوراً
-      }
-
-      // ② سيرفر في الخلفية
-      if (navigator.onLine) {
-        try {
-          const [campRes, userRes] = await Promise.all([
-            supabase.from('camps').select('*').eq('org_id', ORG_ID),
-            supabase.from('org_members').select('*').eq('org_id', ORG_ID)
-              .order('created_at', { ascending: false }),
-          ])
-          if (campRes.data) {
-            try { await localDB.camps.bulkPut(campRes.data) } catch {}
-            setCamps(campRes.data)
-          }
-          if (userRes.data) {
-            try { await localDB.org_members.bulkPut(userRes.data) } catch {}
-            setUsers(userRes.data)
-          } else if (userRes.error) {
-            console.warn('org_members:', userRes.error.message)
-          }
-        } catch (err) {
-          console.warn('[users] server:', err.message)
-        }
-      } else if (!localUsers.length) {
-        showToast('لا توجد بيانات محلية — اتصل بالإنترنت', true)
-      }
-    } catch(err) { showToast('خطأ: ' + err.message, true) }
+      if (lCamps.length) setCamps(lCamps)
+      if (lUsers.length) setUsers(lUsers)
+    } catch(e) { console.warn(e) }
     finally { setLoading(false) }
+
+    // ② سيرفر في الخلفية — بصمت
+    if (!navigator.onLine) return
+    try {
+      const [cRes, uRes] = await Promise.all([
+        supabase.from('camps').select('*').eq('org_id', ORG_ID),
+        supabase.from('org_members').select('*').eq('org_id', ORG_ID)
+          .order('created_at', { ascending: false }),
+      ])
+      if (!cRes.error && cRes.data?.length) {
+        try { await localDB.camps.bulkPut(cRes.data) } catch {}
+        setCamps(cRes.data)
+      }
+      if (!uRes.error && uRes.data?.length) {
+        try { await localDB.org_members.bulkPut(uRes.data) } catch {}
+        setUsers(uRes.data)
+      }
+    } catch(e) { console.warn('[users sync]', e.message) }
   }
 
   function setF(field, value) {
@@ -268,11 +257,7 @@ export default function UsersList() {
           📴 أوف لاين — التعديلات ستُزامَن عند الاتصال
         </div>
       )}
-      {!online && users.length === 0 && (
-        <div className="bg-red/10 border border-red/30 text-red text-xs rounded-xl p-3 mb-3 text-center">
-          لا توجد بيانات محلية — اتصل وامزج البيانات أولاً
-        </div>
-      )}
+
 
       <div className="grid grid-cols-4 gap-2 mb-4">
         {[['مدير', users.filter(u=>u.role==='super_admin').length,'red'],
