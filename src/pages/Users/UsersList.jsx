@@ -22,6 +22,7 @@ const ROLE_CONFIG = {
 
 const EMPTY_FORM = {
   full_name:'', national_id:'', phone:'', role:'camp_delegate', camp_id:'',
+  supervisor_id:'',
   can_add:true, can_edit:true, can_delete:false, can_export:false, can_import:false, allowed_pages:{},
 }
 
@@ -120,6 +121,7 @@ export default function UsersList() {
         full_name: form.full_name.trim(), national_id: form.national_id.trim(),
         phone: form.phone.trim(), role: form.role,
         camp_id: form.camp_id || null, org_id: ORG_ID,
+        supervisor_id: form.supervisor_id || null,
         can_add: form.can_add, can_edit: form.can_edit,
         can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages), created_by: profile?.id,
@@ -140,6 +142,7 @@ export default function UsersList() {
         full_name:    form.full_name.trim(),
         phone:        form.phone?.trim() || null,
         camp_id:      form.camp_id || null,
+        supervisor_id: form.supervisor_id || null,
         can_add:      form.can_add,
         can_edit:     form.can_edit,
         can_delete:   form.can_delete,
@@ -226,7 +229,7 @@ export default function UsersList() {
     try { allowedPages = JSON.parse(user.allowed_pages || '{}') } catch {}
     setForm({
       full_name: user.full_name||'', national_id: user.national_id||'', phone: user.phone||'',
-      role: user.role||'', camp_id: user.camp_id||'',
+      role: user.role||'', camp_id: user.camp_id||'', supervisor_id: user.supervisor_id||'',
       can_add: user.can_add??true, can_edit: user.can_edit??true,
       can_delete: user.can_delete??false, can_export: user.can_export??false,
       can_import: user.can_import??false, allowed_pages: allowedPages,
@@ -399,6 +402,32 @@ export default function UsersList() {
               {errors.camp_id && <p className="text-red text-xs mt-1">{errors.camp_id}</p>}
             </div>
           )}
+          {/* تابع لمدير إيواء — للمندوب فقط */}
+          {form.role === 'camp_delegate' && isOwner && (
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">👤 تابع لمدير إيواء</label>
+              <select value={form.supervisor_id} onChange={e=>setF('supervisor_id',e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">— اختر المدير —</option>
+                {users.filter(u=>u.role==='super_admin').map(u=>(
+                  <option key={u.id} value={u.id}>{u.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {/* تابع لمندوب — للمساعد فقط */}
+          {form.role === 'assistant' && (isOwner || isSuperAdmin) && (
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب</label>
+              <select value={form.supervisor_id} onChange={e=>setF('supervisor_id',e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">— اختر المندوب —</option>
+                {users.filter(u=>u.role==='camp_delegate').map(u=>(
+                  <option key={u.id} value={u.id}>{u.full_name} {u.camp_id && campMap[u.camp_id] ? `— ${campMap[u.camp_id]}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex gap-3">
             <button type="submit" disabled={saving} className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
               {saving?'جاري الإنشاء...':'✅ إنشاء المستخدم'}
@@ -430,6 +459,30 @@ export default function UsersList() {
                 className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
                 <option value="">— بدون مخيم —</option>
                 {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          {form.role === 'camp_delegate' && isOwner && (
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">👤 تابع لمدير إيواء</label>
+              <select value={form.supervisor_id} onChange={e=>setF('supervisor_id',e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">— اختر المدير —</option>
+                {users.filter(u=>u.role==='super_admin').map(u=>(
+                  <option key={u.id} value={u.id}>{u.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {form.role === 'assistant' && (isOwner || isSuperAdmin) && (
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب</label>
+              <select value={form.supervisor_id} onChange={e=>setF('supervisor_id',e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">— اختر المندوب —</option>
+                {users.filter(u=>u.role==='camp_delegate').map(u=>(
+                  <option key={u.id} value={u.id}>{u.full_name} {u.camp_id && campMap[u.camp_id] ? `— ${campMap[u.camp_id]}` : ''}</option>
+                ))}
               </select>
             </div>
           )}
