@@ -363,9 +363,9 @@ export default function FamiliesList() {
     // ترتيب: ناقص أولاً إذا فلتر ناقص، وإلا حسب عدد الأفراد
     if (filterMiss === 'incomplete') {
       list.sort((a,b) => {
-        const aI = isIncomplete(a, memsByFamF[a.id]) ? 1 : 0
-        const bI = isIncomplete(b, memsByFamF[b.id]) ? 1 : 0
-        return bI - aI
+        const aI = checkFamilyIssues(a, memsByFamF[a.id]).length
+        const bI = checkFamilyIssues(b, memsByFamF[b.id]).length
+        return bI - aI  // الأكثر نواقصاً أولاً
       })
     } else {
       list.sort((a,b) => (memberCount[b.id]||0) - (memberCount[a.id]||0))
