@@ -333,18 +333,35 @@ export default function FamilyForm() {
       const newVersion = (form.version || 0) + 1
 
       // ═══ بيانات الأسرة الكاملة ═══
+      // الحقول المقبولة في Supabase فقط
+      const ALLOWED_FIELDS = [
+        'id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
+        'head_marital','phone1','phone2','tent','original_address','address_details',
+        'status','notes','category_tags','economic_level','version',
+        'created_at','updated_at','created_by',
+      ]
       const familyData = {
-        ...form,
-        id:         familyId,
-        org_id:     ORG_ID,
-        created_by: profile?.user_id || profile?.id,
-        updated_at: now,
-        created_at: isEdit ? (form.created_at || now) : now,
-        version:    newVersion,
-        // الحقول الجديدة
-        categories:     form.categories     || [],
+        id:             familyId,
+        org_id:         ORG_ID,
+        camp_id:        form.camp_id        || null,
+        head_name:      form.head_name      || '',
+        head_id:        form.head_id        || null,
+        head_gender:    form.head_gender    || null,
+        head_dob:       form.head_dob       || null,
+        head_marital:   form.head_marital   || null,
+        phone1:         form.phone1         || null,
+        phone2:         form.phone2         || null,
+        tent:           form.tent           || null,
+        original_address:  form.original_address  || null,
+        address_details:   form.address_details   || null,
+        status:         form.status         || 'active',
+        notes:          form.notes          || null,
+        category_tags:  form.categories     || form.category_tags || [],
         economic_level: form.economic_level || null,
-        num_orphans:    form.num_orphans    || 0,
+        version:        newVersion,
+        created_at:     isEdit ? (form.created_at || now) : now,
+        updated_at:     now,
+        created_by:     profile?.user_id || profile?.id || null,
       }
 
       // ═══ بيانات الأفراد ═══
@@ -378,18 +395,18 @@ export default function FamilyForm() {
       // ══════════════════════════════════════════
       if (navigator.onLine) {
         // رفع الأسرة
+        // إزالة undefined قبل الإرسال
+        const cleanData = Object.fromEntries(
+          Object.entries(familyData).filter(([,v]) => v !== undefined)
+        )
         const { data: savedFamily, error: fErr } = await supabase
-          .from('families').upsert(familyData).select().single()
+          .from('families').upsert(cleanData).select().single()
 
         if (!fErr && savedFamily) {
-          // تحديث المحلي بما رجع من السيرفر (للتطابق التام)
-          await localDB.families.put({ ...savedFamily,
-            categories:     savedFamily.categories     || [],
-            economic_level: savedFamily.economic_level || null,
-            num_orphans:    savedFamily.num_orphans    || 0,
-          })
+          await localDB.families.put({ ...familyData, ...savedFamily })
         } else if (fErr) {
           console.warn('[save family]', fErr.message)
+          showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
         }
 
         // رفع الأفراد (بدون org_id لأن Supabase لا يقبله في family_members)
