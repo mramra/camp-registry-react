@@ -32,7 +32,7 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }) {
-  const { profile, role, isOwner, isSuperAdmin, signOut } = useAuth()
+  const { profile, role, isOwner, isSuperAdmin, signOut, isPreviewMode, previewAs, setPreviewAs, realProfile } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
@@ -48,6 +48,20 @@ export default function Sidebar({ open, onClose }) {
 
   return (
     <aside className={`fixed top-0 right-0 w-72 h-full bg-surface border-l border-border z-[300] flex flex-col transition-transform duration-300 overflow-y-auto ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+      {/* شريط المحاكاة */}
+      {isPreviewMode && (
+        <div style={{background:'linear-gradient(135deg,#7c3aed,#4f46e5)',padding:'10px 14px'}}>
+          <div style={{color:'white',fontSize:'11px',marginBottom:'6px',fontWeight:'bold'}}>
+            👁️ محاكاة: {previewAs?.full_name}
+          </div>
+          <button
+            onClick={() => { setPreviewAs(null); navigate('/users'); onClose() }}
+            style={{width:'100%',background:'white',color:'#7c3aed',border:'none',
+              borderRadius:'8px',padding:'6px',fontSize:'12px',fontWeight:'900',cursor:'pointer'}}>
+            ← رجوع لحسابي الحقيقي
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 p-5 border-b border-border">
         <div className="w-11 h-11 bg-accent rounded-xl flex items-center justify-center text-2xl flex-shrink-0">⛺</div>
