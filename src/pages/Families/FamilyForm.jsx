@@ -354,7 +354,6 @@ export default function FamilyForm() {
         tent:           form.tent           || null,
         original_address:  form.original_address  || null,
         address_details:   form.address_details   || null,
-        status:         form.status         || 'active',
         notes:          form.notes          || null,
         category_tags:  form.categories     || form.category_tags || [],
         economic_level: form.economic_level || null,
