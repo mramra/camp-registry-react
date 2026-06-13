@@ -305,7 +305,7 @@ export default function FamilyForm() {
                 num_orphans:   data.num_orphans   || 0,
               })
               // حفظ محلي محدّث
-              localDB.families.put(data).catch(()=>{})
+              upsert('families', data)
             }
           })
         supabase.from('family_members').select('*').eq('family_id', id)
@@ -456,10 +456,10 @@ export default function FamilyForm() {
       await upsert('families', familyData)
       // upsert كل فرد بـ id — لا نحذف الأفراد القديمة إلا من removedIds
       const currentMemberIds = new Set(memberDocs.map(m => m.id))
-      const existingMems = await localDB.family_members.where('family_id').equals(familyId).toArray().catch(()=>[])
+      const existingMems = await query('family_members', {family_id: familyId})
       const removedIds   = existingMems.filter(m => !currentMemberIds.has(m.id)).map(m => m.id)
       // احذف المحذوفين فقط
-      if (removedIds.length) await localDB.family_members.bulkDelete(removedIds)
+      if (removedIds.length) await Promise.all(removedIds.map(id => remove('family_members', id)))
       // أضف/حدّث الموجودين
       if (memberDocs.length) {
         const withOrgId = memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
@@ -482,7 +482,7 @@ export default function FamilyForm() {
           .from('families').upsert(cleanData).select().single()
 
         if (!fErr && savedFamily) {
-          await localDB.families.put({ ...familyData, ...savedFamily })
+          await upsert('families', { ...familyData, ...savedFamily })
         } else if (fErr) {
           console.warn('[save family]', fErr.message)
           showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
