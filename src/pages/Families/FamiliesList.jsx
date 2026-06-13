@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -105,6 +105,7 @@ export default function FamiliesList() {
 
   const { canWrite, canDelete } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { query, upsert, bulkUpsert, remove } = useRxDB()
   const { showToast } = useApp()
   const navigate = useNavigate()
 
@@ -118,7 +119,7 @@ export default function FamiliesList() {
     if (st.openFamily) {
       // انتظر تحميل البيانات ثم افتح الأسرة مباشرة
       const tryOpen = async () => {
-        let fams = await localDB.families.toArray().catch(()=>[])
+        let fams = await query('families')
         let fam = fams.find(f => f.id === st.openFamily)
         if (fam) {
           openFamily(fam)
@@ -128,7 +129,7 @@ export default function FamiliesList() {
         if (navigator.onLine) {
           const { data } = await supabase.from('families').select('*').eq('id', st.openFamily).single()
           if (data) {
-            try { await localDB.families.put(data) } catch {}
+            try { await upsert('families', data) } catch {}
             openFamily(data)
           }
         }
@@ -142,7 +143,7 @@ export default function FamiliesList() {
     loadLocal().then(async () => {
       // تحقق من وقت آخر مزامنة — إذا مضى أكثر من 5 دقائق أو فارغة → زامن
       try {
-        const meta = await localDB.meta.get('families_synced_at').catch(() => null)
+        const meta = Promise.resolve(null)
         const lastSync = meta?.value ? new Date(meta.value) : null
         const fiveMin = 5 * 60 * 1000
         const needsSync = !lastSync || (Date.now() - lastSync.getTime() > fiveMin)
@@ -155,9 +156,9 @@ export default function FamiliesList() {
   async function loadLocal() {
     try {
       const [fams, camps, mems] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
+        query('families'),
+        query('camps'),
+        query('family_members'),
       ])
       applyData(fams, camps, mems)
       return fams
@@ -213,7 +214,7 @@ export default function FamiliesList() {
         catch(e) { for (const m of mems) { try { await localDB.family_members.put(m) } catch {} } }
       }
 
-      const localCamps = camps || await localDB.camps.toArray().catch(()=>[])
+      const localCamps = camps || await query('camps')
       applyData(fams, localCamps, mems)
       // حفظ وقت آخر مزامنة
       try { await localDB.meta.put({ key: 'families_synced_at', value: new Date().toISOString() }) } catch {}
@@ -278,8 +279,8 @@ export default function FamiliesList() {
   async function deleteFamily(id) {
     if (!window.confirm('حذف هذه الأسرة؟')) return
     try {
-      await localDB.families.delete(id)
-      await localDB.family_members.where('family_id').equals(id).delete()
+      await remove('families', id)
+      await Promise.all((await query('family_members', {family_id:id})).map(m => remove('family_members', m.id)))
       if (navigator.onLine) {
         await supabase.from('family_members').delete().eq('family_id', id)
         await supabase.from('families').delete().eq('id', id)
