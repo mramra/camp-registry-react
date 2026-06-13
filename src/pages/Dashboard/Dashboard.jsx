@@ -43,7 +43,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useRxDB()
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => { if (psReady) loadStats() }, [psReady])
 
   async function loadStats() {
     try {
