@@ -1,14 +1,18 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { processSyncQueue } from '../lib/sync'
+import { quickSync } from '../lib/syncAll'
 
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   const [online,  setOnline]  = useState(navigator.onLine)
   const [toast,   setToast]   = useState(null)
-  const psReady = true  // دائماً true — PowerSync يتصل في الخلفية
 
   useEffect(() => {
-    const onOnline  = () => setOnline(true)
+    const onOnline = async () => {
+      setOnline(true)
+      try { await processSyncQueue(); await quickSync() } catch {}
+    }
     const onOffline = () => setOnline(false)
     window.addEventListener('online',  onOnline)
     window.addEventListener('offline', onOffline)
@@ -24,7 +28,7 @@ export function AppProvider({ children }) {
   }, [])
 
   return (
-    <AppContext.Provider value={{ online, toast, showToast, psReady }}>
+    <AppContext.Provider value={{ online, toast, showToast, psReady: true }}>
       {children}
     </AppContext.Provider>
   )
