@@ -27,6 +27,7 @@ const NAV_ITEMS = [
     { icon: '💬', label: 'رسائل SMS',       path: '/sms' },
     { icon: '⚙️', label: 'الإعدادات',       path: '/settings' },
     { icon: '💎', label: 'الاشتراك',        path: '/subscription' },
+    { icon: '🛠️', label: 'إدارة البيانات',    path: '/sync',         ownerOnly: true },
     { icon: '❓', label: 'المساعدة',        path: '/help' },
   ]},
 ]
@@ -88,6 +89,7 @@ export default function Sidebar({ open, onClose }) {
         {NAV_ITEMS.map(({ group, items }) => {
           const visible = items.filter(item => {
             if (item.adminOnly && !isOwner && !isSuperAdmin) return false
+          if (item.ownerOnly && !isOwner) return false
           if (item.ownerOnly && !isOwner) return false
             return true
           })
