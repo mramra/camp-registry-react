@@ -311,9 +311,16 @@ export default function FamilyForm() {
         supabase.from('family_members').select('*').eq('family_id', id)
           .then(({ data }) => {
             if (data?.length) {
-              setMembers(sortMembers(data))
+              // دمج Supabase مع Dexie — خذ الأكثر
+              setMembers(prev => {
+                // إذا Supabase أرجع أفراد أكثر → استخدمه
+                // إذا Dexie أكثر → ابقَ على Dexie
+                const merged = data.length >= prev.length ? data : prev
+                return sortMembers(merged)
+              })
               localDB.family_members.bulkPut(data).catch(()=>{})
             }
+            // إذا data فارغة → لا تمسح ما في Dexie
           })
       }
     }
