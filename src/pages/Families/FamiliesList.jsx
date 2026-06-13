@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
+import { localDB } from '../../lib/db'
 import { useRxDB } from '../../lib/useRxDB'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
@@ -217,7 +218,7 @@ export default function FamiliesList() {
       const localCamps = camps || await query('camps')
       applyData(fams, localCamps, mems)
       // حفظ وقت آخر مزامنة
-      try { await localDB.meta.put({ key: 'families_synced_at', value: new Date().toISOString() }) } catch {}
+      // RxDB يتتبع آخر sync تلقائياً
     } catch(e) { console.warn('[sync]', e.message) }
     finally { setSyncing(false) }
   }
@@ -243,8 +244,7 @@ export default function FamiliesList() {
     setSelected(family)
     // ① اقرأ من Dexie مباشرة (أحدث من allMembers في الذاكرة)
     try {
-      const dexieMems = await localDB.family_members
-        .where('family_id').equals(family.id).toArray()
+      const dexieMems = await query('family_members', {family_id: family.id})
       setSelMembers(getMembers(dexieMems, family))
       // حدّث allMembers أيضاً
       setAllMembers(prev => {
