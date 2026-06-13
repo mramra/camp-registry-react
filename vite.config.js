@@ -22,27 +22,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // استثناء workers الخاصة بـ PowerSync
-        globIgnores: ['**/worker*.js', '**/open-worker*.js'],
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        // لا تعترض أي طلبات شبكة — فقط ملفات التطبيق
+        navigateFallback: null,
+        runtimeCaching: [],
       }
     })
   ],
   base: '/camp-registry-react/',
-  // إعداد خاص لـ PowerSync workers
-  worker: {
-    format: 'es',
-  },
-  optimizeDeps: {
-    exclude: ['@powersync/web'],
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        // تجنب تعارض format
-      }
-    }
-  }
 })
