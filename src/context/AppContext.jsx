@@ -1,29 +1,14 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { processSyncQueue, getSyncStats } from '../lib/sync'
-import { quickSync } from '../lib/syncAll'
 
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   const [online,  setOnline]  = useState(navigator.onLine)
-  const [syncing, setSyncing] = useState(false)
   const [toast,   setToast]   = useState(null)
 
-  // ── مراقبة الاتصال ──
   useEffect(() => {
-    const onOnline = async () => {
-      setOnline(true)
-      setSyncing(true)
-      try {
-        // 1. ارفع الكتابات المعلقة
-        await processSyncQueue()
-        // 2. اسحب التحديثات الجديدة من Supabase
-        await quickSync()
-      } catch(e) { console.warn('[AppContext online]', e) }
-      setSyncing(false)
-    }
+    const onOnline  = () => setOnline(true)
     const onOffline = () => setOnline(false)
-
     window.addEventListener('online',  onOnline)
     window.addEventListener('offline', onOffline)
     return () => {
@@ -38,7 +23,7 @@ export function AppProvider({ children }) {
   }, [])
 
   return (
-    <AppContext.Provider value={{ online, syncing, toast, showToast }}>
+    <AppContext.Provider value={{ online, toast, showToast }}>
       {children}
     </AppContext.Provider>
   )
