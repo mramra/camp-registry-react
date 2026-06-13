@@ -24,12 +24,20 @@ export default function LoginPage() {
     try {
       await signIn(id.trim(), pass)
       navigate('/', { replace: true })
-    } catch {
+    } catch(err) {
       const n = attempts + 1
       setAttempts(n)
       if (n >= 5) setLockUntil(Date.now() + 60000)
       else if (n >= 3) setLockUntil(Date.now() + 15000)
-      setError('رقم الهوية أو كلمة المرور غير صحيحة')
+      // أظهر الخطأ الحقيقي للتشخيص
+      const msg = err?.message || 'خطأ غير معروف'
+      if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) {
+        setError('رقم الهوية أو كلمة المرور غير صحيحة')
+      } else if (msg.includes('network') || msg.includes('fetch')) {
+        setError('خطأ في الاتصال — تحقق من الإنترنت')
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
