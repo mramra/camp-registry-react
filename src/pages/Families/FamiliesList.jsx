@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
 import { useRxDB } from '../../lib/useRxDB'
-import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
@@ -199,20 +197,20 @@ export default function FamiliesList() {
 
       // حفظ في Dexie — نتجاهل أخطاء الـ schema بأمان
       if (fams.length) {
-        try { await localDB.families.bulkPut(fams) }
+        try { await bulkUpsert("families", fams) }
         catch(e) {
           console.warn('[dexie] families bulkPut:', e.message)
           // محاولة بديلة — حفظ واحد واحد
-          for (const f of fams) { try { await localDB.families.put(f) } catch {} }
+          for (const f of fams) { try { await upsert("families", f) } catch {} }
         }
       }
       if (camps?.length) {
-        try { await localDB.camps.bulkPut(camps) }
-        catch(e) { for (const c of camps) { try { await localDB.camps.put(c) } catch {} } }
+        try { await bulkUpsert("camps", camps) }
+        catch(e) { await bulkUpsert('camps', camps) }
       }
       if (mems.length) {
-        try { await localDB.family_members.bulkPut(mems) }
-        catch(e) { for (const m of mems) { try { await localDB.family_members.put(m) } catch {} } }
+        try { await bulkUpsert("family_members", mems) }
+        catch(e) { await bulkUpsert('family_members', mems) }
       }
 
       const localCamps = camps || await query('camps')
@@ -262,9 +260,7 @@ export default function FamiliesList() {
         const filtered = getMembers(data, family)
         setSelMembers(filtered)
         try {
-          await localDB.family_members.bulkPut(
-            data.map(m => ({ ...m, org_id: ORG_ID }))
-          )
+          await bulkUpsert('family_members', data.map(m => ({ ...m, org_id: ORG_ID })))
           // حدّث allMembers
           setAllMembers(prev => {
             const others = prev.filter(m => m.family_id !== family.id)
