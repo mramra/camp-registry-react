@@ -165,7 +165,7 @@ export default function Analysis() {
             if (data) await bulkUpsert('families', data)
           }),
           supabase.from('family_members').select('*')
-            .then(({ data }) => data && localDB.family_members.bulkPut(data).catch(() => {})),
+            .then(({ data }) => data && bulkUpsert('family_members', data).catch(() => {})),
         ]).catch(() => {})
       }
 
@@ -294,7 +294,7 @@ export default function Analysis() {
     const fam = allFamilies.find(f => f.id === famId)
     if (!fam) return
     setSelFamily(fam)
-    const mems = await localDB.family_members.where('family_id').equals(famId).toArray().catch(()=>[])
+    const mems = await query('family_members', {family_id: famId})
     setSelMembers(mems)
   }
 
