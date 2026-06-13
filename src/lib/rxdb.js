@@ -2,9 +2,9 @@
  * rxdb.js — قاعدة البيانات المحلية + مزامنة Supabase
  * يستبدل db.js + sync.js بالكامل
  */
-import { createRxDatabase, addRxPlugin } from 'rxdb/plugins/core'
+import { createRxDatabase, addRxPlugin } from 'rxdb'
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
-import { replicateSupabase } from 'rxdb-supabase'
+import { replicateSupabase } from 'rxdb/plugins/replication-supabase'
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
 import { supabase, ORG_ID } from './supabase'
 
