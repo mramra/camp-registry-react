@@ -100,6 +100,7 @@ function AppRoutes() {
           <Route path="help"          element={<HelpPage />} />
           <Route path="sms"           element={<SMS />} />
               <Route path="sync"          element={<SyncManager />} />
+
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
