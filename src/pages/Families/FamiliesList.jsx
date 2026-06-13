@@ -46,16 +46,15 @@ function checkFamilyIssues(f, members) {
     if (!hasSpouse) issues.push('بيانات الزوجة ناقصة')
   }
 
-  // ── الأفراد ──
+  // ── الأفراد — نفحص الاسم فقط كشرط إلزامي ──
   mems.forEach(m => {
     const name = (m.name || '').trim()
-    if (!name) return
-    if (name.split(/\s+/).filter(Boolean).length < 4)
-      issues.push(`اسم "${name}" غير رباعي`)
-    if (!m.national_id?.trim())
-      issues.push(`هوية "${name}" ناقصة`)
-    if (!m.dob)
-      issues.push(`تاريخ ميلاد "${name}" ناقص`)
+    if (!name) {
+      issues.push('اسم فرد فارغ')
+      return
+    }
+    if (name.split(/\s+/).filter(Boolean).length < 3)
+      issues.push(`اسم "${name}" قصير جداً`)
   })
 
   return issues
@@ -241,13 +240,36 @@ export default function FamiliesList() {
   // ── فتح تفاصيل أسرة ──────────────────────────────────
   async function openFamily(family) {
     setSelected(family)
-    const local = getMembers(allMembers, family)
-    setSelMembers(local)
+    // ① اقرأ من Dexie مباشرة (أحدث من allMembers في الذاكرة)
+    try {
+      const dexieMems = await localDB.family_members
+        .where('family_id').equals(family.id).toArray()
+      setSelMembers(getMembers(dexieMems, family))
+      // حدّث allMembers أيضاً
+      setAllMembers(prev => {
+        const others = prev.filter(m => m.family_id !== family.id)
+        return [...others, ...dexieMems]
+      })
+    } catch {
+      setSelMembers(getMembers(allMembers, family))
+    }
+    // ② ثم من Supabase في الخلفية
     if (navigator.onLine) {
-      const { data } = await supabase.from('family_members').select('*').eq('family_id', family.id)
+      const { data } = await supabase.from('family_members')
+        .select('*').eq('family_id', family.id)
       if (data) {
-        setSelMembers(getMembers(data, family))
-        try { await localDB.family_members.bulkPut(data) } catch {}
+        const filtered = getMembers(data, family)
+        setSelMembers(filtered)
+        try {
+          await localDB.family_members.bulkPut(
+            data.map(m => ({ ...m, org_id: ORG_ID }))
+          )
+          // حدّث allMembers
+          setAllMembers(prev => {
+            const others = prev.filter(m => m.family_id !== family.id)
+            return [...others, ...data.map(m=>({...m,org_id:ORG_ID}))]
+          })
+        } catch {}
       }
     }
   }
