@@ -45,8 +45,8 @@ export default function UsersList() {
   const navigate = useNavigate()
   const { showToast, online } = useApp()
 
-  const { query, upsert, bulkUpsert, remove, ready } = useRxDB()
-  useEffect(() => { if (ready) loadData() }, [ready])
+  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     // ① Dexie فوراً
