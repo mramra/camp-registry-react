@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { enqueue } from '../../lib/sync'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
@@ -65,7 +65,7 @@ export default function Distributions() {
           .eq('org_id', ORG_ID)
           .order('created_at', { ascending: false })
         if (!error && data) {
-          await localDB.dist_rounds.bulkPut(data).catch(() => {})
+          await bulkUpsert('dist_rounds', data).catch(() => {})
           setRounds(data)
         }
       }
@@ -120,7 +120,7 @@ export default function Distributions() {
           .from('camp_dist_families').select('family_id')
           .eq('distribution_id', batch.id)
         if (data) data.forEach(r => { recvSet[r.family_id] = true })
-        await localDB.camp_dist_families.bulkPut(
+        await bulkUpsert('camp_dist_families', 
           (data||[]).map(r => ({ ...r, distribution_id: batch.id }))
         ).catch(() => {})
       } else {
@@ -143,7 +143,7 @@ export default function Distributions() {
         notes: form.notes || null, status: 'draft',
         created_at: new Date().toISOString()
       }
-      await localDB.dist_rounds.put(data)
+      await upsert('dist_rounds', data)
       await enqueue('insert_round', data)
       showToast('✅ تمت إضافة الجولة')
       setShowAddRound(false)
@@ -204,7 +204,7 @@ export default function Distributions() {
           org_id: ORG_ID,
           received_at: new Date().toISOString()
         }
-        await localDB.camp_dist_families.put(rec)
+        await upsert('camp_dist_families', rec)
         await enqueue('insert_dist', rec)
         setReceived(r => ({ ...r, [family.id]: true }))
         showToast('✅ تم تسجيل الاستلام')
