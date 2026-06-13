@@ -106,7 +106,7 @@ export default function FamiliesList() {
 
   const { canWrite, canDelete } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  const { query, upsert, bulkUpsert, remove, ready } = useRxDB()
   const { showToast } = useApp()
   const navigate = useNavigate()
 
