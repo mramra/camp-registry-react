@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, ORG_ID, callAdminAPI } from '../../lib/supabase'
-import { enqueue } from '../../lib/sync'
 import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -149,7 +148,7 @@ export default function UsersList() {
       if (isOwner) updates.role = form.role
 
       // حفظ محلي فوراً
-      await localDB.org_members.put(updates)
+      await upsert('org_members', updates)
       setUsers(u => u.map(x => x.id === editUser.id ? updates : x))
 
       if (navigator.onLine) {
@@ -175,7 +174,7 @@ export default function UsersList() {
     const updated = { ...user, is_active: newStatus }
 
     // محلي فوراً
-    await localDB.org_members.put(updated)
+    await upsert('org_members', updated)
     setUsers(u => u.map(x => x.id === user.id ? updated : x))
 
     if (navigator.onLine) {
