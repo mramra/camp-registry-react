@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -135,6 +135,7 @@ export default function Analysis() {
 
   const { showToast, online } = useApp()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { query } = useRxDB()
   const navigate = useNavigate()
 
   // حفظ الأسر الكاملة للـ drill-down
@@ -147,11 +148,11 @@ export default function Analysis() {
     setLoading(true)
     try {
       const [famRaw, camps, members, rounds, distFams] = await Promise.all([
-        localDB.families.toArray().catch(() => []),
-        localDB.camps.toArray().catch(() => []),
-        localDB.family_members.toArray().catch(() => []),
-        localDB.dist_rounds.toArray().catch(() => []),
-        localDB.camp_dist_families.toArray().catch(() => []),
+        query('families'),
+        query('camps'),
+        query('family_members'),
+        query('dist_rounds').catch(()=>[]),
+        query('camp_dist_families').catch(()=>[]),
       ])
 
       if (online) {
