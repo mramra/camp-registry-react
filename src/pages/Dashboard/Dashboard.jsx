@@ -39,11 +39,18 @@ export default function Dashboard() {
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { showToast, online, psReady, psSyncing } = useApp()
+  const { showToast, online, psReady } = useApp()
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useRxDB()
   useEffect(() => { if (psReady) loadStats() }, [psReady])
+
+  // إعادة load بعد PowerSync يزامن
+  useEffect(() => {
+    if (!psReady) return
+    const timer = setTimeout(() => loadStats(), 2000)
+    return () => clearTimeout(timer)
+  }, [psReady])
 
   async function loadStats() {
     try {
