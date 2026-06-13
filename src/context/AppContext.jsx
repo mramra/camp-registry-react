@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { processSyncQueue, getSyncStats } from '../lib/sync'
+import { quickSync } from '../lib/syncAll'
 
 const AppContext = createContext(null)
 
@@ -6,30 +8,22 @@ export function AppProvider({ children }) {
   const [online,  setOnline]  = useState(navigator.onLine)
   const [syncing, setSyncing] = useState(false)
   const [toast,   setToast]   = useState(null)
-  const dbRef = useRef(null)
-
-  // ── تهيئة RxDB + سحب من PostgreSQL ──
-  useEffect(() => {
-    getDB().then(async db => {
-      dbRef.current = db
-      if (navigator.onLine) {
-        setSyncing(true)
-        await startSync(db).catch(e => console.warn('[sync]', e))
-        setSyncing(false)
-      }
-    }).catch(e => console.warn('[RxDB init]', e))
-  }, [])
 
   // ── مراقبة الاتصال ──
   useEffect(() => {
     const onOnline = async () => {
       setOnline(true)
-      const db = dbRef.current || await getDB()
       setSyncing(true)
-      await startSync(db).catch(() => {})
+      try {
+        // 1. ارفع الكتابات المعلقة
+        await processSyncQueue()
+        // 2. اسحب التحديثات الجديدة من Supabase
+        await quickSync()
+      } catch(e) { console.warn('[AppContext online]', e) }
       setSyncing(false)
     }
     const onOffline = () => setOnline(false)
+
     window.addEventListener('online',  onOnline)
     window.addEventListener('offline', onOffline)
     return () => {
@@ -38,14 +32,13 @@ export function AppProvider({ children }) {
     }
   }, [])
 
-  // ── Toast ──
   const showToast = useCallback((msg, isError = false) => {
     setToast({ msg, isError })
     setTimeout(() => setToast(null), 3500)
   }, [])
 
   return (
-    <AppContext.Provider value={{ online, syncing, toast, showToast, db: dbRef.current }}>
+    <AppContext.Provider value={{ online, syncing, toast, showToast }}>
       {children}
     </AppContext.Provider>
   )
