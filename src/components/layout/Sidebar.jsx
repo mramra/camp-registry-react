@@ -88,6 +88,7 @@ export default function Sidebar({ open, onClose }) {
         {NAV_ITEMS.map(({ group, items }) => {
           const visible = items.filter(item => {
             if (item.adminOnly && !isOwner && !isSuperAdmin) return false
+          if (item.ownerOnly && !isOwner) return false
             return true
           })
           if (!visible.length) return null
