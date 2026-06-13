@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -31,6 +31,7 @@ export default function Movements() {
 
   const { canWrite } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { query, upsert, remove, bulkUpsert } = useRxDB()
   const { showToast } = useApp()
 
   useEffect(() => { loadData() }, [filterType, filterCamp])
@@ -39,11 +40,11 @@ export default function Movements() {
     setLoading(true)
     try {
       // مخيمات
-      const lCamps = await localDB.camps.toArray().catch(()=>[])
+      const lCamps = await query('camps')
       setCamps(lCamps)
 
       // حركات — Dexie أولاً
-      let movs = await localDB.family_movements.where('org_id').equals(ORG_ID).toArray().catch(()=>[])
+      let movs = await query('family_movements', {org_id: ORG_ID})
       movs.sort((a,b) => (b.date||'').localeCompare(a.date||''))
       const campIds = getAllowedCampIds(camps)
       if (campIds !== null && campIds.length > 0 && !filterCamp) {
