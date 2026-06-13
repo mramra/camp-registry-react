@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useRxDB } from '../../lib/useRxDB'
-import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -53,7 +52,7 @@ export default function CampsList() {
       const f2 = !fRes.error && fRes.data ? fRes.data : lFams
       const m2 = !mRes.error && mRes.data ? mRes.data : lMems
       await bulkUpsert('camps', c2)
-      if (m2.length) try { await localDB.org_members.bulkPut(m2) } catch {}
+      if (m2.length) await bulkUpsert('org_members', m2).catch(()=>{})
       applyData(c2, f2, m2)
     } catch(e) { console.error(e) }
     finally { setLoading(false); setSyncing(false) }
