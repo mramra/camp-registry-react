@@ -89,7 +89,6 @@ export function AuthProvider({ children }) {
         .select('*')
         .eq('user_id', userId)
         .eq('org_id', ORG_ID)
-        .eq('is_active', true)
         .limit(1)
 
       const data = members?.[0]
