@@ -7,7 +7,6 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      strategies: 'generateSW',
       manifest: {
         name: 'نبض المخيم',
         short_name: 'نبض المخيم',
@@ -25,11 +24,15 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        // لا تعترض أي طلبات شبكة — فقط ملفات التطبيق
-        navigateFallback: null,
-        runtimeCaching: [],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: { cacheName: 'gf-cache', expiration: { maxEntries: 10, maxAgeSeconds: 31536000 } }
+          }
+        ]
       }
     })
   ],
-  base: '/camp-registry-react/',
+  base: '/camp-registry-react/'
 })
