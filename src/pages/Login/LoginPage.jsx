@@ -20,24 +20,19 @@ export default function LoginPage() {
     }
     if (!id.trim() || !pass) return setError('أدخل رقم الهوية وكلمة المرور')
     setLoading(true)
-    setError('')
+    setError('جارٍ الاتصال بـ Supabase...')
     try {
-      await signIn(id.trim(), pass)
+      setError('جارٍ التحقق من البيانات...')
+      const result = await signIn(id.trim(), pass)
+      setError('نجح الدخول! جارٍ تحميل البيانات...')
+      await new Promise(r => setTimeout(r, 500))
       navigate('/', { replace: true })
     } catch(err) {
       const n = attempts + 1
       setAttempts(n)
       if (n >= 5) setLockUntil(Date.now() + 60000)
       else if (n >= 3) setLockUntil(Date.now() + 15000)
-      // أظهر الخطأ الحقيقي للتشخيص
-      const msg = err?.message || 'خطأ غير معروف'
-      if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) {
-        setError('رقم الهوية أو كلمة المرور غير صحيحة')
-      } else if (msg.includes('network') || msg.includes('fetch')) {
-        setError('خطأ في الاتصال — تحقق من الإنترنت')
-      } else {
-        setError(msg)
-      }
+      setError('❌ ' + (err?.message || 'خطأ غير معروف'))
     } finally {
       setLoading(false)
     }
