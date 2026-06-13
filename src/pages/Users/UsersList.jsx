@@ -44,10 +44,10 @@ export default function UsersList() {
 
   const { profile, isOwner, isSuperAdmin, setPreviewAs, realProfile } = useAuth()
   const navigate = useNavigate()
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
   const { showToast, online } = useApp()
 
-  useEffect(() => { loadData() }, [])
+  const { query, upsert, bulkUpsert, remove, ready } = useRxDB()
+  useEffect(() => { if (ready) loadData() }, [ready])
 
   async function loadData() {
     // ① Dexie فوراً
