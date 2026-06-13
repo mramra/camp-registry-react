@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -335,7 +334,7 @@ export default function FamilyForm() {
   // فحص التكرار عند الكتابة
   const checkDuplicate = useCallback(async (field, value) => {
     if (!value || value.length < 3) { setDupAlert(''); return }
-    const all = await localDB.families.toArray().catch(() => [])
+    const all = await query("families")
     const dup = all.find(f => {
       if (isEdit && f.id === id) return false
       if (field === 'head_id') return f.head_id === value
@@ -463,7 +462,7 @@ export default function FamilyForm() {
       // أضف/حدّث الموجودين
       if (memberDocs.length) {
         const withOrgId = memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
-        await localDB.family_members.bulkPut(withOrgId)
+        await bulkUpsert("family_members", memberDocs)
       }
 
       // إضافة لطابور المزامنة
