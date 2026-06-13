@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getDB } from './rxdb'
+import { getDB, pushToPostgres } from './rxdb'
 import { ORG_ID } from './supabase'
 
-/**
- * useRxDB — hook يوفر واجهة مشابهة لـ localDB لكن باستخدام RxDB
- * يستبدل: localDB.families.toArray() → db.families.find().exec()
- */
 export function useRxDB() {
   const dbRef = useRef(null)
   const [ready, setReady] = useState(false)
@@ -14,96 +10,92 @@ export function useRxDB() {
     getDB().then(db => {
       dbRef.current = db
       setReady(true)
-    }).catch(e => console.warn('[useRxDB]', e))
+    }).catch(e => console.warn('[useRxDB init]', e))
   }, [])
 
-  /**
-   * قراءة جميع سجلات collection مع فلتر اختياري
-   * مثال: await query('families', { org_id: ORG_ID })
-   */
+  // قراءة كل سجلات collection
   const query = useCallback(async (collection, filters = {}) => {
     const db = dbRef.current
     if (!db?.[collection]) return []
     try {
-      let q = db[collection].find()
-      // تطبيق الفلاتر
       const selector = {}
       Object.entries(filters).forEach(([k, v]) => {
         if (v !== undefined && v !== null) selector[k] = { $eq: v }
       })
-      if (Object.keys(selector).length) q = db[collection].find({ selector })
+      const q = Object.keys(selector).length
+        ? db[collection].find({ selector })
+        : db[collection].find()
       const docs = await q.exec()
       return docs.map(d => d.toJSON())
     } catch(e) {
-      console.warn('[useRxDB query]', collection, e)
+      console.warn('[useRxDB query]', collection, e.message)
       return []
     }
   }, [])
 
-  /**
-   * إضافة أو تحديث سجل
-   */
+  // إضافة/تحديث سجل — محلياً + PostgreSQL
   const upsert = useCallback(async (collection, data) => {
     const db = dbRef.current
     if (!db?.[collection]) return null
-    try {
-      const doc = await db[collection].upsert({
-        ...data,
-        _deleted: false,
-        updated_at: data.updated_at || new Date().toISOString(),
-      })
-      return doc.toJSON()
-    } catch(e) {
-      console.warn('[useRxDB upsert]', collection, e)
-      return null
+    const now = new Date().toISOString()
+    const doc = {
+      ...data,
+      _deleted: false,
+      updated_at: now,
+      org_id: data.org_id || ORG_ID,
     }
+    // 1. حفظ محلي فوراً
+    try { await db[collection].upsert(doc) } catch(e) { console.warn('[upsert local]', e.message) }
+    // 2. رفع لـ PostgreSQL في الخلفية
+    const table = collection.replace(/_/g, '_') // نفس الاسم
+    pushToPostgres(table, 'upsert', doc).catch(()=>{})
+    return doc
   }, [])
 
-  /**
-   * إضافة أو تحديث عدة سجلات
-   */
+  // إضافة/تحديث عدة سجلات
   const bulkUpsert = useCallback(async (collection, docs) => {
     const db = dbRef.current
-    if (!db?.[collection] || !docs.length) return
+    if (!db?.[collection] || !docs?.length) return
+    const now = new Date().toISOString()
+    const prepared = docs.map(d => ({
+      ...d, _deleted: false,
+      updated_at: d.updated_at || now,
+      org_id: d.org_id || ORG_ID,
+    }))
+    // 1. محلي
     try {
-      const now = new Date().toISOString()
-      await db[collection].bulkUpsert(
-        docs.map(d => ({ ...d, _deleted: false, updated_at: d.updated_at || now }))
-      )
+      await db[collection].bulkUpsert(prepared)
     } catch(e) {
-      console.warn('[useRxDB bulkUpsert]', collection, e)
+      await Promise.allSettled(prepared.map(d => db[collection].upsert(d).catch(()=>{})))
     }
+    // 2. PostgreSQL في الخلفية
+    const table = collection
+    pushToPostgres(table, 'upsert', prepared).catch(()=>{})
   }, [])
 
-  /**
-   * حذف سجل (soft delete)
-   */
+  // حذف سجل
   const remove = useCallback(async (collection, id) => {
     const db = dbRef.current
     if (!db?.[collection]) return
     try {
       const doc = await db[collection].findOne(id).exec()
       if (doc) await doc.remove()
-    } catch(e) {
-      console.warn('[useRxDB remove]', collection, e)
-    }
+    } catch(e) { console.warn('[remove]', e.message) }
+    pushToPostgres(collection, 'delete', { id }).catch(()=>{})
   }, [])
 
-  /**
-   * الاشتراك في تغييرات collection (reactive)
-   */
+  // اشتراك reactif في تغييرات
   const subscribe = useCallback((collection, callback, filters = {}) => {
     const db = dbRef.current
     if (!db?.[collection]) return () => {}
     const selector = {}
-    Object.entries(filters).forEach(([k, v]) => {
+    Object.entries(filters).forEach(([k,v]) => {
       if (v !== undefined) selector[k] = { $eq: v }
     })
-    let q = db[collection].find()
-    if (Object.keys(selector).length) q = db[collection].find({ selector })
-    const sub = q.$.subscribe(docs => {
-      callback(docs.map(d => d.toJSON()))
-    })
+    const q = Object.keys(selector).length
+      ? db[collection].find({ selector })
+      : db[collection].find()
+    const sub = q.$.subscribe(docs => callback(docs.map(d => d.toJSON())))
     return () => sub.unsubscribe()
   }, [])
 
