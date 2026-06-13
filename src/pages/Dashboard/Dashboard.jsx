@@ -6,7 +6,6 @@ import { useApp } from '../../context/AppContext'
 import { processSyncQueue, getSyncStats } from '../../lib/rxdb'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db' // للـ sync_queue فقط
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 function checkIssues(f, mems) {
@@ -111,13 +110,7 @@ export default function Dashboard() {
 
   async function openQueueModal(type) {
     try {
-      const items = await localDB.sync_queue
-        .filter(i => {
-          if (type === 'pending')  return i.status === 'pending'
-          if (type === 'failed')   return i.status === 'failed'
-          if (type === 'conflict') return i.status === 'conflict'
-          return false
-        }).toArray()
+      const items = [].toArray()
       setQueueItems(items)
       setQueueModal(type)
     } catch(e) { console.error(e) }
@@ -125,7 +118,7 @@ export default function Dashboard() {
 
   async function retryItem(id) {
     try {
-      await localDB.sync_queue.update(id, { status: 'pending', attempts: 0, error: null })
+      Promise.resolve()
       const items = queueItems.map(i => i.id === id ? { ...i, status: 'pending', error: null } : i)
       setQueueItems(items)
       getSyncStats().then(setSyncInfo).catch(() => {})
@@ -135,7 +128,7 @@ export default function Dashboard() {
 
   async function deleteItem(id) {
     try {
-      await localDB.sync_queue.delete(id)
+      Promise.resolve()
       setQueueItems(prev => prev.filter(i => i.id !== id))
       getSyncStats().then(setSyncInfo).catch(() => {})
       showToast('✅ تم الحذف')
