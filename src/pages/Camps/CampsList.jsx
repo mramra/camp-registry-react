@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -35,9 +35,9 @@ export default function CampsList() {
     setLoading(true)
     try {
       const [lCamps, lFams, lMems] = await Promise.all([
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.families.toArray().catch(()=>[]),
-        localDB.org_members.toArray().catch(()=>[]),
+        query('camps'),
+        query('families'),
+        query('org_members'),
       ])
       applyData(lCamps, lFams, lMems)
       setLoading(false)
@@ -51,7 +51,7 @@ export default function CampsList() {
       const c2 = !cRes.error && cRes.data ? cRes.data : lCamps
       const f2 = !fRes.error && fRes.data ? fRes.data : lFams
       const m2 = !mRes.error && mRes.data ? mRes.data : lMems
-      if (c2.length) try { await localDB.camps.bulkPut(c2) } catch {}
+      await bulkUpsert('camps', c2)
       if (m2.length) try { await localDB.org_members.bulkPut(m2) } catch {}
       applyData(c2, f2, m2)
     } catch(e) { console.error(e) }
@@ -128,7 +128,7 @@ export default function CampsList() {
           facilities: 0, portal_open: false,
         }),
       }
-      await localDB.camps.put(data)
+      await upsert('camps', data)
       await enqueue(editCamp ? 'update_camp' : 'insert_camp', data)
       setCamps(prev => editCamp ? prev.map(c=>c.id===data.id?data:c) : [...prev, data])
       setShowForm(false)
@@ -140,7 +140,7 @@ export default function CampsList() {
   async function handleDelete(camp) {
     if (!window.confirm(`حذف "${camp.name}"؟`)) return
     try {
-      await localDB.camps.delete(camp.id)
+      await remove('camps', camp.id)
       if (navigator.onLine) await supabase.from('camps').delete().eq('id', camp.id)
       else await enqueue('delete_camp', { id: camp.id })
       setCamps(prev => prev.filter(c => c.id !== camp.id))
