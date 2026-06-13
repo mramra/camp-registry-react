@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -38,9 +38,9 @@ export default function Alerts() {
     setLoading(true)
     try {
       const [fams, camps, members] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
+        query('families'),
+        query('camps'),
+        query('family_members'),
       ])
 
       const campMap = Object.fromEntries(camps.map(c=>[c.id,c]))
