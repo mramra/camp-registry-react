@@ -1,105 +1,59 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { processSyncQueue, getSyncStats, retryFailed } from '../lib/sync'
-import { syncAllData, getLastSyncTime, setLastSyncTime } from '../lib/syncAll'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
+import { getDB, startSync } from '../lib/rxdb'
 
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
-  const [online, setOnline]           = useState(navigator.onLine)
-  const [syncing, setSyncing]         = useState(false)
-  const [syncProgress, setSyncProgress] = useState(0)
-  const [syncLabel, setSyncLabel]     = useState('')
-  const [pendingCount, setPending]    = useState(0)
-  const [toast, setToast]             = useState(null)
-  const [lastSync, setLastSync]       = useState(null)
-  const [fullSyncing, setFullSyncing] = useState(false)
+  const [online,  setOnline]  = useState(navigator.onLine)
+  const [syncing, setSyncing] = useState(false)
+  const [toast,   setToast]   = useState(null)
+  const dbRef = useRef(null)
 
-  // تحميل وقت آخر مزامنة
+  // ── تهيئة RxDB + سحب من PostgreSQL ──
   useEffect(() => {
-    getLastSyncTime().then(t => setLastSync(t))
+    getDB().then(async db => {
+      dbRef.current = db
+      if (navigator.onLine) {
+        setSyncing(true)
+        await startSync(db).catch(e => console.warn('[sync]', e))
+        setSyncing(false)
+      }
+    }).catch(e => console.warn('[RxDB init]', e))
   }, [])
 
-  // مراقبة الاتصال
+  // ── مراقبة الاتصال ──
   useEffect(() => {
-    const on  = () => { setOnline(true);  triggerSync() }
-    const off = () => setOnline(false)
-    window.addEventListener('online', on)
-    window.addEventListener('offline', off)
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
-  }, [])
-
-  // مزامنة الطابور عند الاتصال
-  const triggerSync = useCallback(async () => {
-    if (syncing) return
-    setSyncing(true)
-    try {
-      const result = await processSyncQueue()
-      if (result.synced > 0) showToast(`✅ تمت مزامنة ${result.synced} عنصر`)
-    } catch {}
-    setSyncing(false)
-  }, [syncing])
-
-  // جلب كل البيانات (Full Sync)
-  const fullSync = useCallback(async () => {
-    if (!navigator.onLine) return showToast('لا يوجد اتصال', true)
-    if (fullSyncing) return
-    setFullSyncing(true)
-    setSyncProgress(0)
-    try {
-      const results = await syncAllData((pct, label) => {
-        setSyncProgress(pct)
-        setSyncLabel(label)
-      })
-      await setLastSyncTime()
-      const now = new Date().toISOString()
-      setLastSync(now)
-      const total = Object.values(results).reduce((a,b) => a+b, 0)
-      showToast(`✅ تمت المزامنة الكاملة — ${total} سجل`)
-    } catch (err) {
-      showToast('خطأ في المزامنة: ' + err.message, true)
-    } finally {
-      setFullSyncing(false)
-      setSyncProgress(0)
-      setSyncLabel('')
+    const onOnline = async () => {
+      setOnline(true)
+      const db = dbRef.current || await getDB()
+      setSyncing(true)
+      await startSync(db).catch(() => {})
+      setSyncing(false)
     }
-  }, [fullSyncing])
+    const onOffline = () => setOnline(false)
+    window.addEventListener('online',  onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online',  onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
 
-  function showToast(msg, isError = false) {
+  // ── Toast ──
+  const showToast = useCallback((msg, isError = false) => {
     setToast({ msg, isError })
     setTimeout(() => setToast(null), 3500)
-  }
+  }, [])
 
   return (
-    <AppContext.Provider value={{
-      online, syncing, pendingCount, toast, showToast,
-      triggerSync, fullSync, fullSyncing, syncProgress, syncLabel, lastSync
-    }}>
+    <AppContext.Provider value={{ online, syncing, toast, showToast, db: dbRef.current }}>
       {children}
-
-      {/* شريط التقدم أثناء Full Sync */}
-      {fullSyncing && (
-        <div className="fixed top-0 left-0 right-0 z-[600] bg-surface border-b border-border px-4 py-2">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold text-accent">⬇️ جلب البيانات... {syncLabel}</span>
-            <span className="text-xs text-muted">{syncProgress}%</span>
-          </div>
-          <div className="h-1 bg-surface2 rounded-full overflow-hidden">
-            <div className="h-full bg-accent rounded-full transition-all duration-300" style={{ width: `${syncProgress}%` }} />
-          </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 left-4 z-[500] px-4 py-3 rounded-xl text-sm font-bold text-white shadow-2xl
-          ${toast.isError ? 'bg-red/90' : 'bg-green/90'}`}>
-          {toast.msg}
-        </div>
-      )}
     </AppContext.Provider>
   )
 }
 
 export function useApp() {
-  return useContext(AppContext)
+  const ctx = useContext(AppContext)
+  if (!ctx) throw new Error('useApp must be inside AppProvider')
+  return ctx
 }
