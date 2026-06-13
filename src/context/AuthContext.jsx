@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
-import { localDB } from '../lib/db'
+import { localDB } from '../lib/db' // للحفظ المحلي
 
 const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
@@ -71,19 +71,19 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(userId) {
     try {
-      // ① Dexie أولاً
-      const localMembers = await localDB.org_members
-        .filter(m => m.user_id === userId && m.org_id === ORG_ID)
-        .toArray().catch(() => [])
-      if (localMembers.length) {
-        const p = localMembers[0]
-        setProfile(p)
-        localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
-        setLoading(false)
+      // ① كاش محلي أولاً (سريع)
+      const cached = localStorage.getItem(PROFILE_KEY)
+      if (cached) {
+        try {
+          const p = JSON.parse(cached)
+          if (p.user_id === userId) {
+            setProfile(p)
+            setLoading(false)
+          }
+        } catch {}
       }
 
-      // ② Supabase في الخلفية
-      if (!navigator.onLine) return
+      // ② Supabase (المصدر الحقيقي)
       const { data, error } = await supabase
         .from('org_members')
         .select('*')
@@ -94,10 +94,14 @@ export function AuthProvider({ children }) {
       if (!error && data) {
         setProfile(data)
         localStorage.setItem(PROFILE_KEY, JSON.stringify(data))
+        // احفظ في Dexie وPowerSync
         try { await localDB.org_members.put(data) } catch {}
         const { data: meta } = await supabase.auth.getUser()
         const userMeta = meta?.user?.user_metadata || {}
         setMustChange(!!userMeta.must_change_pass)
+      } else if (!cached) {
+        // لا كاش ولا Supabase → أوف لاين بدون بيانات
+        setProfile(null)
       }
     } catch (err) {
       console.warn('[fetchProfile]', err.message)
