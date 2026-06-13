@@ -142,7 +142,7 @@ export default function Analysis() {
   const [allMembers,  setAllMembers]  = useState([])
 
   const { query } = useRxDB()
-  useEffect(() => { if (ready) loadStats() }, [filterCamp])
+  useEffect(() => { loadStats() }, [filterCamp])
 
   async function loadStats() {
     setLoading(true)
