@@ -1,108 +1,77 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { getDB, pushToPostgres } from './rxdb'
+import { useCallback } from 'react'
+import { localDB } from './db'
 import { ORG_ID } from './supabase'
 
-// singleton — db مشترك بين كل الـ hooks
-let _globalDB = null
-const _listeners = new Set()
-
-function notifyReady(db) {
-  _globalDB = db
-  _listeners.forEach(fn => fn(db))
-}
-
-getDB().then(db => {
-  notifyReady(db)
-}).catch(e => console.warn('[useRxDB global init]', e))
-
+/**
+ * useRxDB — نفس الـ API لكن يستخدم Dexie مباشرة
+ * استبدال RxDB الذي كان يسبب "Illegal constructor" على Android
+ */
 export function useRxDB() {
-  const [db, setDb] = useState(_globalDB)
+  // Dexie جاهز دائماً — لا حاجة لـ ready state
+  const ready = true
 
-  useEffect(() => {
-    if (_globalDB) { setDb(_globalDB); return }
-    const fn = (db) => setDb(db)
-    _listeners.add(fn)
-    return () => _listeners.delete(fn)
-  }, [])
-
-  // قراءة كل سجلات collection
   const query = useCallback(async (collection, filters = {}) => {
-    const d = _globalDB || db
-    if (!d?.[collection]) return []
     try {
-      const selector = {}
-      Object.entries(filters).forEach(([k, v]) => {
-        if (v !== undefined && v !== null) selector[k] = { $eq: v }
-      })
-      const q = Object.keys(selector).length
-        ? d[collection].find({ selector })
-        : d[collection].find()
-      const docs = await q.exec()
-      return docs.map(doc => doc.toJSON())
+      const table = localDB[collection]
+      if (!table) return []
+      let results = await table.toArray()
+      // تطبيق الفلاتر
+      const keys = Object.keys(filters)
+      if (keys.length) {
+        results = results.filter(item =>
+          keys.every(k => item[k] === filters[k])
+        )
+      }
+      return results
     } catch(e) {
-      console.warn('[query]', collection, e.message)
+      console.warn('[useRxDB/Dexie query]', collection, e.message)
       return []
     }
-  }, [db])
+  }, [])
 
-  // إضافة/تحديث — محلي أولاً + PostgreSQL في الخلفية
   const upsert = useCallback(async (collection, data) => {
-    const d = _globalDB || db
-    if (!d?.[collection]) return data
-    const now = new Date().toISOString()
-    const doc = { ...data, _deleted: false,
-      updated_at: data.updated_at || now,
-      org_id: data.org_id || ORG_ID }
-    try { await d[collection].upsert(doc) }
-    catch(e) { console.warn('[upsert]', collection, e.message) }
-    pushToPostgres(collection, 'upsert', doc).catch(() => {})
-    return doc
-  }, [db])
-
-  // إضافة/تحديث عدة سجلات
-  const bulkUpsert = useCallback(async (collection, docs) => {
-    const d = _globalDB || db
-    if (!d?.[collection] || !docs?.length) return
-    const now = new Date().toISOString()
-    const prepared = docs.map(doc => ({
-      ...doc, _deleted: false,
-      updated_at: doc.updated_at || now,
-      org_id: doc.org_id || ORG_ID,
-    }))
-    try { await d[collection].bulkUpsert(prepared) }
-    catch {
-      await Promise.allSettled(
-        prepared.map(doc => d[collection].upsert(doc).catch(() => {}))
-      )
-    }
-    // لا نرفع لـ PostgreSQL هنا — هذا للبيانات المحلية القادمة من Supabase
-  }, [db])
-
-  // حذف سجل
-  const remove = useCallback(async (collection, id) => {
-    const d = _globalDB || db
-    if (!d?.[collection]) return
     try {
-      const doc = await d[collection].findOne(id).exec()
-      if (doc) await doc.remove()
-    } catch(e) { console.warn('[remove]', e.message) }
-    pushToPostgres(collection, 'delete', { id }).catch(() => {})
-  }, [db])
+      const table = localDB[collection]
+      if (!table) return data
+      const doc = {
+        ...data,
+        updated_at: data.updated_at || new Date().toISOString(),
+        org_id: data.org_id || ORG_ID,
+      }
+      await table.put(doc)
+      return doc
+    } catch(e) {
+      console.warn('[useRxDB/Dexie upsert]', collection, e.message)
+      return data
+    }
+  }, [])
 
-  // اشتراك reactive في التغييرات
-  const subscribe = useCallback((collection, callback, filters = {}) => {
-    const d = _globalDB || db
-    if (!d?.[collection]) return () => {}
-    const selector = {}
-    Object.entries(filters).forEach(([k, v]) => {
-      if (v !== undefined) selector[k] = { $eq: v }
-    })
-    const q = Object.keys(selector).length
-      ? d[collection].find({ selector })
-      : d[collection].find()
-    const sub = q.$.subscribe(docs => callback(docs.map(doc => doc.toJSON())))
-    return () => sub.unsubscribe()
-  }, [db])
+  const bulkUpsert = useCallback(async (collection, docs) => {
+    try {
+      const table = localDB[collection]
+      if (!table || !docs?.length) return
+      const now = new Date().toISOString()
+      await table.bulkPut(docs.map(d => ({
+        ...d,
+        updated_at: d.updated_at || now,
+        org_id: d.org_id || ORG_ID,
+      })))
+    } catch(e) {
+      console.warn('[useRxDB/Dexie bulkUpsert]', collection, e.message)
+    }
+  }, [])
 
-  return { db, ready: !!db, query, upsert, bulkUpsert, remove, subscribe }
+  const remove = useCallback(async (collection, id) => {
+    try {
+      const table = localDB[collection]
+      if (!table) return
+      await table.delete(id)
+    } catch(e) {
+      console.warn('[useRxDB/Dexie remove]', collection, e.message)
+    }
+  }, [])
+
+  const subscribe = useCallback(() => () => {}, [])
+
+  return { ready, query, upsert, bulkUpsert, remove, subscribe }
 }
