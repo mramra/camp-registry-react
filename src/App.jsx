@@ -1,3 +1,4 @@
+import { PowerSyncProvider } from './context/PowerSyncContext'
 import { lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
@@ -113,11 +114,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter basename="/camp-registry-react">
-      <AuthProvider>
+      <PowerSyncProvider>
+        <AuthProvider>
         <AppProvider>
           <AppRoutes />
         </AppProvider>
       </AuthProvider>
+        </PowerSyncProvider>
     </BrowserRouter>
   )
 }
