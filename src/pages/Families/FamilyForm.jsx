@@ -447,7 +447,13 @@ export default function FamilyForm() {
       // ① حفظ محلي فوري (قبل أي شيء)
       // ══════════════════════════════════════════
       await localDB.families.put(familyData)
-      await localDB.family_members.where('family_id').equals(familyId).delete()
+      // upsert كل فرد بـ id — لا نحذف الأفراد القديمة إلا من removedIds
+      const currentMemberIds = new Set(memberDocs.map(m => m.id))
+      const existingMems = await localDB.family_members.where('family_id').equals(familyId).toArray().catch(()=>[])
+      const removedIds   = existingMems.filter(m => !currentMemberIds.has(m.id)).map(m => m.id)
+      // احذف المحذوفين فقط
+      if (removedIds.length) await localDB.family_members.bulkDelete(removedIds)
+      // أضف/حدّث الموجودين
       if (memberDocs.length) {
         const withOrgId = memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
         await localDB.family_members.bulkPut(withOrgId)
@@ -475,23 +481,26 @@ export default function FamilyForm() {
           showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
         }
 
-        // رفع الأفراد (بدون org_id لأن Supabase لا يقبله في family_members)
-        if (memberDocs.length) {
-          await supabase.from('family_members').delete().eq('family_id', familyId)
-          const { data: savedMembers, error: mErr } = await supabase
-            .from('family_members').insert(memberDocs).select()
-
-          if (!mErr && savedMembers?.length) {
-            // تحديث المحلي بما رجع من السيرفر
-            const withOrgId = savedMembers.map(m => ({ ...m, org_id: ORG_ID }))
-            await localDB.family_members.where('family_id').equals(familyId).delete()
-            await localDB.family_members.bulkPut(withOrgId)
-          } else if (mErr) {
-            console.warn('[save members]', mErr.message)
+        // رفع الأفراد — upsert كل فرد + حذف المحذوفين فقط
+        try {
+          // حذف الأفراد المحذوفة من الفورم
+          if (removedIds.length) {
+            await supabase.from('family_members').delete().in('id', removedIds)
           }
-        } else {
-          // حذف الأفراد من السيرفر إذا أصبحوا فارغين
-          await supabase.from('family_members').delete().eq('family_id', familyId)
+          // upsert الأفراد الحالية
+          if (memberDocs.length) {
+            const { data: savedMembers, error: mErr } = await supabase
+              .from('family_members').upsert(memberDocs).select()
+            if (!mErr && savedMembers?.length) {
+              const withOrgId = savedMembers.map(m => ({ ...m, org_id: ORG_ID }))
+              await localDB.family_members.bulkPut(withOrgId)
+            } else if (mErr) {
+              console.warn('[save members]', mErr.message)
+              showToast('⚠️ الأسرة حُفظت — الأفراد سيُزامَنون لاحقاً')
+            }
+          }
+        } catch(mEx) {
+          console.warn('[members upload]', mEx.message)
         }
       }
 
