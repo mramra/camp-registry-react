@@ -1,9 +1,4 @@
-/**
- * PowerSyncContext — يهيئ PowerSync ويربطه بـ Supabase
- * يُلف التطبيق كله ويتولى المزامنة التلقائية
- */
 import { createContext, useContext, useEffect, useState } from 'react'
-import { PowerSyncContext as PSContext } from '@powersync/react'
 import { getPowerSync, SupabaseConnector } from '../lib/powersync'
 import { useAuth } from './AuthContext'
 
@@ -11,39 +6,45 @@ const SyncStatusContext = createContext({ syncing: false, lastSync: null })
 
 export function PowerSyncProvider({ children }) {
   const { user } = useAuth()
-  const [db]          = useState(() => getPowerSync())
   const [syncing, setSyncing]   = useState(false)
   const [lastSync, setLastSync] = useState(null)
+  const [error, setError]       = useState(null)
 
   useEffect(() => {
-    if (!user) return  // لا مزامنة بدون تسجيل دخول
+    if (!user) return
+    let cancelled = false
 
-    const connector = new SupabaseConnector()
+    const connect = async () => {
+      try {
+        const db = getPowerSync()
+        const connector = new SupabaseConnector()
+        await db.connect(connector)
+        console.log('[PowerSync] ✅ متصل')
 
-    db.connect(connector).then(() => {
-      console.log('[PowerSync] ✅ متصل ويزامن')
-    }).catch(e => {
-      console.warn('[PowerSync] خطأ في الاتصال:', e.message)
-    })
+        // مراقبة حالة المزامنة
+        db.currentStatus.subscribe(status => {
+          if (cancelled) return
+          setSyncing(status.connecting)
+          if (status.lastSyncedAt) setLastSync(status.lastSyncedAt.toISOString())
+        })
+      } catch(e) {
+        console.warn('[PowerSync] خطأ:', e.message)
+        setError(e.message)
+      }
+    }
 
-    // مراقبة حالة المزامنة
-    const sub = db.syncStatus.subscribe(status => {
-      setSyncing(status.connected && !status.hasSynced)
-      if (status.hasSynced) setLastSync(new Date().toISOString())
-    })
-
+    connect()
     return () => {
-      sub?.()
-      db.disconnect()
+      cancelled = true
+      getPowerSync().disconnect().catch(() => {})
     }
   }, [user])
 
+  // لا نُظهر خطأ PowerSync للمستخدم — التطبيق يعمل بـ Dexie
   return (
-    <PSContext.Provider value={db}>
-      <SyncStatusContext.Provider value={{ syncing, lastSync }}>
-        {children}
-      </SyncStatusContext.Provider>
-    </PSContext.Provider>
+    <SyncStatusContext.Provider value={{ syncing, lastSync, error }}>
+      {children}
+    </SyncStatusContext.Provider>
   )
 }
 
