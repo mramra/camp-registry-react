@@ -277,7 +277,7 @@ export default function FamilyForm() {
   const [saving,    setSaving]    = useState(false)
   const { profile } = useAuth()
   const { showToast } = useApp()
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  const { query, upsert, bulkUpsert, remove, ready } = useRxDB()
   const navigate = useNavigate()
 
   useEffect(() => {
