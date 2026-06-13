@@ -39,7 +39,7 @@ export default function Dashboard() {
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { online, showToast } = useApp()
+  const { showToast, online, psReady, psSyncing } = useApp()
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useRxDB()
