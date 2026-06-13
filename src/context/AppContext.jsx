@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
-import { getDB, startSync } from '../lib/rxdb'
 
 const AppContext = createContext(null)
 
