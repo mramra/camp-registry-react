@@ -28,8 +28,8 @@ export default function CampsList() {
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
   const { showToast } = useApp()
 
-  const { query, upsert, remove, bulkUpsert, ready } = useRxDB()
-  useEffect(() => { if (ready) loadData() }, [ready])
+  const { query, upsert, remove, bulkUpsert } = useRxDB()
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
