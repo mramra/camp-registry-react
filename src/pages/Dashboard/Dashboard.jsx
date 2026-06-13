@@ -43,7 +43,8 @@ export default function Dashboard() {
   const { online, showToast } = useApp()
   const navigate = useNavigate()
 
-  useEffect(() => { loadStats() }, [])
+  const { query, bulkUpsert, ready } = useRxDB()
+  useEffect(() => { if (ready) loadStats() }, [ready])
 
   async function loadStats() {
     try {
