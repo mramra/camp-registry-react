@@ -488,73 +488,52 @@ export default function FamilyForm() {
           showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
         }
 
-        // ── رفع الأفراد بنظام diff ذكي ──
-        try {
-          // جلب الأفراد من السيرفر للمقارنة
-          const { data: serverMems, error: fetchErr } = await supabase
-            .from('family_members')
-            .select('id,name,national_id,dob,gender,relation,health,updated_at')
-            .eq('family_id', familyId)
+        // ── رفع الأفراد — حفظ محلي أولاً ثم مزامنة في الخلفية ──
+        // حفظ Dexie فوراً
+        if (removedIds.length)
+          await localDB.family_members.bulkDelete(removedIds).catch(()=>{})
+        if (memberDocs.length)
+          await localDB.family_members.bulkPut(
+            memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
+          ).catch(()=>{})
 
-          if (fetchErr) throw fetchErr
+        // مزامنة Supabase في الخلفية (لا تنتظر)
+        if (memberDocs.length || removedIds.length) {
+          const syncMembers = async () => {
+            try {
+              const { data: serverMems } = await supabase
+                .from('family_members').select('id').eq('family_id', familyId)
+              const serverIds = new Set((serverMems||[]).map(m=>m.id))
+              const localIds  = new Set(memberDocs.map(m=>m.id))
 
-          const serverMap = Object.fromEntries((serverMems||[]).map(m=>[m.id,m]))
-          const localMap  = Object.fromEntries(memberDocs.map(m=>[m.id,m]))
-          const FIELDS    = ['name','national_id','dob','gender','relation','health']
+              // حذف
+              const toDelete = (serverMems||[]).filter(m=>!localIds.has(m.id)).map(m=>m.id)
+              if (toDelete.length)
+                await supabase.from('family_members').delete().in('id', toDelete)
 
-          // ① حذف: في السيرفر لكن حُذف من الفورم
-          const toDelete = (serverMems||[])
-            .filter(m => !localMap[m.id]).map(m => m.id)
+              // إضافة الجدد
+              const toInsert = memberDocs.filter(m=>!serverIds.has(m.id))
+              if (toInsert.length)
+                await supabase.from('family_members').insert(toInsert)
 
-          // ② إضافة: في الفورم لكن غير موجود في السيرفر (جديد أو لم يُرسَل سابقاً)
-          const toInsert = memberDocs.filter(m => !serverMap[m.id])
+              // تحديث الموجودين
+              const toUpdate = memberDocs.filter(m=>serverIds.has(m.id))
+              for (const m of toUpdate)
+                await supabase.from('family_members').update({
+                  name:m.name, national_id:m.national_id, dob:m.dob,
+                  gender:m.gender, relation:m.relation, health:m.health,
+                  updated_at:now,
+                }).eq('id', m.id)
 
-          // ③ تحديث: موجود في الاثنين لكن تغيّر
-          const toUpdate = memberDocs.filter(m => {
-            if (!serverMap[m.id]) return false
-            const s = serverMap[m.id]
-            return FIELDS.some(f => String(m[f]||'') !== String(s[f]||''))
-          })
-
-          // تنفيذ العمليات بالتوازي
-          const ops = []
-
-          if (toDelete.length)
-            ops.push(supabase.from('family_members').delete().in('id', toDelete))
-
-          if (toInsert.length)
-            ops.push(supabase.from('family_members').insert(toInsert))
-
-          for (const m of toUpdate)
-            ops.push(supabase.from('family_members').update({
-              name: m.name, national_id: m.national_id, dob: m.dob,
-              gender: m.gender, relation: m.relation, health: m.health,
-              updated_at: now,
-            }).eq('id', m.id))
-
-          const results = await Promise.all(ops)
-          const errors  = results.filter(r => r?.error).map(r => r.error.message)
-          if (errors.length) console.warn('[members diff errors]', errors)
-
-          // ④ حدّث Dexie بالحالة النهائية الصحيحة
-          if (removedIds.length)
-            await localDB.family_members.bulkDelete(removedIds).catch(()=>{})
-          if (memberDocs.length)
-            await localDB.family_members.bulkPut(
-              memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
-            ).catch(()=>{})
-
-          console.log(`[diff] ✓ حذف:${toDelete.length} إضافة:${toInsert.length} تحديث:${toUpdate.length}`)
-
-        } catch(mEx) {
-          console.warn('[members diff]', mEx.message)
-          // fallback: upsert كل الأفراد
-          try {
-            await supabase.from('family_members').upsert(
-              memberDocs.map(m => ({ ...m }))
-            )
-          } catch {}
-          showToast('⚠️ الأسرة حُفظت — تحقق من الاتصال')
+              console.log(`[sync] ✓ أفراد: +${toInsert.length} ~${toUpdate.length} -${toDelete.length}`)
+            } catch(e) {
+              console.warn('[sync members bg]', e.message)
+              // أضف للطابور إذا فشل
+              for (const m of memberDocs)
+                await enqueue('insert_member', { ...m, org_id: ORG_ID }).catch(()=>{})
+            }
+          }
+          syncMembers() // بدون await — لا تعيق الحفظ
         }
       }
 
