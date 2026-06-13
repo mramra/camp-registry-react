@@ -12,30 +12,32 @@
     "build:check": "eslint src --ext .js,.jsx && vite build"
   },
   "dependencies": {
+    "@powersync/react": "^1.10.0",
+    "@powersync/web": "^1.38.3",
     "@supabase/supabase-js": "^2.39.0",
+    "chart.js": "^4.4.0",
     "dexie": "^3.2.7",
     "dexie-react-hooks": "^1.1.7",
+    "lucide-react": "^0.383.0",
     "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
-    "xlsx-js-style": "^1.2.0",
-    "chart.js": "^4.4.0",
-    "react-chartjs-2": "^5.2.0",
-    "lucide-react": "^0.383.0",
+    "rxdb": "^17.3.0",
     "xlsx": "^0.18.5",
-    "rxdb": "^17.3.0"
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.17",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^5.0.0",
-    "vite-plugin-pwa": "^0.17.5",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.34.0",
-    "eslint-plugin-react-hooks": "^4.6.0"
+    "vite-plugin-pwa": "^0.17.5"
   }
 }
