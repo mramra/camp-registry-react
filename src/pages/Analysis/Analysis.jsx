@@ -162,7 +162,7 @@ export default function Analysis() {
             let q = supabase.from('families').select('*').eq('org_id', ORG_ID)
             q = applyScope(q, cIds)
             const {data} = await q
-            if (data) await localDB.families.bulkPut(data).catch(()=>{})
+            if (data) await bulkUpsert('families', data)
           }),
           supabase.from('family_members').select('*')
             .then(({ data }) => data && localDB.family_members.bulkPut(data).catch(() => {})),
