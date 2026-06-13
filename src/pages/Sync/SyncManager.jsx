@@ -3,7 +3,6 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { localDB } from '../../lib/db'
-import { getPowerSync } from '../../lib/powersync'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -83,12 +82,13 @@ export default function SyncManager() {
   const pullAll = async () => {
     if (!online) return showToast('لا يوجد اتصال', true)
     setSyncing(true)
-    log('⬇️ PowerSync يُزامن تلقائياً...', 'info')
+    log('⬇️ سحب كامل من Supabase...', 'info')
     try {
-      const db = getPowerSync()
-      await db.waitForFirstSync()
-      log('✅ اكتملت المزامنة', 'success')
-      showToast('✅ تمت المزامنة')
+      localStorage.removeItem('camp_last_sync')
+      const results = await syncAllData((pct, label) => log(`  [${pct}%] ${label}`, 'info'))
+      log(`✅ ${results.pulled} سجل`, 'success')
+      results.errors?.forEach(e => log(`❌ ${e}`, 'error'))
+      showToast(`✅ ${results.pulled} سجل`)
       await loadStats()
     } catch(e) { log(`❌ ${e.message}`, 'error') }
     setSyncing(false)
