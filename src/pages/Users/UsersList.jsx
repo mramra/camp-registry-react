@@ -76,7 +76,7 @@ export default function UsersList() {
       if (!uRes.error && uRes.data?.length) {
         // upsert — لا نحذف المحلي بل نُحدّثه
         for (const u of uRes.data) {
-          await localDB.org_members.put(u).catch(()=>{})
+          await upsert('org_members', u)
         }
         setUsers(uRes.data)
       }
