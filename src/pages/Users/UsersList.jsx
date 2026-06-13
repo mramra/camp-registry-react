@@ -53,14 +53,14 @@ export default function UsersList() {
     try {
       const [lCamps, lUsers] = await Promise.all([
         localDB.camps.toArray().catch(()=>[]),
-        localDB.org_members.toArray().catch(()=>[]),
+        localDB.org_members.filter(m => m.org_id === ORG_ID).toArray().catch(()=>[]),
       ])
       if (lCamps.length) setCamps(lCamps)
-      if (lUsers.length) setUsers(lUsers)
+      if (lUsers.length) { setUsers(lUsers); setLoading(false) }
     } catch(e) { console.warn(e) }
     finally { setLoading(false) }
 
-    // ② سيرفر في الخلفية — بصمت
+    // ② سيرفر في الخلفية — يُحدّث Dexie ثم الـ state
     if (!navigator.onLine) return
     try {
       const [cRes, uRes] = await Promise.all([
@@ -69,11 +69,14 @@ export default function UsersList() {
           .order('created_at', { ascending: false }),
       ])
       if (!cRes.error && cRes.data?.length) {
-        try { await localDB.camps.bulkPut(cRes.data) } catch {}
+        await localDB.camps.bulkPut(cRes.data).catch(()=>{})
         setCamps(cRes.data)
       }
       if (!uRes.error && uRes.data?.length) {
-        try { await localDB.org_members.bulkPut(uRes.data) } catch {}
+        // upsert — لا نحذف المحلي بل نُحدّثه
+        for (const u of uRes.data) {
+          await localDB.org_members.put(u).catch(()=>{})
+        }
         setUsers(uRes.data)
       }
     } catch(e) { console.warn('[users sync]', e.message) }
