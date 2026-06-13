@@ -1,61 +1,53 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
-import { localDB } from '../lib/db' // للحفظ المحلي
+import { localDB } from '../lib/db'
 
-const AuthContext = createContext(null)
-const PROFILE_KEY = 'camp_profile'
+const AuthContext  = createContext(null)
+const PROFILE_KEY  = 'camp_profile'
 
 export function AuthProvider({ children }) {
-  const [user, setUser]             = useState(null)
-  const [profile, setProfile]       = useState(null)
-  const [loading, setLoading]       = useState(true)
+  const [user,       setUser]       = useState(null)
+  const [profile,    setProfile]    = useState(null)
+  const [loading,    setLoading]    = useState(true)
   const [mustChange, setMustChange] = useState(false)
-  const [previewAs, setPreviewAs]   = useState(null)
+  const [previewAs,  setPreviewAs]  = useState(null)
 
-  useEffect(() => {
-    initAuth()
-  }, [])
+  useEffect(() => { initAuth() }, [])
 
   async function initAuth() {
-    // ── أولاً: تحقق من الجلسة المحلية فوراً ──
+    // ① كاش فوري
     try {
       const cached = localStorage.getItem(PROFILE_KEY)
       if (cached) {
-        const p = JSON.parse(cached)
-        setProfile(p)
-        setLoading(false)  // أظهر التطبيق فوراً من الكاش
+        setProfile(JSON.parse(cached))
+        setLoading(false)  // أظهر التطبيق فوراً
       }
     } catch {}
 
-    // ── ثانياً: getSession مع timeout ──
+    // ② Session من Supabase مع timeout 3 ثواني
+    let session = null
     try {
-      const sessionPromise = supabase.auth.getSession()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 5000)
-      )
-      const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise])
-
-      if (session?.user) {
-        setUser(session.user)
-        await fetchProfile(session.user.id)
-      } else {
-        // لا جلسة → امسح الكاش وأظهر Login
-        localStorage.removeItem(PROFILE_KEY)
-        setProfile(null)
-        setLoading(false)
-      }
-    } catch (err) {
-      // timeout أو خطأ شبكة → استخدم الكاش إذا موجود
-      const cached = localStorage.getItem(PROFILE_KEY)
-      if (!cached) {
-        setProfile(null)
-        setLoading(false)
-      }
-      // إذا كاش موجود → loading=false تم أعلاه، التطبيق يعمل أوف لاين
-      console.warn('[auth] offline mode:', err.message)
+      const result = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 3000))
+      ])
+      session = result?.data?.session
+    } catch {
+      // timeout أو offline — استخدم الكاش
+      setLoading(false)
+      return
     }
 
-    // ── ثالثاً: استمع لتغييرات المصادقة ──
+    if (session?.user) {
+      setUser(session.user)
+      fetchProfile(session.user.id)  // بدون await
+    } else {
+      localStorage.removeItem(PROFILE_KEY)
+      setProfile(null)
+      setLoading(false)
+    }
+
+    // ③ استمع لتغييرات المصادقة
     supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
@@ -70,20 +62,18 @@ export function AuthProvider({ children }) {
   }
 
   async function fetchProfile(userId) {
-    try {
-      // ① كاش محلي أولاً (سريع)
-      const cached = localStorage.getItem(PROFILE_KEY)
-      if (cached) {
-        try {
-          const p = JSON.parse(cached)
-          if (p.user_id === userId) {
-            setProfile(p)
-            setLoading(false)
-          }
-        } catch {}
-      }
+    // أظهر فوراً إذا كاش موجود
+    const cached = localStorage.getItem(PROFILE_KEY)
+    if (cached) {
+      try {
+        const p = JSON.parse(cached)
+        setProfile(p)
+        setLoading(false)
+      } catch {}
+    }
 
-      // ② Supabase (المصدر الحقيقي)
+    // جلب من Supabase في الخلفية
+    try {
       const { data, error } = await supabase
         .from('org_members')
         .select('*')
@@ -94,19 +84,12 @@ export function AuthProvider({ children }) {
       if (!error && data) {
         setProfile(data)
         localStorage.setItem(PROFILE_KEY, JSON.stringify(data))
-        // احفظ في Dexie وPowerSync
         try { await localDB.org_members.put(data) } catch {}
-        const { data: meta } = await supabase.auth.getUser()
-        const userMeta = meta?.user?.user_metadata || {}
-        setMustChange(!!userMeta.must_change_pass)
-      } else if (!cached) {
-        // لا كاش ولا Supabase → أوف لاين بدون بيانات
-        setProfile(null)
       }
     } catch (err) {
       console.warn('[fetchProfile]', err.message)
     } finally {
-      setLoading(false)
+      setLoading(false)  // دائماً false في النهاية
     }
   }
 
@@ -119,16 +102,16 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     localStorage.removeItem(PROFILE_KEY)
+    setPreviewAs(null)
     await supabase.auth.signOut()
   }
 
-  // ======== صلاحيات ========
   const effectiveProfile = previewAs || profile
-  const role = effectiveProfile?.role
-  const isOwner        = role === 'platform_owner'
-  const isSuperAdmin   = role === 'super_admin' || isOwner
-  const isCampDelegate = role === 'camp_delegate' || isSuperAdmin
-  const isAssistant    = role === 'assistant'
+  const role             = effectiveProfile?.role
+  const isOwner          = role === 'platform_owner'
+  const isSuperAdmin     = role === 'super_admin'   || isOwner
+  const isCampDelegate   = role === 'camp_delegate' || isSuperAdmin
+  const isAssistant      = role === 'assistant'
 
   const canWrite  = isOwner || isSuperAdmin || isCampDelegate || effectiveProfile?.can_add
   const canEdit   = isOwner || isSuperAdmin || isCampDelegate || effectiveProfile?.can_edit
@@ -136,21 +119,18 @@ export function AuthProvider({ children }) {
   const canExport = isOwner || isSuperAdmin || effectiveProfile?.can_export
   const canImport = isOwner || isSuperAdmin || effectiveProfile?.can_import
 
-  const value = {
-    user,
-    profile: effectiveProfile,
-    effectiveProfile,
-    realProfile: profile,
-    loading, mustChange, setMustChange,
-    previewAs, setPreviewAs,
-    isPreviewMode: !!previewAs,
-    role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
-    canWrite, canEdit, canDelete, canExport, canImport,
-    signIn, signOut,
-    refetchProfile: () => user && fetchProfile(user.id),
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{
+      user, profile: effectiveProfile, effectiveProfile,
+      realProfile: profile, loading, mustChange, setMustChange,
+      previewAs, setPreviewAs, isPreviewMode: !!previewAs,
+      role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
+      canWrite, canEdit, canDelete, canExport, canImport,
+      signIn, signOut,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
