@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
@@ -277,22 +277,22 @@ export default function FamilyForm() {
   const [saving,    setSaving]    = useState(false)
   const { profile } = useAuth()
   const { showToast } = useApp()
+  const { query, upsert, bulkUpsert, remove } = useRxDB()
   const navigate = useNavigate()
 
   useEffect(() => {
-    localDB.camps.toArray().catch(()=>[]).then(setCamps)
+    query('camps').then(setCamps)
 
     if (isEdit) {
       // ① جلب من localDB فوراً
-      localDB.families.get(id).catch(()=>null).then(f => {
+      query('families').then(fs => fs.find(f=>f.id===id) || null).then(f => {
         if (f) setForm({ ...EMPTY_FORM, ...f,
           categories:    f.categories    || [],
           economic_level:f.economic_level || '',
           num_orphans:   f.num_orphans   || 0,
         })
       })
-      localDB.family_members.where('family_id').equals(id)
-        .toArray().catch(()=>[]).then(d => setMembers(sortMembers(d)))
+      query('family_members', {family_id: id}).then(d => setMembers(sortMembers(d)))
 
       // ② جلب من Supabase للتأكد من البيانات الكاملة
       if (navigator.onLine) {
@@ -318,7 +318,7 @@ export default function FamilyForm() {
                 const merged = data.length >= prev.length ? data : prev
                 return sortMembers(merged)
               })
-              localDB.family_members.bulkPut(data).catch(()=>{})
+              bulkUpsert('family_members', data)
             }
             // إذا data فارغة → لا تمسح ما في Dexie
           })
@@ -453,7 +453,7 @@ export default function FamilyForm() {
       // ══════════════════════════════════════════
       // ① حفظ محلي فوري (قبل أي شيء)
       // ══════════════════════════════════════════
-      await localDB.families.put(familyData)
+      await upsert('families', familyData)
       // upsert كل فرد بـ id — لا نحذف الأفراد القديمة إلا من removedIds
       const currentMemberIds = new Set(memberDocs.map(m => m.id))
       const existingMems = await localDB.family_members.where('family_id').equals(familyId).toArray().catch(()=>[])
@@ -467,7 +467,7 @@ export default function FamilyForm() {
       }
 
       // إضافة لطابور المزامنة
-      await enqueue(isEdit ? 'update_family' : 'insert_family', familyData)
+      // RxDB يتولى المزامنة تلقائياً
 
       // ══════════════════════════════════════════
       // ② رفع للسيرفر (إذا متصل)
@@ -491,11 +491,9 @@ export default function FamilyForm() {
         // ── رفع الأفراد — حفظ محلي أولاً ثم مزامنة في الخلفية ──
         // حفظ Dexie فوراً
         if (removedIds.length)
-          await localDB.family_members.bulkDelete(removedIds).catch(()=>{})
+          await Promise.all(removedIds.map(id => remove('family_members', id))).catch(()=>{})
         if (memberDocs.length)
-          await localDB.family_members.bulkPut(
-            memberDocs.map(m => ({ ...m, org_id: ORG_ID }))
-          ).catch(()=>{})
+          await bulkUpsert('family_members', memberDocs)
 
         // مزامنة Supabase في الخلفية (لا تنتظر)
         if (memberDocs.length || removedIds.length) {
