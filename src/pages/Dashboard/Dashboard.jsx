@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext'
 import { processSyncQueue, getSyncStats } from '../../lib/rxdb'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
+import { localDB } from '../../lib/db' // للـ sync_queue فقط
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 function checkIssues(f, mems) {
