@@ -84,13 +84,15 @@ export function AuthProvider({ children }) {
 
       // ② Supabase في الخلفية
       if (!navigator.onLine) return
-      const { data, error } = await supabase
+      const { data: members, error } = await supabase
         .from('org_members')
         .select('*')
         .eq('user_id', userId)
         .eq('org_id', ORG_ID)
-        .single()
+        .eq('is_active', true)
+        .limit(1)
 
+      const data = members?.[0]
       if (!error && data) {
         setProfile(data)
         localStorage.setItem(PROFILE_KEY, JSON.stringify(data))
@@ -98,6 +100,8 @@ export function AuthProvider({ children }) {
         const { data: meta } = await supabase.auth.getUser()
         const userMeta = meta?.user?.user_metadata || {}
         setMustChange(!!userMeta.must_change_pass)
+      } else if (error) {
+        console.warn('[fetchProfile] error:', error.message)
       }
     } catch (err) {
       console.warn('[fetchProfile]', err.message)
