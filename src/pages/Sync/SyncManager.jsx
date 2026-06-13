@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { localDB } from '../../lib/db'
+import { syncAllData, quickSync } from '../../lib/syncAll'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -80,24 +81,19 @@ export default function SyncManager() {
   useEffect(() => { loadStats() }, [])
 
   const pullAll = async () => {
-    if (!online) return showToast('لا يوجد اتصال',true)
+    if (!online) return showToast('لا يوجد اتصال', true)
     setSyncing(true)
-    log('⬇️ سحب من Supabase...','info')
-    let total=0
+    log('⬇️ سحب كامل من Supabase...', 'info')
     try {
-      for (const col of COLS) {
-        const { data, error } = await supabase.from(col.table).select('*')
-          .eq('org_id', ORG_ID).order('updated_at',{ascending:true}).limit(1000)
-        if (error||!data?.length) continue
-        await localDB[col.key]?.bulkPut(data).catch(()=>{})
-        total += data.length
-        log(`  ✅ ${col.label}: ${data.length}`,'success')
-      }
-      localStorage.setItem('rxdb_last_sync', new Date().toISOString())
-      log(`✅ تم سحب ${total} سجل`,'success')
-      showToast(`✅ تم سحب ${total} سجل`)
+      localStorage.removeItem('camp_last_sync') // سحب كامل من البداية
+      const results = await syncAllData((pct, label) => {
+        log(`  [${pct}%] ${label}`, 'info')
+      })
+      log(`✅ سُحب ${results.pulled} سجل`, 'success')
+      if (results.errors.length) results.errors.forEach(e => log(`❌ ${e}`, 'error'))
+      showToast(`✅ ${results.pulled} سجل`)
       await loadStats()
-    } catch(e) { log(`❌ ${e.message}`,'error') }
+    } catch(e) { log(`❌ ${e.message}`, 'error') }
     setSyncing(false)
   }
 
