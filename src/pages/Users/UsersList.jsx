@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, ORG_ID, callAdminAPI } from '../../lib/supabase'
 import { enqueue } from '../../lib/sync'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { randomPassword } from '../../lib/utils'
@@ -44,6 +44,7 @@ export default function UsersList() {
 
   const { profile, isOwner, isSuperAdmin, setPreviewAs, realProfile } = useAuth()
   const navigate = useNavigate()
+  const { query, upsert, bulkUpsert, remove } = useRxDB()
   const { showToast, online } = useApp()
 
   useEffect(() => { loadData() }, [])
@@ -52,8 +53,8 @@ export default function UsersList() {
     // ① Dexie فوراً
     try {
       const [lCamps, lUsers] = await Promise.all([
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.org_members.filter(m => m.org_id === ORG_ID).toArray().catch(()=>[]),
+        query('camps'),
+        query('org_members', { org_id: ORG_ID }),
       ])
       if (lCamps.length) setCamps(lCamps)
       if (lUsers.length) { setUsers(lUsers); setLoading(false) }
@@ -69,7 +70,7 @@ export default function UsersList() {
           .order('created_at', { ascending: false }),
       ])
       if (!cRes.error && cRes.data?.length) {
-        await localDB.camps.bulkPut(cRes.data).catch(()=>{})
+        await bulkUpsert('camps', cRes.data)
         setCamps(cRes.data)
       }
       if (!uRes.error && uRes.data?.length) {
@@ -191,7 +192,7 @@ export default function UsersList() {
     if (!window.confirm(`حذف "${user.full_name}"؟`)) return
     try {
       // محلي فوراً
-      await localDB.org_members.delete(user.id)
+      await remove('org_members', user.id)
       setUsers(u => u.filter(x => x.id !== user.id))
 
       if (navigator.onLine) {
