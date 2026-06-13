@@ -135,14 +135,14 @@ export default function Analysis() {
 
   const { showToast, online } = useApp()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { query } = useRxDB()
   const navigate = useNavigate()
 
   // حفظ الأسر الكاملة للـ drill-down
   const [allFamilies, setAllFamilies] = useState([])
   const [allMembers,  setAllMembers]  = useState([])
 
-  useEffect(() => { loadStats() }, [filterCamp])
+  const { query, ready } = useRxDB()
+  useEffect(() => { if (ready) loadStats() }, [filterCamp, ready])
 
   async function loadStats() {
     setLoading(true)
