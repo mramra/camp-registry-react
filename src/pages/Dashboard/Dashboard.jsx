@@ -1,11 +1,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { localDB } from '../../lib/db'
-import { supabase, ORG_ID } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
-import { processSyncQueue, getSyncStats } from '../../lib/sync'
+import { processSyncQueue, getSyncStats } from '../../lib/rxdb'
+import { useRxDB } from '../../lib/useRxDB'
+import { supabase, ORG_ID } from '../../lib/supabase'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 function checkIssues(f, mems) {
@@ -47,9 +47,9 @@ export default function Dashboard() {
   async function loadStats() {
     try {
       const [fams, camps, members] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
+        query('families'),
+        query('camps'),
+        query('family_members'),
       ])
       const campIds = getAllowedCampIds(camps)
       const filteredFams = filterLocal(fams, campIds)
@@ -67,8 +67,8 @@ export default function Dashboard() {
       ])
         const f2 = !fRes.error && fRes.data?.length ? fRes.data : fams
         const c2 = !cRes.error && cRes.data?.length ? cRes.data : camps
-        if (f2.length) try { await localDB.families.bulkPut(f2) } catch {}
-        if (c2.length) try { await localDB.camps.bulkPut(c2) } catch {}
+        await bulkUpsert('families', f2)
+        await bulkUpsert('camps', c2)
         applyStats(f2, c2, members)
       }
     } catch(e) { console.error(e); setLoading(false) }
