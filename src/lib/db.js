@@ -10,7 +10,7 @@ localDB.version(4).stores({ families: 'id, camp_id, org_id, status', family_memb
 localDB.version(5).stores({ families: 'id, camp_id, org_id, status, updated_at', family_members: 'id, family_id, national_id', camps: 'id, org_id', meta: 'key', sync_queue: '++id, status', org_members: 'id, org_id, role, camp_id, created_by, user_id', dist_rounds: 'id, camp_id, org_id, status', camp_distributions: 'id, camp_id, org_id, status, round_id', camp_dist_families: 'id, distribution_id, family_id', family_movements: 'id, family_id, org_id, type, date', devices: 'id' })
 localDB.version(6).stores({ families: 'id, camp_id, org_id, status, updated_at', family_members: 'id, family_id, national_id', camps: 'id, org_id', meta: 'key', sync_queue: '++id, status', org_members: 'id, org_id, role, camp_id, created_by, user_id', dist_rounds: 'id, camp_id, org_id, status', camp_distributions: 'id, camp_id, org_id, status, round_id', camp_dist_families: 'id, distribution_id, family_id', family_movements: 'id, family_id, org_id, type, date', family_history: 'id, family_id, org_id, created_at', devices: 'id' })
 localDB.version(7).stores({ families: 'id, camp_id, org_id, status, updated_at', family_members: 'id, family_id, national_id', camps: 'id, org_id', meta: 'key', sync_queue: '++id, status', dist_rounds: 'id, camp_id, org_id, status', camp_distributions: 'id, camp_id, org_id, status, round_id', camp_dist_families: 'id, distribution_id, family_id', org_members: 'id, org_id, role, camp_id, created_by, user_id', family_movements: 'id, family_id, org_id, type, date', family_history: 'id, family_id, org_id, created_at' })
-// version 150 — يتجاوز أي version قديم مخزن في المتصفح (كان 140)
+// version 150
 localDB.version(150).stores({
   families:          'id, camp_id, org_id, updated_at',
   family_members:    'id, family_id, national_id',
@@ -21,6 +21,21 @@ localDB.version(150).stores({
   camp_distributions:'id, camp_id, org_id, status, round_id',
   camp_dist_families:'id, distribution_id, family_id',
   org_members:       'id, org_id, role, camp_id, user_id',
+  family_movements:  'id, family_id, org_id, type, date',
+  family_history:    'id, family_id, org_id, created_at',
+})
+
+// version 151 — إضافة supervisor_id لـ org_members
+localDB.version(151).stores({
+  families:          'id, camp_id, org_id, updated_at',
+  family_members:    'id, family_id, national_id',
+  camps:             'id, org_id',
+  meta:              'key',
+  sync_queue:        '++id, status',
+  dist_rounds:       'id, camp_id, org_id, status',
+  camp_distributions:'id, camp_id, org_id, status, round_id',
+  camp_dist_families:'id, distribution_id, family_id',
+  org_members:       'id, org_id, role, camp_id, user_id, supervisor_id',
   family_movements:  'id, family_id, org_id, type, date',
   family_history:    'id, family_id, org_id, created_at',
 })
