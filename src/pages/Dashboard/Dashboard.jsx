@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
-import { processSyncQueue, getSyncStats } from '../../lib/rxdb'
+import { processSyncQueue, getSyncStats } from '../../lib/sync'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 
@@ -42,8 +42,8 @@ export default function Dashboard() {
   const { online, showToast } = useApp()
   const navigate = useNavigate()
 
-  const { query, bulkUpsert, ready } = useRxDB()
-  useEffect(() => { if (ready) loadStats() }, [ready])
+  const { query, bulkUpsert } = useRxDB()
+  useEffect(() => { loadStats() }, [])
 
   async function loadStats() {
     try {
