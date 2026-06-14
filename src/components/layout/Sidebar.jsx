@@ -23,11 +23,11 @@ const NAV_ITEMS = [
     { icon: '📋', label: 'سجل النشاط',      path: '/audit', adminOnly: true },
   ]},
   { group: 'الأدوات', items: [
-    { icon: '💾', label: 'استيراد/تصدير',  path: '/data' },
+    { icon: '💾', label: 'استيراد/تصدير',  path: '/export' },
     { icon: '💬', label: 'رسائل SMS',       path: '/sms' },
     { icon: '⚙️', label: 'الإعدادات',       path: '/settings' },
     { icon: '💎', label: 'الاشتراك',        path: '/subscription' },
-    { icon: '🛠️', label: 'إدارة البيانات',    path: '/data',         ownerOnly: true },
+    { icon: '🛠️', label: 'إدارة البيانات',  path: '/data',  ownerOnly: true },
     { icon: '❓', label: 'المساعدة',        path: '/help' },
   ]},
 ]
