@@ -554,13 +554,21 @@ export default function DataPage() {
 
           <Card title="📥 تصدير Excel" icon="">
             <div className="flex flex-col gap-2">
-              <button onClick={()=>setExportModal(true)} disabled={loading}
+              <p className="text-muted text-xs mb-1">يقرأ من Supabase مباشرة — دقة 100%</p>
+              <button onClick={()=>setExportModal('fam')} disabled={loading}
                 className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
-                👨‍👩‍👧 تصدير كشف الأسر
+                👨‍👩‍👧 كشف رباب الأسر
               </button>
-              <p className="text-muted text-[11px] text-center">
-                يقرأ من Supabase مباشرة — دقة 100%
-              </p>
+              <button onClick={()=>setExportModal('mem')} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-bold border border-blue/40 text-blue"
+                style={{background:'rgba(59,130,246,0.08)'}}>
+                👤 كشف أفراد الأسر
+              </button>
+              <button onClick={exportMissing} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-bold border border-red/40 text-red"
+                style={{background:'rgba(239,68,68,0.08)'}}>
+                ⚠️ الأسر الناقصة
+              </button>
             </div>
           </Card>
         </div>
