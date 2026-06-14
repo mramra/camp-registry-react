@@ -165,12 +165,10 @@ export default function CampsList() {
   const searchLower = search.trim().toLowerCase()
   const isSearching = !!searchLower
 
-  // عند البحث: اعرض كل المخيمات المطابقة
-  // بدون بحث: اعرض كل المخيمات كـ parents (وكل مخيم يعرض فروعه تحته أيضاً)
-  // هذا يضمن ظهور كل مخيم حتى لو كان sub-camp
+  // هرمي فقط: الرئيسية تظهر وفروعها تحتها
   const parents  = isSearching
     ? visible.filter(c => c.name?.toLowerCase().includes(searchLower))
-    : visible  // ← كل المخيمات تظهر
+    : visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
   const children = isSearching ? []
     : visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
   const mainCamps = camps.filter(c => !c.parent_camp_id)
