@@ -58,7 +58,10 @@ export function useRxDB() {
           keys.forEach(k => params.push(filters[k]))
         }
         const rows = await db.getAll(sql, params)
-        return rows.map(parseRow)
+        // إذا PowerSync أرجع بيانات → استخدمها
+        if (rows && rows.length > 0) return rows.map(parseRow)
+        // إذا فارغة → قد يكون SQLite غير محفوظ (Android بدون COOP/COEP) → جرب Dexie
+        console.warn('[useRxDB] PS empty for', table, '— trying Dexie fallback')
       } catch(e) {
         console.warn('[useRxDB] PS query failed, fallback Dexie:', table, e.message)
       }
