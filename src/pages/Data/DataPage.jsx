@@ -1,5 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
-// SheetJS يُحمَّل ديناميكياً
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { supabase, ORG_ID } from '../../lib/supabase'
+import { getPowerSync } from '../../lib/powersync'
+import { useAuth } from '../../context/AuthContext'
+import { useApp } from '../../context/AppContext'
+import PageHeader from '../../components/ui/PageHeader'
+import Card from '../../components/ui/Card'
+import Spinner from '../../components/ui/Spinner'
+import Modal from '../../components/ui/Modal'
+
 async function getXLSX() {
   if (window.XLSX) return window.XLSX
   await new Promise((res, rej) => {
@@ -10,52 +18,32 @@ async function getXLSX() {
   })
   return window.XLSX
 }
-import { supabase, ORG_ID } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
-import { useAuth } from '../../context/AuthContext'
-import { useApp } from '../../context/AppContext'
-import { useDataScope } from '../../lib/useDataScope'
-import PageHeader from '../../components/ui/PageHeader'
-import Card from '../../components/ui/Card'
-import Spinner from '../../components/ui/Spinner'
-import Modal from '../../components/ui/Modal'
 
-// ── تعريف الأعمدة ──────────────────────────────────────
-const FAM_COLS = [
-  { key:'head_name',        label:'اسم رب الأسرة',          def:true  },
-  { key:'head_id',          label:'رقم الهوية',              def:true  },
-  { key:'phone1',           label:'رقم الجوال',              def:true  },
-  { key:'phone2',           label:'جوال بديل',               def:false },
-  { key:'camp',             label:'المخيم',                  def:true  },
-  { key:'tent',             label:'رقم الخيمة',              def:false },
-  { key:'head_dob',         label:'تاريخ الميلاد',           def:false },
-  { key:'age',              label:'العمر',                   def:false },
-  { key:'head_gender',      label:'الجنس',                   def:false },
-  { key:'head_marital',     label:'الحالة الاجتماعية',       def:true  },
-  { key:'members_count',    label:'عدد الأفراد',             def:true  },
-  { key:'spouse_name',      label:'اسم الزوجة',              def:false },
-  { key:'spouse_id',        label:'هوية الزوجة',             def:false },
-  { key:'category_tags',    label:'الفئة الاجتماعية',        def:false },
-  { key:'original_address', label:'عنوان السكن الأصلي',      def:false },
-  { key:'address_details',  label:'العنوان بالتفصيل',        def:false },
-  { key:'notes',            label:'ملاحظات',                 def:false },
+const TABLES = [
+  { key: 'families',           label: 'الأسر',               icon: '👨‍👩‍👧' },
+  { key: 'family_members',     label: 'أفراد الأسر',          icon: '👤' },
+  { key: 'camps',              label: 'المخيمات',             icon: '🏕️' },
+  { key: 'org_members',        label: 'المستخدمون',           icon: '👥' },
+  { key: 'family_movements',   label: 'الحركات',              icon: '🔄' },
+  { key: 'dist_rounds',        label: 'جولات التوزيع',        icon: '📦' },
+  { key: 'camp_distributions', label: 'دفعات التوزيع',        icon: '📋' },
+  { key: 'camp_dist_families', label: 'استلام التوزيعات',     icon: '✅' },
 ]
 
-const MEM_COLS = [
-  { key:'fam_name',    label:'اسم رب الأسرة',           def:true  },
-  { key:'head_id',     label:'هوية رب الأسرة',          def:true  },
-  { key:'head_phone',  label:'رقم الجوال',               def:true  },
-  { key:'camp',        label:'المخيم',                   def:true  },
-  { key:'mother_name', label:'اسم الأم',                 def:true  },
-  { key:'mother_id',   label:'رقم هوية الأم',            def:true  },
-  { key:'mother_dob',  label:'تاريخ ميلاد الأم',        def:false },
-  { key:'son_name',    label:'اسم الفرد',                def:true  },
-  { key:'son_id',      label:'رقم هوية الفرد',           def:true  },
-  { key:'son_dob',     label:'تاريخ الميلاد',            def:true  },
-  { key:'relation',    label:'العلاقة',                  def:true  },
-  { key:'age',         label:'العمر',                    def:true  },
-  { key:'gender',      label:'الجنس',                    def:false },
-  { key:'health',      label:'الحالة الصحية',            def:false },
+const FAM_COLS = [
+  { key:'head_name',        label:'اسم رب الأسرة',      def:true  },
+  { key:'head_id',          label:'رقم الهوية',          def:true  },
+  { key:'phone1',           label:'رقم الجوال',          def:true  },
+  { key:'phone2',           label:'جوال بديل',           def:false },
+  { key:'camp',             label:'المخيم',              def:true  },
+  { key:'tent',             label:'رقم الخيمة',          def:false },
+  { key:'head_dob',         label:'تاريخ الميلاد',       def:false },
+  { key:'head_gender',      label:'الجنس',               def:false },
+  { key:'head_marital',     label:'الحالة الاجتماعية',   def:true  },
+  { key:'members_count',    label:'عدد الأفراد',         def:true  },
+  { key:'category_tags',    label:'الفئة الاجتماعية',    def:false },
+  { key:'original_address', label:'عنوان السكن الأصلي',  def:false },
+  { key:'notes',            label:'ملاحظات',             def:false },
 ]
 
 function calcAge(dob) {
@@ -66,64 +54,101 @@ function calcAge(dob) {
   return a>=0&&a<120 ? a : null
 }
 
-const REQUIRED = ['head_name','head_id','phone1','camp_id']
-
 export default function DataPage() {
+  const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
+  const { showToast, psReady, psSynced, psStatus, online } = useApp()
+
   const [loading,       setLoading]       = useState(false)
-  const [filterCamp,    setFilterCamp]    = useState('')
+  const [stats,         setStats]         = useState({})
+  const [psStats,       setPsStats]       = useState(null)
   const [camps,         setCamps]         = useState([])
-  const [exportModal,   setExportModal]   = useState(null)
-  const [famCols,       setFamCols]       = useState(() => FAM_COLS.map((c,i)=>({...c, order: c.def?i+1:0})))
-  const [memCols,       setMemCols]       = useState(() => MEM_COLS.map((c,i)=>({...c, order: c.def?i+1:0})))
-  const [ageFrom,       setAgeFrom]       = useState(0)
-  const [ageTo,         setAgeTo]         = useState(120)
+  const [filterCamp,    setFilterCamp]    = useState('')
+  const [exportModal,   setExportModal]   = useState(false)
+  const [famCols,       setFamCols]       = useState(() => FAM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
+  const [activeTab,     setActiveTab]     = useState('stats')
   const importRef  = useRef()
   const restoreRef = useRef()
 
-  const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
-  const { showToast, psReady, psSynced } = useApp()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
-  const { query, bulkUpsert } = useRxDB()
+  const isAdmin = isOwner || isSuperAdmin
+  const canExp  = canExport || isAdmin
+  const canImp  = canImport || isAdmin
 
-  // ── تحميل المخيمات ──────────────────────────────────
-  async function loadCamps() {
-    const c = await query('camps')
-    setCamps(c || [])
-    if (profile?.camp_id) setFilterCamp(profile.camp_id)
+  // ── تحميل الإحصائيات من Supabase مباشرة ────────────
+  const loadStats = useCallback(async () => {
+    setLoading(true)
+    try {
+      const results = {}
+      await Promise.all(TABLES.map(async ({ key }) => {
+        const { count } = await supabase
+          .from(key)
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', ORG_ID)
+          .catch(() => ({ count: 0 }))
+        results[key] = count || 0
+      }))
+      setStats(results)
+
+      // إحصائيات المخيمات
+      const { data: campsData } = await supabase
+        .from('camps').select('id,name').eq('org_id', ORG_ID)
+      setCamps(campsData || [])
+    } catch(e) {
+      showToast('خطأ في جلب الإحصائيات', true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // ── إحصائيات PowerSync ──────────────────────────────
+  const loadPsStats = useCallback(async () => {
+    if (!psReady) return
+    try {
+      const db = getPowerSync()
+      const status = db.currentStatus
+      const results = {}
+      await Promise.all(TABLES.map(async ({ key }) => {
+        try {
+          const rows = await db.getAll(`SELECT COUNT(*) as cnt FROM ${key}`)
+          results[key] = rows[0]?.cnt || 0
+        } catch { results[key] = 0 }
+      }))
+      setPsStats({
+        counts: results,
+        status: psStatus,
+        synced: psSynced,
+      })
+    } catch {}
+  }, [psReady, psStatus, psSynced])
+
+  useEffect(() => { loadStats() }, [])
+  useEffect(() => { if (psReady)  { loadStats(); loadPsStats() } }, [psReady])
+  useEffect(() => { if (psSynced) { loadStats(); loadPsStats() } }, [psSynced])
+
+  // ── جلب البيانات للتصدير (من Supabase مباشرة) ───────
+  async function getFullData() {
+    let query = supabase.from('families').select(`
+      *,
+      camps!camp_id(name),
+      family_members(*)
+    `).eq('org_id', ORG_ID)
+    if (filterCamp) query = query.eq('camp_id', filterCamp)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
   }
 
-  useEffect(() => { loadCamps() }, [])
-  useEffect(() => { if (psReady)  loadCamps() }, [psReady])
-  useEffect(() => { if (psSynced) loadCamps() }, [psSynced])
-
-  // ── جلب البيانات (PowerSync أولاً) ──────────────────
-  async function getData() {
-    const allFams = await query('families')
-    const allMems = await query('family_members')
-    const campMap = Object.fromEntries((camps.length ? camps : await query('camps')).map(c=>[c.id,c.name]))
-    const campIds = getAllowedCampIds(camps.length ? camps : Object.keys(campMap).map(id=>({id})))
-    let fams = filterLocal(allFams, campIds)
-    if (filterCamp) fams = fams.filter(f => f.camp_id === filterCamp)
-    const famIds = new Set(fams.map(f=>f.id))
-    const mems = allMems.filter(m => famIds.has(m.family_id))
-    const mByFam = {}
-    mems.forEach(m => { if(!mByFam[m.family_id]) mByFam[m.family_id]=[]; mByFam[m.family_id].push(m) })
-    return { fams, mems, mByFam, campMap }
-  }
-
-  // ── تصدير الأسر ──
+  // ── تصدير Excel ─────────────────────────────────────
   async function exportFamilies() {
     setLoading(true)
     try {
-      const { fams, mByFam, campMap } = await getData()
-      const selected = [...famCols].filter(c=>c.order>0).sort((a,b)=>a.order-b.order)
+      const selected = famCols.filter(c=>c.order>0).sort((a,b)=>a.order-b.order)
       if (!selected.length) return showToast('اختر عموداً على الأقل', true)
 
-      const rows = fams.map(f => {
-        const fMems = mByFam[f.id] || []
-        const spouses = fMems.filter(m => ['زوجة','زوج'].includes(m.relation||''))
+      const data = await getFullData()
+      const rows = data.map(f => {
+        const mems = f.family_members || []
         const row = {}
         selected.forEach(col => {
           switch(col.key) {
@@ -131,18 +156,14 @@ export default function DataPage() {
             case 'head_id':          row[col.label] = f.head_id||''; break
             case 'phone1':           row[col.label] = f.phone1||''; break
             case 'phone2':           row[col.label] = f.phone2||''; break
-            case 'camp':             row[col.label] = campMap[f.camp_id]||''; break
+            case 'camp':             row[col.label] = f.camps?.name||''; break
             case 'tent':             row[col.label] = f.tent||''; break
             case 'head_dob':         row[col.label] = f.head_dob||''; break
-            case 'age':              row[col.label] = calcAge(f.head_dob)??''; break
             case 'head_gender':      row[col.label] = f.head_gender||''; break
             case 'head_marital':     row[col.label] = f.head_marital||''; break
-            case 'members_count':    row[col.label] = fMems.length+1; break
-            case 'spouse_name':      row[col.label] = spouses[0]?.name||''; break
-            case 'spouse_id':        row[col.label] = spouses[0]?.national_id||''; break
-            case 'category_tags':    row[col.label] = (Array.isArray(f.category_tags)?f.category_tags:(f.category_tags?[f.category_tags]:[])).join(', '); break
+            case 'members_count':    row[col.label] = mems.length + 1; break
+            case 'category_tags':    row[col.label] = (Array.isArray(f.category_tags)?f.category_tags:[]).join(', '); break
             case 'original_address': row[col.label] = f.original_address||''; break
-            case 'address_details':  row[col.label] = f.address_details||''; break
             case 'notes':            row[col.label] = f.notes||''; break
           }
         })
@@ -151,170 +172,116 @@ export default function DataPage() {
 
       const XLSX = await getXLSX()
       const ws = XLSX.utils.json_to_sheet(rows)
-      styleSheet(ws, selected.length)
+      ws['!cols'] = selected.map(()=>({wch:22}))
+      const hdr = XLSX.utils.decode_range(ws['!ref']||'A1')
+      for (let c = hdr.s.c; c <= hdr.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({r:0,c})
+        if (ws[addr]) ws[addr].s = {
+          fill:{fgColor:{rgb:'1E3A5F'}},
+          font:{bold:true,color:{rgb:'FFFFFF'}},
+          alignment:{horizontal:'center'}
+        }
+      }
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'الأسر')
-      addInfoSheet(wb, fams.length, campMap)
-      const campName = filterCamp ? campMap[filterCamp] : 'كل المخيمات'
-      XLSX.writeFile(wb, `كشف_الأسر_${campName}_${today()}.xlsx`)
-      showToast(`✅ تم تصدير ${fams.length} أسرة`)
-      setExportModal(null)
+      const info = XLSX.utils.aoa_to_sheet([
+        ['عدد الأسر', data.length],
+        ['المخيم', filterCamp ? camps.find(c=>c.id===filterCamp)?.name : 'كل المخيمات'],
+        ['تاريخ التصدير', new Date().toLocaleDateString('ar-EG')],
+        ['بواسطة', profile?.full_name||'—'],
+      ])
+      XLSX.utils.book_append_sheet(wb, info, 'معلومات')
+      const campLabel = filterCamp ? camps.find(c=>c.id===filterCamp)?.name||'' : 'كل_المخيمات'
+      XLSX.writeFile(wb, `كشف_الأسر_${campLabel}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
+      showToast(`✅ تم تصدير ${data.length} أسرة`)
+      setExportModal(false)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }
 
-  // ── تصدير الأفراد ──
-  async function exportMembers() {
+  // ── نسخة احتياطية كاملة من Supabase ────────────────
+  async function createBackup() {
     setLoading(true)
     try {
-      const { fams, mByFam, campMap } = await getData()
-      const selected = [...memCols].filter(c=>c.order>0).sort((a,b)=>a.order-b.order)
-      if (!selected.length) return showToast('اختر عموداً على الأقل', true)
+      const [
+        { data: fams },
+        { data: mems },
+        { data: campsD },
+        { data: rounds },
+        { data: distFams },
+        { data: dists },
+      ] = await Promise.all([
+        supabase.from('families').select('*').eq('org_id', ORG_ID),
+        supabase.from('family_members').select('*'),
+        supabase.from('camps').select('*').eq('org_id', ORG_ID),
+        supabase.from('dist_rounds').select('*').eq('org_id', ORG_ID),
+        supabase.from('camp_dist_families').select('*'),
+        supabase.from('camp_distributions').select('*').eq('org_id', ORG_ID),
+      ])
 
-      const memRows = []
-      fams.forEach(f => {
-        const fMems  = mByFam[f.id] || []
-        const mother = fMems.find(m => ['زوجة','زوج','أم'].includes(m.relation||''))
-        const allPersons = [
-          { _isHead:true, name:f.head_name, national_id:f.head_id, dob:f.head_dob, gender:f.head_gender, relation:'رب الأسرة', health:'' },
-          ...fMems
-        ]
-        const filtered = (ageFrom>0||ageTo<120)
-          ? allPersons.filter(m => { const a=calcAge(m.dob); return a!==null&&a>=ageFrom&&a<=ageTo })
-          : allPersons
-
-        const toProcess = filtered.length ? filtered : [null]
-        toProcess.forEach(child => {
-          const age = child ? (calcAge(child.dob)??'') : ''
-          const row = {}
-          selected.forEach(col => {
-            switch(col.key) {
-              case 'fam_name':    row[col.label] = f.head_name||''; break
-              case 'head_id':     row[col.label] = f.head_id||''; break
-              case 'head_phone':  row[col.label] = f.phone1||''; break
-              case 'camp':        row[col.label] = campMap[f.camp_id]||''; break
-              case 'mother_name': row[col.label] = mother?.name||''; break
-              case 'mother_id':   row[col.label] = mother?.national_id||''; break
-              case 'mother_dob':  row[col.label] = mother?.dob||''; break
-              case 'son_name':    row[col.label] = (!child?._isHead&&child?.name)||''; break
-              case 'son_id':      row[col.label] = (!child?._isHead&&child?.national_id)||''; break
-              case 'son_dob':     row[col.label] = (!child?._isHead&&child?.dob)||''; break
-              case 'relation':    row[col.label] = child?.relation||''; break
-              case 'age':         row[col.label] = age; break
-              case 'gender':      row[col.label] = child?.gender||''; break
-              case 'health':      row[col.label] = child?.health||''; break
-            }
-          })
-          memRows.push(row)
-        })
-      })
-
-      const XLSX = await getXLSX()
-      const ws = XLSX.utils.json_to_sheet(memRows)
-      styleSheet(ws, selected.length)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'الأفراد')
-      const campMap2 = Object.fromEntries(camps.map(c=>[c.id,c.name]))
-      addInfoSheet(wb, fams.length, campMap2)
-      const campName = filterCamp ? campMap2[filterCamp] : 'كل المخيمات'
-      XLSX.writeFile(wb, `كشف_الأفراد_${campName}_${today()}.xlsx`)
-      showToast(`✅ تم تصدير ${memRows.length} سجل`)
-      setExportModal(null)
-    } catch(e) { showToast('خطأ: '+e.message, true) }
-    finally { setLoading(false) }
-  }
-
-  // ── تصدير الناقصة ──
-  async function exportMissing() {
-    setLoading(true)
-    try {
-      const { fams, campMap } = await getData()
-      const XLSX = await getXLSX()
-      const missing = fams.filter(f => REQUIRED.some(k=>!f[k]?.toString().trim()))
-      const rows = missing.map((f,i) => ({
-        '#': i+1,
-        'اسم رب الأسرة': f.head_name||'—',
-        'رقم الهوية':     f.head_id||'—',
-        'رقم الجوال':     f.phone1||'—',
-        'المخيم':          campMap[f.camp_id]||'—',
-        'النواقص': REQUIRED.filter(k=>!f[k]?.toString().trim())
-          .map(k=>({head_name:'الاسم',head_id:'الهوية',phone1:'الجوال',camp_id:'المخيم'}[k])).join(' + ')
-      }))
-      const ws = XLSX.utils.json_to_sheet(rows)
-      styleSheet(ws, 6)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'الأسر الناقصة')
-      XLSX.writeFile(wb, `ناقصة_${today()}.xlsx`)
-      showToast(`✅ ${missing.length} أسرة ناقصة`)
-    } catch(e) { showToast('خطأ: '+e.message, true) }
-    finally { setLoading(false) }
-  }
-
-  // ── تنسيق الورقة ──
-  function styleSheet(ws, colCount) {
-    const XLSX = window.XLSX
-    const range = XLSX.utils.decode_range(ws['!ref']||'A1')
-    ws['!cols'] = Array(colCount).fill({ wch: 20 })
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c })
-      if (!ws[addr]) continue
-      ws[addr].s = {
-        fill: { fgColor: { rgb: '1E3A5F' } },
-        font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Arial' },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-        border: { bottom: { style:'thin', color:{ rgb:'CCCCCC' }}}
+      const backup = {
+        version: 2,
+        org_id: ORG_ID,
+        created_at: new Date().toISOString(),
+        created_by: profile?.full_name,
+        source: 'supabase',
+        counts: {
+          families: fams?.length||0,
+          family_members: mems?.length||0,
+          camps: campsD?.length||0,
+        },
+        data: { families:fams, family_members:mems, camps:campsD, dist_rounds:rounds, camp_dist_families:distFams, camp_distributions:dists }
       }
-    }
-    ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+      const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'})
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href=url; a.download=`backup_supabase_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.json`; a.click()
+      URL.revokeObjectURL(url)
+      showToast(`✅ نسخة احتياطية كاملة: ${fams?.length||0} أسرة`)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
   }
 
-  function addInfoSheet(wb, count, campMap) {
-    const XLSX = window.XLSX
-    const campName = filterCamp ? campMap[filterCamp] : 'كل المخيمات'
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['المخيم',    campName],
-      ['عدد الأسر', count],
-      ['تاريخ التصدير', new Date().toLocaleDateString('ar-EG')],
-      ['تم بواسطة',  profile?.full_name||'—'],
-    ])
-    ws['!cols'] = [{wch:18},{wch:30}]
-    XLSX.utils.book_append_sheet(wb, ws, 'معلومات')
+  // ── استعادة نسخة احتياطية → Supabase ────────────────
+  async function handleRestoreFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!window.confirm('⚠️ سيتم رفع البيانات لـ Supabase. هل أنت متأكد؟')) return
+    setLoading(true)
+    try {
+      const backup = JSON.parse(await file.text())
+      if (!backup.data) return showToast('ملف غير صالح', true)
+      let ok = 0
+
+      if (backup.data.families?.length) {
+        const { error } = await supabase.from('families').upsert(backup.data.families)
+        if (!error) ok += backup.data.families.length
+      }
+      if (backup.data.family_members?.length) {
+        await supabase.from('family_members').upsert(backup.data.family_members)
+      }
+      showToast(`✅ استُعيدت ${ok} أسرة في Supabase`)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false); if(restoreRef.current) restoreRef.current.value='' }
   }
 
-  function today() {
-    return new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')
-  }
-
-  // ── تحميل القالب ──
-  async function downloadTemplate() {
-    const XLSX = await getXLSX()
-    const headers = ['اسم رب الأسرة*','رقم الهوية*','رقم الجوال*','جوال بديل','الجنس','الحالة الاجتماعية','تاريخ الميلاد','اسم المخيم*','الخيمة','المنطقة الأصلية','ملاحظات']
-    const example = ['محمد أحمد علي محمود','123456789','0599000000','','ذكر','متزوج','1980-01-15','مخيم السلام','A1','غزة','']
-    const ws = XLSX.utils.aoa_to_sheet([headers, example])
-    ws['!cols'] = headers.map(()=>({wch:22}))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'قالب الاستيراد')
-    XLSX.writeFile(wb, 'قالب_استيراد_الأسر.xlsx')
-    showToast('✅ تم تحميل القالب')
-  }
-
-  // ── استيراد ──
+  // ── استيراد Excel ────────────────────────────────────
   async function handleImportFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
     setLoading(true)
     try {
       const XLSX = await getXLSX()
-      const buf  = await file.arrayBuffer()
-      const wb   = XLSX.read(buf, { type:'array' })
-      const ws   = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' })
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, {type:'array'})
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''})
       if (!rows.length) return showToast('الملف فارغ', true)
 
-      // فحص المكررات من PowerSync
-      const existingFams = await query('families')
-      const existingIds  = new Set(existingFams.map(f=>f.head_id).filter(Boolean))
-      const campNameMap  = Object.fromEntries(camps.map(c=>[c.name.trim(), c.id]))
+      const { data: existing } = await supabase.from('families').select('head_id').eq('org_id', ORG_ID)
+      const existingIds = new Set((existing||[]).map(f=>f.head_id).filter(Boolean))
+      const campNameMap = Object.fromEntries(camps.map(c=>[c.name.trim(), c.id]))
 
       const preview = rows
         .filter(r => r['اسم رب الأسرة*']||r['اسم رب الأسرة'])
@@ -322,10 +289,10 @@ export default function DataPage() {
           const headId   = String(r['رقم الهوية*']||r['رقم الهوية']||'').trim()
           const campName = String(r['اسم المخيم*']||r['المخيم']||'').trim()
           return {
-            head_name: String(r['اسم رب الأسرة*']||r['اسم رب الأسرة']||'').trim(),
-            head_id:   headId,
-            phone1:    String(r['رقم الجوال*']||r['رقم الجوال']||'').trim(),
-            phone2:    String(r['جوال بديل']||'').trim()||null,
+            head_name:    String(r['اسم رب الأسرة*']||r['اسم رب الأسرة']||'').trim(),
+            head_id:      headId,
+            phone1:       String(r['رقم الجوال*']||r['رقم الجوال']||'').trim(),
+            phone2:       String(r['جوال بديل']||'').trim()||null,
             head_gender:  String(r['الجنس']||'ذكر').trim(),
             head_marital: String(r['الحالة الاجتماعية']||'').trim()||null,
             head_dob:     String(r['تاريخ الميلاد']||'').trim()||null,
@@ -338,7 +305,6 @@ export default function DataPage() {
             valid: !!(r['اسم رب الأسرة*']||r['اسم رب الأسرة']) && !!headId,
           }
         })
-
       setImportPreview(preview)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false); if(importRef.current) importRef.current.value='' }
@@ -351,255 +317,305 @@ export default function DataPage() {
     try {
       const toImport = importPreview.filter(r=>r.valid&&!r.dup)
       for (const row of toImport) {
-        try {
-          const fam = {
-            id: crypto.randomUUID(),
-            org_id: ORG_ID,
-            ...row,
-            category_tags: [],
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-          delete fam.dup; delete fam.valid; delete fam.campName
-          // اكتب لـ Supabase مباشرة — PowerSync يزامن تلقائياً
-          if (navigator.onLine) {
-            const { error } = await supabase.from('families').insert(fam)
-            if (error) throw error
-          }
-          // اكتب لـ PowerSync محلياً أيضاً للعمل offline
-          await bulkUpsert('families', [fam])
-          ok++
-        } catch { err++ }
+        const fam = {
+          id: crypto.randomUUID(), org_id: ORG_ID, ...row,
+          category_tags: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        delete fam.dup; delete fam.valid; delete fam.campName
+        const { error } = await supabase.from('families').insert(fam)
+        if (error) err++; else ok++
       }
       skip = importPreview.filter(r=>r.dup).length
-      showToast(`✅ استُورد ${ok} | تخطى ${skip} مكرر${err?` | خطأ ${err}`:''}`)
+      showToast(`✅ ${ok} استُورد | ${skip} مكرر${err?` | ${err} خطأ`:''}`)
       setImportPreview(null)
+      loadStats()
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setImporting(false) }
   }
 
-  // ── نسخة احتياطية ──
-  async function createBackup() {
+  // ── حذف كل البيانات ─────────────────────────────────
+  async function clearAllData() {
+    if (!window.confirm('⚠️⚠️ حذف كل بيانات المنظمة نهائياً؟\nهذا الإجراء لا يمكن التراجع عنه!')) return
+    if (!window.confirm('تأكيد أخير — هل أنت متأكد 100%؟')) return
     setLoading(true)
     try {
-      // اقرأ من PowerSync
-      const [fams, mems, camps2, rounds, distFams] = await Promise.all([
-        query('families'),
-        query('family_members'),
-        query('camps'),
-        query('dist_rounds'),
-        query('camp_dist_families'),
-      ])
-      const backup = {
-        version: 1,
-        org_id: ORG_ID,
-        created_at: new Date().toISOString(),
-        created_by: profile?.full_name,
-        counts: { families:fams.length, members:mems.length, camps:camps2.length },
-        data: { families:fams, family_members:mems, camps:camps2, dist_rounds:rounds, camp_dist_families:distFams }
-      }
-      const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'})
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href=url; a.download=`backup_${today()}.json`; a.click()
-      URL.revokeObjectURL(url)
-      showToast(`✅ نسخة احتياطية: ${fams.length} أسرة`)
+      await supabase.from('camp_dist_families').delete().neq('id','00000000-0000-0000-0000-000000000000')
+      await supabase.from('family_members').delete().neq('id','00000000-0000-0000-0000-000000000000')
+      await supabase.from('family_movements').delete().eq('org_id',ORG_ID)
+      await supabase.from('families').delete().eq('org_id',ORG_ID)
+      showToast('✅ تم حذف جميع البيانات')
+      loadStats()
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }
 
-  async function handleRestoreFile(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!window.confirm('سيتم استبدال البيانات المحلية. هل أنت متأكد؟')) return
-    setLoading(true)
-    try {
-      const backup = JSON.parse(await file.text())
-      if (!backup.data) return showToast('ملف غير صالح', true)
-      // استعدة في PowerSync (يزامن لـ Supabase تلقائياً)
-      if (backup.data.families?.length)       await bulkUpsert('families',       backup.data.families)
-      if (backup.data.family_members?.length) await bulkUpsert('family_members', backup.data.family_members)
-      if (backup.data.camps?.length)          await bulkUpsert('camps',          backup.data.camps)
-      showToast(`✅ استُعيدت ${backup.data.families?.length||0} أسرة`)
-    } catch(e) { showToast('خطأ: '+e.message, true) }
-    finally { setLoading(false); if(restoreRef.current) restoreRef.current.value='' }
-  }
-
   const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"
-  const canExp = canExport || isOwner || isSuperAdmin
-  const canImp = canImport || isOwner || isSuperAdmin
+  const psColor = psStatus==='connected' ? 'text-green' : psStatus==='connecting' ? 'text-accent' : 'text-muted'
+  const psLabel = psStatus==='connected' ? '🟢 متصل' : psStatus==='connecting' ? '🟡 يتصل...' : '⚪ غير متصل'
+
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <div className="text-4xl">🔒</div>
+      <p className="text-muted text-sm">هذه الصفحة لمالك المنصة فقط</p>
+    </div>
+  )
 
   return (
     <div>
-      <PageHeader icon="📁" title="استيراد وتصدير البيانات" />
+      <PageHeader icon="🗄️" title="إدارة البيانات" subtitle="مالك المنصة" />
 
-      <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL+' mb-4'}>
-        <option value="">🏕️ كل المخيمات</option>
-        {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+      {/* ═══ تبويبات ═══ */}
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
+        {[
+          {id:'stats',  label:'📊 الإحصائيات'},
+          {id:'export', label:'📥 تصدير'},
+          {id:'import', label:'📤 استيراد'},
+          {id:'backup', label:'💾 نسخ احتياطية'},
+          {id:'danger', label:'⚠️ خطر'},
+        ].map(t => (
+          <button key={t.id} onClick={()=>setActiveTab(t.id)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              activeTab===t.id
+                ? 'bg-accent text-bg'
+                : 'bg-surface2 text-muted border border-border'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {!psSynced && !psReady && (
-        <div className="flex items-center gap-2 text-muted text-xs mb-3 bg-surface2 rounded-xl px-3 py-2">
-          <Spinner size="sm" />
-          <span>جاري الاتصال بقاعدة البيانات...</span>
+      {/* ═══ إحصائيات ═══ */}
+      {activeTab==='stats' && (
+        <div className="flex flex-col gap-3">
+          {/* حالة الاتصال */}
+          <Card title="🔄 حالة المزامنة" icon="">
+            <div className="flex flex-col gap-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">PowerSync</span>
+                <span className={psColor}>{psLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">أول sync</span>
+                <span className={psSynced?'text-green':'text-muted'}>{psSynced?'✅ اكتمل':'⏳ انتظار'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">الإنترنت</span>
+                <span className={online?'text-green':'text-red'}>{online?'🟢 متصل':'🔴 غير متصل'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">قاعدة البيانات</span>
+                <span className="text-blue text-xs">Supabase + PowerSync</span>
+              </div>
+            </div>
+            <button onClick={loadStats} disabled={loading}
+              className="w-full mt-3 py-2 rounded-xl text-xs font-bold border border-border text-muted">
+              {loading ? <Spinner size="sm" /> : '🔄 تحديث'}
+            </button>
+          </Card>
+
+          {/* إحصائيات Supabase */}
+          <Card title="📊 إحصائيات Supabase (مصدر الحقيقة)" icon="">
+            {loading ? (
+              <div className="flex justify-center py-4"><Spinner /></div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {TABLES.map(t => (
+                  <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                    <span className="text-muted text-xs">{t.icon} {t.label}</span>
+                    <span className="text-white font-black text-sm">{stats[t.key]??'—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* إحصائيات PowerSync محلياً */}
+          {psStats && (
+            <Card title="💾 PowerSync SQLite المحلي" icon="">
+              <div className="flex flex-col gap-2">
+                {TABLES.map(t => (
+                  <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                    <span className="text-muted text-xs">{t.icon} {t.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-black text-sm">{psStats.counts[t.key]??'—'}</span>
+                      {stats[t.key] !== undefined && psStats.counts[t.key] !== stats[t.key] && (
+                        <span className="text-accent text-[10px]">⚠️ فرق</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-muted text-[10px] mt-2 text-center">مقارنة: Supabase ↔ SQLite محلي</p>
+            </Card>
+          )}
         </div>
       )}
 
       {/* ═══ تصدير ═══ */}
-      <Card title="📥 تصدير Excel" icon="">
-        {canExp ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-muted text-xs mb-1">صدّر البيانات إلى Excel مع اختيار الأعمدة</p>
-            <button onClick={()=>setExportModal('fam')} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-black text-bg bg-accent">
-              👨‍👩‍👧 كشف الأسر
-            </button>
-            <button onClick={()=>setExportModal('mem')} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-bold border border-blue/40 text-blue"
-              style={{background:'rgba(59,130,246,0.08)'}}>
-              👤 كشف الأفراد
-            </button>
-            <button onClick={exportMissing} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-bold border border-red/40 text-red"
-              style={{background:'rgba(239,68,68,0.08)'}}>
-              ⚠️ الأسر الناقصة
-            </button>
-          </div>
-        ) : <p className="text-red text-xs text-center py-3">🔒 لا تملك صلاحية التصدير</p>}
-      </Card>
+      {activeTab==='export' && canExp && (
+        <div className="flex flex-col gap-3">
+          <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL}>
+            <option value="">🏕️ كل المخيمات</option>
+            {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
 
-      {/* ═══ استيراد ═══ */}
-      <Card title="📤 استيراد Excel" icon="">
-        {canImp ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-muted text-xs mb-1">استيراد أسر من Excel — يتحقق من التكرار تلقائياً</p>
-            <button onClick={downloadTemplate}
-              className="w-full py-2.5 rounded-xl text-sm font-bold border border-accent/40 text-accent"
-              style={{background:'rgba(245,158,11,0.08)'}}>
-              📋 تحميل قالب الاستيراد
-            </button>
-            <button onClick={()=>importRef.current?.click()} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-black text-bg bg-accent">
-              📂 اختيار ملف Excel
-            </button>
-            <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportFile}/>
-
-            {importPreview && (
-              <div className="mt-1">
-                <div className="flex gap-3 text-xs mb-2 flex-wrap">
-                  <span className="text-white font-bold">{importPreview.length} سجل</span>
-                  <span className="text-green">✅ {importPreview.filter(r=>r.valid&&!r.dup).length} جديد</span>
-                  <span className="text-accent">🔁 {importPreview.filter(r=>r.dup).length} مكرر</span>
-                  <span className="text-red">❌ {importPreview.filter(r=>!r.valid).length} ناقص</span>
-                </div>
-                <div className="flex flex-col gap-1 max-h-40 overflow-y-auto mb-2">
-                  {importPreview.map((r,i)=>(
-                    <div key={i} className="text-[11px] px-3 py-1.5 rounded-lg flex justify-between"
-                      style={{background:r.dup?'rgba(245,158,11,0.1)':r.valid?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)'}}>
-                      <span className="text-white truncate max-w-[200px]">{r.head_name}</span>
-                      <span>{r.dup?'🔁 مكرر':r.valid?'✅':'❌'}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={confirmImport} disabled={importing}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-black text-bg bg-accent">
-                    {importing?'⏳...':'✅ تأكيد'}
-                  </button>
-                  <button onClick={()=>setImportPreview(null)}
-                    className="flex-1 py-2.5 rounded-xl text-sm border border-border text-muted">
-                    إلغاء
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : <p className="text-red text-xs text-center py-3">🔒 لا تملك صلاحية الاستيراد</p>}
-      </Card>
-
-      {/* ═══ نسخة احتياطية ═══ */}
-      {(isOwner||isSuperAdmin) && (
-        <Card title="💾 النسخة الاحتياطية" icon="">
-          <div className="flex flex-col gap-2">
-            <button onClick={createBackup} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-black text-bg bg-accent">
-              💾 إنشاء نسخة احتياطية
-            </button>
-            <button onClick={()=>restoreRef.current?.click()} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-bold border border-accent/40 text-accent"
-              style={{background:'rgba(245,158,11,0.08)'}}>
-              📂 استعادة نسخة احتياطية
-            </button>
-            <input ref={restoreRef} type="file" accept=".json" className="hidden" onChange={handleRestoreFile}/>
-          </div>
-        </Card>
+          <Card title="📥 تصدير Excel" icon="">
+            <div className="flex flex-col gap-2">
+              <button onClick={()=>setExportModal(true)} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
+                👨‍👩‍👧 تصدير كشف الأسر
+              </button>
+              <p className="text-muted text-[11px] text-center">
+                يقرأ من Supabase مباشرة — دقة 100%
+              </p>
+            </div>
+          </Card>
+        </div>
       )}
 
-      {loading && <div className="flex justify-center py-4"><Spinner/></div>}
-
-      {/* ═══ Modal اختيار الأعمدة ═══ */}
-      <Modal open={!!exportModal} onClose={()=>setExportModal(null)}
-        title={exportModal==='fam'?'📊 تصدير كشف الأسر':'📊 تصدير كشف الأفراد'}>
+      {/* ═══ استيراد ═══ */}
+      {activeTab==='import' && canImp && (
         <div className="flex flex-col gap-3">
-          {exportModal==='mem' && (
-            <div className="bg-surface2 rounded-xl p-3">
-              <div className="text-xs font-bold text-muted mb-2">🎂 فلتر العمر</div>
-              <div className="flex items-center gap-2">
-                <input type="number" value={ageFrom} onChange={e=>setAgeFrom(+e.target.value)}
-                  min="0" max="120" className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none"/>
-                <span className="text-muted text-sm">—</span>
-                <input type="number" value={ageTo} onChange={e=>setAgeTo(+e.target.value)}
-                  min="0" max="120" className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none"/>
-                <span className="text-muted text-xs">سنة</span>
-              </div>
-              <div className="flex gap-1 mt-2 flex-wrap">
-                {[[0,120,'الكل'],[0,17,'أطفال'],[18,59,'بالغون'],[60,120,'مسنون']].map(([f,t,l])=>(
-                  <button key={l} onClick={()=>{setAgeFrom(f);setAgeTo(t)}}
-                    className="text-[10px] px-2 py-1 rounded-lg border border-border text-muted">
-                    {l}
-                  </button>
-                ))}
-              </div>
+          <Card title="📤 استيراد Excel → Supabase" icon="">
+            <div className="flex flex-col gap-2">
+              <p className="text-muted text-xs">
+                يتحقق من التكرار من Supabase مباشرة — يكتب مباشرة في قاعدة البيانات
+              </p>
+              <button onClick={()=>importRef.current?.click()} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
+                📂 اختيار ملف Excel
+              </button>
+              <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportFile}/>
+
+              {importPreview && (
+                <div className="mt-2">
+                  <div className="flex gap-3 text-xs mb-3 flex-wrap">
+                    <span className="text-white font-bold">{importPreview.length} سجل</span>
+                    <span className="text-green">✅ {importPreview.filter(r=>r.valid&&!r.dup).length} جديد</span>
+                    <span className="text-accent">🔁 {importPreview.filter(r=>r.dup).length} مكرر</span>
+                    <span className="text-red">❌ {importPreview.filter(r=>!r.valid).length} ناقص</span>
+                  </div>
+                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto mb-3">
+                    {importPreview.map((r,i)=>(
+                      <div key={i} className="text-[11px] px-3 py-1.5 rounded-lg flex justify-between items-center"
+                        style={{background:r.dup?'rgba(245,158,11,0.1)':r.valid?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)'}}>
+                        <div>
+                          <span className="text-white">{r.head_name}</span>
+                          <span className="text-muted ml-2">{r.campName}</span>
+                        </div>
+                        <span>{r.dup?'🔁':r.valid?'✅':'❌'}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={confirmImport} disabled={importing}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-black text-bg bg-accent">
+                      {importing?'⏳ جاري الاستيراد...':'✅ تأكيد الاستيراد'}
+                    </button>
+                    <button onClick={()=>setImportPreview(null)}
+                      className="flex-1 py-2.5 rounded-xl text-sm border border-border text-muted">
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </Card>
+        </div>
+      )}
 
-          <div className="text-xs font-bold text-muted mb-1">
-            اختر الأعمدة وترتيبها (رقم = الترتيب، فارغ = لا يُصدَّر)
-          </div>
-          <div className="flex gap-2 mb-1">
-            <button onClick={()=>{
-              const cols = exportModal==='fam'?famCols:memCols
-              const setter = exportModal==='fam'?setFamCols:setMemCols
-              setter(cols.map((c,i)=>({...c,order:i+1})))
-            }} className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">تحديد الكل</button>
-            <button onClick={()=>{
-              const setter = exportModal==='fam'?setFamCols:setMemCols
-              setter(exportModal==='fam'?FAM_COLS.map(c=>({...c,order:0})):MEM_COLS.map(c=>({...c,order:0})))
-            }} className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">إلغاء الكل</button>
+      {/* ═══ نسخ احتياطية ═══ */}
+      {activeTab==='backup' && (
+        <div className="flex flex-col gap-3">
+          <Card title="💾 نسخة احتياطية من Supabase" icon="">
+            <div className="flex flex-col gap-2">
+              <p className="text-muted text-xs">
+                يُصدّر كل البيانات من Supabase بصيغة JSON — مصدر الحقيقة الكاملة
+              </p>
+              <button onClick={createBackup} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
+                {loading ? '⏳ جاري الإنشاء...' : '💾 إنشاء نسخة احتياطية'}
+              </button>
+            </div>
+          </Card>
+
+          <Card title="📂 استعادة نسخة احتياطية → Supabase" icon="">
+            <div className="flex flex-col gap-2">
+              <p className="text-muted text-xs">
+                ⚠️ يرفع البيانات مباشرة لـ Supabase — سيُدمج مع البيانات الموجودة
+              </p>
+              <button onClick={()=>restoreRef.current?.click()} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-bold border border-accent/40 text-accent"
+                style={{background:'rgba(245,158,11,0.08)'}}>
+                📂 اختيار ملف النسخة الاحتياطية
+              </button>
+              <input ref={restoreRef} type="file" accept=".json" className="hidden" onChange={handleRestoreFile}/>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══ منطقة الخطر ═══ */}
+      {activeTab==='danger' && isOwner && (
+        <div className="flex flex-col gap-3">
+          <div className="bg-red/10 border border-red/30 rounded-xl p-3">
+            <p className="text-red text-xs font-bold mb-1">⚠️ منطقة الخطر</p>
+            <p className="text-muted text-xs">العمليات هنا لا يمكن التراجع عنها</p>
           </div>
 
+          <Card title="🗑️ حذف البيانات" icon="">
+            <div className="flex flex-col gap-2">
+              <p className="text-muted text-xs">يحذف كل الأسر والأفراد والحركات من Supabase نهائياً</p>
+              <button onClick={clearAllData} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-black text-white"
+                style={{background:'rgba(239,68,68,0.2)', border:'1px solid rgba(239,68,68,0.4)'}}>
+                🗑️ حذف كل بيانات الأسر
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {!canExp && !canImp && !isAdmin && (
+        <div className="text-center py-8 text-muted text-sm">🔒 لا تملك صلاحيات إدارة البيانات</div>
+      )}
+
+      {loading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-surface rounded-2xl p-6 flex flex-col items-center gap-3">
+            <Spinner size="lg" />
+            <p className="text-white text-sm">جاري المعالجة...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal تصدير */}
+      <Modal open={exportModal} onClose={()=>setExportModal(false)} title="📊 اختيار أعمدة التصدير">
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            <button onClick={()=>setFamCols(famCols.map((c,i)=>({...c,order:i+1})))}
+              className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">تحديد الكل</button>
+            <button onClick={()=>setFamCols(FAM_COLS.map(c=>({...c,order:0})))}
+              className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">إلغاء الكل</button>
+          </div>
           <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
-            {(exportModal==='fam'?famCols:memCols).map((col,i)=>(
+            {famCols.map((col,i)=>(
               <div key={col.key} className="flex items-center gap-2 bg-surface2 border border-border rounded-xl px-3 py-2">
-                <input type="number" min="0" max="20"
-                  value={col.order||''}
-                  placeholder="—"
+                <input type="number" min="0" max="20" value={col.order||''} placeholder="—"
                   onChange={e=>{
-                    const v = parseInt(e.target.value)||0
-                    const setter = exportModal==='fam'?setFamCols:setMemCols
-                    setter(prev=>prev.map((c,j)=>j===i?{...c,order:v}:c))
+                    const v=parseInt(e.target.value)||0
+                    setFamCols(prev=>prev.map((c,j)=>j===i?{...c,order:v}:c))
                   }}
-                  className="w-12 bg-surface border border-border rounded-lg text-accent font-black text-center text-sm focus:outline-none py-1"
-                />
+                  className="w-12 bg-surface border border-border rounded-lg text-accent font-black text-center text-sm focus:outline-none py-1"/>
                 <span className="text-white text-xs flex-1">{col.label}</span>
               </div>
             ))}
           </div>
-
-          <button onClick={exportModal==='fam'?exportFamilies:exportMembers}
-            disabled={loading}
-            className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent mt-1">
-            {loading?'⏳ جارٍ التصدير...':'📥 تصدير Excel'}
+          <button onClick={exportFamilies} disabled={loading}
+            className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
+            {loading?'⏳ جاري التصدير...':'📥 تصدير Excel'}
           </button>
         </div>
       </Modal>
