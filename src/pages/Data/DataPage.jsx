@@ -217,31 +217,60 @@ export default function DataPage() {
         return row
       })
 
-      const XLSX = await getXLSX()
-      const ws = XLSX.utils.json_to_sheet(rows)
+      const XLSX   = await getXLSX()
+      const campInfo = getCampInfo(filterCamp)
+      const colCount = selected.length
+
+      // ── بناء الكشف بـ aoa (رأسية + بيانات) ──────────
+      const aoa = []
+      if (campInfo) {
+        // صف 1: اسم المخيم | اسم المندوب | جوال المندوب
+        aoa.push([`كشف أسر مخيم: ${campInfo.name}`, campInfo.delegateName, campInfo.delegatePhone])
+        // صف 2: الإحداثيات والعنوان
+        const coord = (campInfo.lat && campInfo.lng)
+          ? `${campInfo.lat}, ${campInfo.lng}`
+          : (campInfo.address || '—')
+        aoa.push([`الإحداثيات: ${coord}`, `التاريخ: ${new Date().toLocaleDateString('ar-EG')}`, ''])
+        aoa.push([])   // صف فاصل
+      }
+      // صف رواسي الأعمدة
+      aoa.push(selected.map(col => col.label))
+      // صفوف البيانات
+      rows.forEach(r => aoa.push(selected.map(col => r[col.label] ?? '')))
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa)
       ws['!cols'] = selected.map(()=>({wch:22}))
-      const hdr = XLSX.utils.decode_range(ws['!ref']||'A1')
-      for (let c = hdr.s.c; c <= hdr.e.c; c++) {
-        const addr = XLSX.utils.encode_cell({r:0,c})
+
+      const colHdrRow = campInfo ? 3 : 0   // رقم صف رواسي الأعمدة (0-indexed)
+
+      // تنسيق صف اسم المخيم
+      if (campInfo) {
+        const addr0 = XLSX.utils.encode_cell({r:0,c:0})
+        if (ws[addr0]) ws[addr0].s = {
+          fill:{fgColor:{rgb:'0D4A8C'}},
+          font:{bold:true,color:{rgb:'FFFFFF'},sz:13},
+          alignment:{horizontal:'right'}
+        }
+      }
+      // تنسيق رواسي الأعمدة
+      for (let col = 0; col < colCount; col++) {
+        const addr = XLSX.utils.encode_cell({r: colHdrRow, c: col})
         if (ws[addr]) ws[addr].s = {
           fill:{fgColor:{rgb:'1E3A5F'}},
           font:{bold:true,color:{rgb:'FFFFFF'}},
-          alignment:{horizontal:'center'}
+          alignment:{horizontal:'center'},
+          border:{bottom:{style:'thin',color:{rgb:'999999'}}}
         }
       }
+      if (!ws['!freeze']) ws['!freeze'] = {xSplit:0,ySplit:colHdrRow+1}
+
       const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'الأسر')
-      const info = XLSX.utils.aoa_to_sheet([
-        ['عدد الأسر', data.length],
-        ['المخيم', filterCamp ? camps.find(c=>c.id===filterCamp)?.name : 'كل المخيمات'],
-        ['تاريخ التصدير', new Date().toLocaleDateString('ar-EG')],
-        ['بواسطة', profile?.full_name||'—'],
-      ])
-      XLSX.utils.book_append_sheet(wb, info, 'معلومات')
-      const campLabel = filterCamp ? camps.find(c=>c.id===filterCamp)?.name||'' : 'كل_المخيمات'
-      XLSX.writeFile(wb, `كشف_الأسر_${campLabel}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
+      XLSX.utils.book_append_sheet(wb, ws, campInfo ? campInfo.name.substring(0,31) : 'كل المخيمات')
+      const campLabel = campInfo ? campInfo.name : 'كل_المخيمات'
+      const dateStr   = new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')
+      XLSX.writeFile(wb, `كشف_الأسر_${campLabel}_${dateStr}.xlsx`)
       showToast(`✅ تم تصدير ${data.length} أسرة`)
-      setExportModal(false)
+      setExportModal(null)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }
