@@ -150,13 +150,17 @@ export default function CampsList() {
     } catch(err) { showToast('خطأ: ' + err.message, true) }
   }
 
-  const visible   = visibleCamps()
-  const visibleIds = new Set(visible.map(c => c.id))
-  // parent: بدون parent_camp_id أو parent غير موجود في القائمة (يتيم → يظهر كرئيسي)
-  const parents   = visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
-  // child: له parent موجود فعلاً في القائمة
-  const children  = visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
-  const mainCamps = camps.filter(c => !c.parent_camp_id)
+  const visible    = visibleCamps()
+  const visibleIds  = new Set(visible.map(c => c.id))
+  // عرض مسطح — كل المخيمات في قائمة واحدة (افتراضي للوضوح)
+  const flatMode    = true
+  const parents     = flatMode
+    ? visible   // عرض الكل بالتسلسل
+    : visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
+  const children    = flatMode
+    ? []
+    : visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
+  const mainCamps   = camps.filter(c => !c.parent_camp_id)
 
   return (
     <div>
