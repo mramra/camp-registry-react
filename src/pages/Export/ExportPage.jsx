@@ -137,61 +137,88 @@ export default function ExportPage() {
     }))
   }
 
-  function buildHeaderAoa(campInfo, colHeaders, dataRows, showBnr) {
+  // ── بناء الـ aoa مع البانر ──────────────────────────────────
+  function buildAoa(campInfo, colHeaders, dataRows, showBnr) {
     const aoa = []
+    const empty = () => Array(colHeaders.length).fill('')
     if (showBnr && campInfo) {
-      const coord = (campInfo.lat&&campInfo.lng) ? `${campInfo.lat}, ${campInfo.lng}` : campInfo.address||'—'
-      const emptyRow = Array(colHeaders.length).fill('')
-      // صف 1: اسم المخيم — سيُدمج بالكامل
-      const r1 = emptyRow.slice(); r1[0] = `مخيم: ${campInfo.name}`; aoa.push(r1)
-      // صف 2: مندوب + جوال + إحداثيات — سيُدمج بالكامل
-      const r2 = emptyRow.slice()
-      r2[0] = `المندوب: ${campInfo.delegateName||'—'}    |    الجوال: ${campInfo.delegatePhone||'—'}    |    الإحداثيات: ${coord}    |    التاريخ: ${new Date().toLocaleDateString('ar-EG')}`
-      aoa.push(r2)
-      aoa.push(emptyRow.slice())   // صف فاصل
+      const coord = (campInfo.lat&&campInfo.lng)
+        ? `${campInfo.lat}, ${campInfo.lng}`
+        : (campInfo.address||'—')
+      const r1 = empty(); r1[0] = `🏕️  مخيم:  ${campInfo.name}`
+      const r2 = empty(); r2[0] = `👤 المندوب: ${campInfo.delegateName||'—'}   |   📞 ${campInfo.delegatePhone||'—'}   |   📍 ${coord}   |   📅 ${new Date().toLocaleDateString('ar-EG')}`
+      aoa.push(r1, r2, empty())       // بانر + فاصل
     }
-    aoa.push(colHeaders)
+    aoa.push(colHeaders)              // رواسي الأعمدة
     dataRows.forEach(r => aoa.push(r))
     return aoa
   }
 
-  function applyMergesAndStyle(ws, colCount, showBnr, campInfo) {
-    if (showBnr && campInfo) {
-      // دمج صفوف البانر كاملاً
+  // ── تطبيق التنسيق: دمج + ألوان متبادلة ─────────────────────
+  function styleSheet(ws, colCount, showBnr, campInfo, totalDataRows) {
+    const hasBnr = showBnr && campInfo
+    const hdrRow = hasBnr ? 3 : 0    // صف رواسي الأعمدة (0-based)
+    const dataStart = hdrRow + 1      // أول صف بيانات
+
+    // دمج البانر
+    if (hasBnr) {
       ws['!merges'] = [
         { s:{r:0,c:0}, e:{r:0,c:colCount-1} },  // صف اسم المخيم
-        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },  // صف المندوب
+        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },  // صف التفاصيل
       ]
       // تنسيق صف اسم المخيم
       const a0 = XLSX.utils.encode_cell({r:0,c:0})
       if (ws[a0]) ws[a0].s = {
         fill:{fgColor:{rgb:'0A3060'}},
-        font:{bold:true,color:{rgb:'FFFFFF'},sz:14},
-        alignment:{horizontal:'center',vertical:'center',wrapText:false}
+        font:{bold:true,color:{rgb:'FFD700'},sz:16,name:'Arial'},
+        alignment:{horizontal:'center',vertical:'center',wrapText:false},
+        border:{bottom:{style:'medium',color:{rgb:'1A6AB0'}}}
       }
-      // تنسيق صف المندوب
+      // تنسيق صف التفاصيل
       const a1 = XLSX.utils.encode_cell({r:1,c:0})
       if (ws[a1]) ws[a1].s = {
         fill:{fgColor:{rgb:'1A4A8A'}},
-        font:{bold:true,color:{rgb:'FFFFFF'},sz:11},
-        alignment:{horizontal:'center',vertical:'center'}
+        font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
+        alignment:{horizontal:'center',vertical:'center',wrapText:false}
       }
+      ws['!rows'] = ws['!rows']||[]
+      ws['!rows'][0] = {hpt:28}
+      ws['!rows'][1] = {hpt:20}
+      ws['!rows'][2] = {hpt:4}
     }
-    const hdrRow = (showBnr && campInfo) ? 3 : 0
+
     // تنسيق رواسي الأعمدة
     for (let col=0; col<colCount; col++) {
       const addr = XLSX.utils.encode_cell({r:hdrRow,c:col})
       if (ws[addr]) ws[addr].s = {
         fill:{fgColor:{rgb:'1E3A5F'}},
-        font:{bold:true,color:{rgb:'FFFFFF'}},
-        alignment:{horizontal:'center'},
-        border:{bottom:{style:'thin',color:{rgb:'999999'}}}
+        font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
+        alignment:{horizontal:'center',vertical:'center'},
+        border:{
+          bottom:{style:'medium',color:{rgb:'0A3060'}},
+          top:{style:'medium',color:{rgb:'0A3060'}}
+        }
       }
     }
-    ws['!freeze'] = {xSplit:0,ySplit:hdrRow+1}
-    ws['!rows'] = (showBnr&&campInfo)
-      ? [{hpt:22},{hpt:18},{hpt:6},{hpt:16}]
-      : [{hpt:16}]
+
+    // ألوان متبادلة للصفوف
+    for (let row=dataStart; row<dataStart+totalDataRows; row++) {
+      const isEven = (row - dataStart) % 2 === 0
+      const bg = isEven ? 'FFFFFF' : 'EEF2F7'
+      for (let col=0; col<colCount; col++) {
+        const addr = XLSX.utils.encode_cell({r:row,c:col})
+        if (ws[addr]) {
+          ws[addr].s = {
+            fill:{fgColor:{rgb:bg}},
+            font:{sz:10,name:'Arial'},
+            alignment:{horizontal:'right',vertical:'center'},
+            border:{bottom:{style:'thin',color:{rgb:'CCCCCC'}}}
+          }
+        }
+      }
+    }
+
+    ws['!freeze'] = {xSplit:0, ySplit:hdrRow+1}
     return ws
   }
 
@@ -255,10 +282,10 @@ export default function ExportPage() {
       const XLSX = await getXLSX()
       const colHeaders = selected.map(c=>c.label)
       const dataRows   = sortedRows.map(r=>colHeaders.map(h=>r[h]??''))
-      const aoa = buildHeaderAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
+      const aoa = buildAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
       const ws  = XLSX.utils.aoa_to_sheet(aoa)
       ws['!cols'] = selected.map(()=>({wch:22}))
-      applyMergesAndStyle(ws, selected.length, showBanner, campInfo)
+      styleSheet(ws, selected.length, showBanner, campInfo, dataRows.length)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, campInfo?campInfo.name.substring(0,31):'كل المخيمات')
       const label = campInfo?campInfo.name:'كل_المخيمات'
@@ -274,31 +301,31 @@ export default function ExportPage() {
     setLoading(true)
     try {
       const selected = memCols.filter(c=>c.order>0).sort((a,b)=>a.order-b.order)
-      if (!selected.length) return showToast('اختر عموداً على الأقل',true)
-      const data = await getFullData()
+      if (!selected.length) return showToast('اختر عموداً على الأقل', true)
+      const data     = await getFullData()
       const campInfo = getCampInfo(filterCamp)
-      const aoa = headerRows(campInfo, 'كشف أفراد الأسر')
-      aoa.push(selected.map(c=>c.label))
-// ترتيب حسب الخيمة
-      const sortedFams = [...data].sort((a,b)=>{
-        const tA=a.tent||'ٮ',tB=b.tent||'ٮ'
-        return tA.localeCompare(tB,'ar',{numeric:true})
-      })
-      sortedFams.forEach(f=>{
-      
+
+      // ترتيب حسب الخيمة
+      const sorted = [...data].sort((a,b)=>
+        (a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true})
+      )
+
+      // بناء صفوف البيانات
+      const dataRows = []
+      sorted.forEach(f => {
         const mems = f.family_members||[]
         const all = [
           {name:f.head_name,national_id:f.head_id,relation:'رب الأسرة',dob:f.head_dob,gender:f.head_gender,health:''},
           ...mems
         ]
-        all.forEach(m=>{
-          aoa.push(selected.map(col=>{
+        all.forEach(m => {
+          dataRows.push(selected.map(col => {
             switch(col.key){
+              case 'tent':        return f.tent||''
               case 'fam_name':    return f.head_name||''
               case 'head_id':     return f.head_id||''
               case 'phone1':      return f.phone1||''
               case 'camp':        return f.camps?.name||''
-              case 'tent':        return f.tent||''
               case 'name':        return m.name||''
               case 'national_id': return m.national_id||''
               case 'relation':    return m.relation||''
@@ -311,46 +338,48 @@ export default function ExportPage() {
           }))
         })
       })
+
       const XLSX = await getXLSX()
-      // aoa جاهزة من فوق لكن نعيد بناءها مع buildHeaderAoa
-      const colHeaders2 = selected.map(c=>c.label)
-      // الـ dataRows موجودة في aoa بعد headerRows
-      const hdrCount = (showBanner&&campInfo) ? 3 : 0
-      const dataOnly = aoa.slice(hdrCount+1)  // بعد هيدر الأعمدة
-      const aoa2 = buildHeaderAoa(showBanner?campInfo:null, colHeaders2, dataOnly, showBanner)
-      const ws  = XLSX.utils.aoa_to_sheet(aoa2)
+      const colHeaders = selected.map(c=>c.label)
+      const aoa = buildAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
+      const ws  = XLSX.utils.aoa_to_sheet(aoa)
       ws['!cols'] = selected.map(()=>({wch:22}))
-      applyMergesAndStyle(ws, selected.length, showBanner, campInfo)
+      styleSheet(ws, selected.length, showBanner, campInfo, dataRows.length)
       const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, campInfo?campInfo.name.substring(0,31):'كل المخيمات')
-      const label = campInfo?campInfo.name:'كل_المخيمات'
+      const sheetName = campInfo ? campInfo.name.substring(0,31) : 'كل المخيمات'
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      const label = campInfo ? campInfo.name : 'كل_المخيمات'
       XLSX.writeFile(wb, `كشف_الأفراد_${label}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
-      showToast(`✅ تم تصدير ${dataOnly.length} سجل مرتب بالخيمة`)
+      showToast(`✅ تم تصدير ${dataRows.length} سجل`)
       setExportModal(null)
-    } catch(e){showToast('خطأ: '+e.message,true)}
-    finally{setLoading(false)}
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
   }
 
   // ── تصدير الناقصة ────────────────────────────────────
   async function exportMissing() {
     setLoading(true)
     try {
-      const data = await getFullData()
-      const XLSX = await getXLSX()
+      const data    = await getFullData()
+      const XLSX    = await getXLSX()
       const missing = data.filter(f=>!f.head_name||!f.head_id||!f.phone1||!f.camp_id)
-      const aoa = [['#','اسم رب الأسرة','رقم الهوية','رقم الجوال','المخيم','النواقص']]
-      missing.forEach((f,i)=>aoa.push([
+      if (!missing.length) return showToast('✅ لا توجد بيانات ناقصة')
+      const colHeaders = ['#','اسم رب الأسرة','رقم الهوية','رقم الجوال','المخيم','النواقص']
+      const dataRows   = missing.map((f,i)=>[
         i+1, f.head_name||'—', f.head_id||'—', f.phone1||'—', f.camps?.name||'—',
         [!f.head_name&&'الاسم',!f.head_id&&'الهوية',!f.phone1&&'الجوال',!f.camp_id&&'المخيم'].filter(Boolean).join(' + ')
-      ]))
-      const ws = XLSX.utils.aoa_to_sheet(aoa)
-      ws['!cols'] = Array(6).fill({wch:20})
+      ])
+      const campInfo = getCampInfo(filterCamp)
+      const aoa = buildAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
+      const ws  = XLSX.utils.aoa_to_sheet(aoa)
+      ws['!cols'] = Array(6).fill({wch:22})
+      styleSheet(ws, 6, showBanner, campInfo, dataRows.length)
       const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb,ws,'الناقصة')
-      XLSX.writeFile(wb,`ناقصة_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
+      XLSX.utils.book_append_sheet(wb, ws, 'الأسر الناقصة')
+      XLSX.writeFile(wb, `ناقصة_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
       showToast(`✅ ${missing.length} أسرة ناقصة`)
-    } catch(e){showToast('خطأ: '+e.message,true)}
-    finally{setLoading(false)}
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
   }
 
   // ── استيراد ──────────────────────────────────────────
