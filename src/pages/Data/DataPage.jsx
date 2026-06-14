@@ -96,37 +96,30 @@ export default function DataPage() {
   const TABLES_WITH_ORG = ['families','camps','org_members','family_movements','dist_rounds','camp_distributions']
 
   const loadStats = useCallback(async () => {
-    setLoading(true)
-    try {
-      const results = {}
-      await Promise.all(TABLES.map(async ({ key }) => {
-        try {
-          let q = supabase.from(key).select('*', { count: 'exact', head: true })
-          if (TABLES_WITH_ORG.includes(key)) q = q.eq('org_id', ORG_ID)
-          const { count } = await q
-          results[key] = count ?? 0
-        } catch { results[key] = 0 }
-      }))
-      setStats(results)
+    // نحمّل في الخلفية — بدون spinner مسدود
+    // كل جدول يُحدَّث فور وصول بياناته
+    const results = { ...stats }
 
-      // جلب المخيمات مع بيانات المندوب والإحداثيات
-      const { data: campsData } = await supabase
-        .from('camps')
-        .select('id, name, latitude, longitude, address, manager_id')
-        .eq('org_id', ORG_ID)
-      setCamps(campsData || [])
+    TABLES.forEach(async ({ key }) => {
+      try {
+        let q = supabase.from(key).select('*', { count: 'exact', head: true })
+        if (TABLES_WITH_ORG.includes(key)) q = q.eq('org_id', ORG_ID)
+        const { count } = await q
+        results[key] = count ?? 0
+        setStats(prev => ({ ...prev, [key]: count ?? 0 }))
+      } catch { setStats(prev => ({ ...prev, [key]: prev[key] ?? '—' })) }
+    })
 
-      // جلب المستخدمين لربط المندوبين
-      const { data: membersData } = await supabase
-        .from('org_members')
-        .select('user_id, full_name, phone, camp_id, role')
-        .eq('org_id', ORG_ID)
-      setOrgMembers(membersData || [])
-    } catch(e) {
-      showToast('خطأ في جلب الإحصائيات: ' + e.message, true)
-    } finally {
-      setLoading(false)
-    }
+    // جلب المخيمات والمستخدمين في الخلفية
+    supabase.from('camps')
+      .select('id, name, latitude, longitude, address, manager_id')
+      .eq('org_id', ORG_ID)
+      .then(({ data }) => { if (data) setCamps(data) })
+
+    supabase.from('org_members')
+      .select('user_id, full_name, phone, camp_id, role')
+      .eq('org_id', ORG_ID)
+      .then(({ data }) => { if (data) setOrgMembers(data) })
   }, [])
 
   // ── إحصائيات PowerSync ──────────────────────────────
@@ -561,26 +554,24 @@ export default function DataPage() {
                 <span className="text-blue text-xs">Supabase + PowerSync</span>
               </div>
             </div>
-            <button onClick={loadStats} disabled={loading}
+            <button onClick={loadStats}
               className="w-full mt-3 py-2 rounded-xl text-xs font-bold border border-border text-muted">
-              {loading ? <Spinner size="sm" /> : '🔄 تحديث'}
+              🔄 تحديث الإحصائيات
             </button>
           </Card>
 
           {/* إحصائيات Supabase */}
           <Card title="📊 إحصائيات Supabase (مصدر الحقيقة)" icon="">
-            {loading ? (
-              <div className="flex justify-center py-4"><Spinner /></div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {TABLES.map(t => (
-                  <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
-                    <span className="text-muted text-xs">{t.icon} {t.label}</span>
-                    <span className="text-white font-black text-sm">{stats[t.key]??'—'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-col gap-2">
+              {TABLES.map(t => (
+                <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                  <span className="text-muted text-xs">{t.icon} {t.label}</span>
+                  <span className={`font-black text-sm ${stats[t.key]===undefined?'text-muted':'text-white'}`}>
+                    {stats[t.key]??'…'}
+                  </span>
+                </div>
+              ))}
+            </div>
           </Card>
 
           {/* إحصائيات PowerSync محلياً */}
