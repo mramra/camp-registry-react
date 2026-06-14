@@ -69,15 +69,22 @@ export default function ExportPage() {
 
   // ── تحميل المخيمات والمستخدمين ──────────────────────
   const loadCamps = useCallback(async () => {
-    const [{ data: c }, { data: m }] = await Promise.all([
-      supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
-      supabase.from('org_members').select('user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
-    ])
-    setCamps(c || [])
-    setOrgMembers(m || [])
+    try {
+      const [{ data: c }, { data: m }] = await Promise.all([
+        supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
+        supabase.from('org_members').select('user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
+      ])
+      if (c?.length) setCamps(c)
+      if (m?.length) setOrgMembers(m)
+    } catch {}
   }, [])
 
-  useEffect(() => { loadCamps() }, [])
+  // تحميل فوري + إعادة محاولة بعد ثانية
+  useEffect(() => {
+    loadCamps()
+    const t = setTimeout(loadCamps, 1500)
+    return () => clearTimeout(t)
+  }, [])
 
   // ── معلومات المخيم (مندوب + إحداثيات) ──────────────
   function getCampInfo(campId) {
