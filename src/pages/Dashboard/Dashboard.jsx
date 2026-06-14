@@ -39,16 +39,21 @@ export default function Dashboard() {
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { showToast, online, psReady } = useApp()
+  const { showToast, online, psReady, psSynced } = useApp()
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useRxDB()
-  useEffect(() => { if (psReady) loadStats() }, [psReady])
+  // تحميل عند أول sync فعلي (psSynced) أو عند psReady إذا عندنا بيانات قديمة
+  useEffect(() => {
+    if (psSynced) loadStats()
+  }, [psSynced])
 
-  // إعادة load بعد PowerSync يزامن
+  // fallback: إذا ما جاء psSynced بعد 8 ثوانٍ — حاول من Supabase مباشرة
   useEffect(() => {
     if (!psReady) return
-    const timer = setTimeout(() => loadStats(), 2000)
+    const timer = setTimeout(() => {
+      if (!psSynced) loadStats()
+    }, 8000)
     return () => clearTimeout(timer)
   }, [psReady])
 
