@@ -1,0 +1,64 @@
+# sync-rules.yaml — نبض المخيم
+# ────────────────────────────────────────────────────────────
+# انشر هذا الملف في: https://app.powersync.com
+#   → مشروعك (6a2d74dd0ef84ed671a15a84)
+#   → Sync Rules → Edit → الصق المحتوى → Deploy
+#
+# token_parameters.user_id = auth.uid() (sub من JWT)
+# org_id الثابت: ddc8abe7-518f-40a4-8c3b-ee03bb0f47d5
+# ────────────────────────────────────────────────────────────
+
+bucket_definitions:
+
+  # ── بيانات المنظمة الرئيسية ─────────────────────────────
+  # يشمل: الأسر، المخيمات، المستخدمين، الحركات، جولات التوزيع
+  org_data:
+    parameters:
+      - SELECT org_id
+        FROM org_members
+        WHERE user_id = token_parameters.user_id
+          AND is_active = true
+    data:
+      - SELECT * FROM families
+        WHERE org_id = bucket.org_id
+      - SELECT * FROM camps
+        WHERE org_id = bucket.org_id
+      - SELECT * FROM org_members
+        WHERE org_id = bucket.org_id
+      - SELECT * FROM family_movements
+        WHERE org_id = bucket.org_id
+      - SELECT * FROM dist_rounds
+        WHERE org_id = bucket.org_id
+      - SELECT * FROM camp_distributions
+        WHERE org_id = bucket.org_id
+
+  # ── أفراد الأسر ─────────────────────────────────────────
+  # family_members لا تملك org_id مباشرة — نربطها بالأسرة
+  family_members_sync:
+    parameters:
+      - SELECT id AS family_id
+        FROM families
+        WHERE org_id = (
+          SELECT org_id FROM org_members
+          WHERE user_id = token_parameters.user_id
+            AND is_active = true
+          LIMIT 1
+        )
+    data:
+      - SELECT * FROM family_members
+        WHERE family_id = bucket.family_id
+
+  # ── استلام التوزيعات ────────────────────────────────────
+  camp_dist_sync:
+    parameters:
+      - SELECT id AS family_id
+        FROM families
+        WHERE org_id = (
+          SELECT org_id FROM org_members
+          WHERE user_id = token_parameters.user_id
+            AND is_active = true
+          LIMIT 1
+        )
+    data:
+      - SELECT * FROM camp_dist_families
+        WHERE family_id = bucket.family_id
