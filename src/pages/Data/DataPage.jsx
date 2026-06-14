@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { getPowerSync } from '../../lib/powersync'
 import { useAuth } from '../../context/AuthContext'
@@ -95,35 +95,25 @@ export default function DataPage() {
   // الجداول التي لها org_id مباشرة
   const TABLES_WITH_ORG = ['families','camps','org_members','family_movements','dist_rounds','camp_distributions']
 
-  const loadingRef = useRef(false)
-
   const loadStats = useCallback(async () => {
-    if (loadingRef.current) return
-    loadingRef.current = true
     try {
-      // استعلام مباشر بدون فحص session — الـ RLS تحمي البيانات
       const results = {}
       await Promise.all(TABLES.map(async ({ key }) => {
         try {
           let q = supabase.from(key).select('*', { count: 'exact', head: true })
           if (TABLES_WITH_ORG.includes(key)) q = q.eq('org_id', ORG_ID)
-          const { count, error } = await q
-          results[key] = (error || count === null) ? '—' : count
+          const { count } = await q
+          results[key] = count ?? 0
         } catch { results[key] = '—' }
       }))
       setStats(results)
-
       const [{ data: campsData }, { data: membersData }] = await Promise.all([
         supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
         supabase.from('org_members').select('user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
       ])
       if (campsData) setCamps(campsData)
       if (membersData) setOrgMembers(membersData)
-    } catch(e) {
-      console.warn('[DataPage] loadStats:', e.message)
-    } finally {
-      loadingRef.current = false
-    }
+    } catch {}
   }, [])
 
   // ── إحصائيات PowerSync SQLite المحلي ────────────────
