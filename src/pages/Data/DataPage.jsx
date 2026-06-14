@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { getPowerSync } from '../../lib/powersync'
 import { useAuth } from '../../context/AuthContext'
