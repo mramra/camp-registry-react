@@ -162,18 +162,18 @@ export default function CampsList() {
 
   const visible    = visibleCamps()
   const visibleIds  = new Set(visible.map(c => c.id))
-  // عند البحث: اعرض كل المخيمات المطابقة بشكل مسطح
   const searchLower = search.trim().toLowerCase()
   const isSearching = !!searchLower
-  const searchResults = isSearching
+
+  // عند البحث: اعرض كل المخيمات المطابقة
+  // بدون بحث: اعرض كل المخيمات كـ parents (وكل مخيم يعرض فروعه تحته أيضاً)
+  // هذا يضمن ظهور كل مخيم حتى لو كان sub-camp
+  const parents  = isSearching
     ? visible.filter(c => c.name?.toLowerCase().includes(searchLower))
-    : []
-  // هرمي: parent = بدون parent_camp_id أو parent غير موجود في القائمة
-  const parents     = isSearching ? searchResults
-    : visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
-  const children    = isSearching ? []
+    : visible  // ← كل المخيمات تظهر
+  const children = isSearching ? []
     : visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
-  const mainCamps   = camps.filter(c => !c.parent_camp_id)
+  const mainCamps = camps.filter(c => !c.parent_camp_id)
 
   return (
     <div>
