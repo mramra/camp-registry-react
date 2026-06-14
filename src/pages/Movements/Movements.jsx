@@ -32,9 +32,11 @@ export default function Movements() {
   const { canWrite } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, remove, bulkUpsert } = useRxDB()
-  const { showToast } = useApp()
+  const { showToast, psReady, psSynced} = useApp()
 
   useEffect(() => { loadData() }, [filterType, filterCamp])
+  useEffect(() => { if (psReady)  loadData() }, [psReady])
+  useEffect(() => { if (psSynced) loadData() }, [psSynced])
 
   async function loadData() {
     setLoading(true)
