@@ -35,6 +35,7 @@ const FAM_COLS = [
 ]
 
 const MEM_COLS = [
+  { key:'tent',        label:'رقم الخيمة',      def:true  },
   { key:'fam_name',    label:'اسم رب الأسرة',  def:true  },
   { key:'head_id',     label:'هوية رب الأسرة', def:true  },
   { key:'phone1',      label:'رقم الجوال',      def:true  },
@@ -69,6 +70,7 @@ export default function ExportPage() {
   const [memCols,       setMemCols]       = useState(()=>MEM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
+  const [showBanner,    setShowBanner]    = useState(true)
   const importRef = useRef()
 
   const isAdmin = isOwner || isSuperAdmin
@@ -135,38 +137,62 @@ export default function ExportPage() {
     }))
   }
 
-  // ── بناء ورقة Excel مع رأسية المخيم ─────────────────
-  async function buildSheet(aoa, colCount, campInfo) {
-    const XLSX = await getXLSX()
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-    ws['!cols'] = Array(colCount).fill({wch:22})
-    const colHdrRow = campInfo ? 3 : 0
-    if (campInfo) {
-      const a0 = XLSX.utils.encode_cell({r:0,c:0})
-      if (ws[a0]) ws[a0].s = {
-        fill:{fgColor:{rgb:'0D4A8C'}},font:{bold:true,color:{rgb:'FFFFFF'},sz:13},
-        alignment:{horizontal:'right'}
-      }
+  function buildHeaderAoa(campInfo, colHeaders, dataRows, showBnr) {
+    const aoa = []
+    if (showBnr && campInfo) {
+      const coord = (campInfo.lat&&campInfo.lng) ? `${campInfo.lat}, ${campInfo.lng}` : campInfo.address||'—'
+      const emptyRow = Array(colHeaders.length).fill('')
+      // صف 1: اسم المخيم — سيُدمج بالكامل
+      const r1 = emptyRow.slice(); r1[0] = `مخيم: ${campInfo.name}`; aoa.push(r1)
+      // صف 2: مندوب + جوال + إحداثيات — سيُدمج بالكامل
+      const r2 = emptyRow.slice()
+      r2[0] = `المندوب: ${campInfo.delegateName||'—'}    |    الجوال: ${campInfo.delegatePhone||'—'}    |    الإحداثيات: ${coord}    |    التاريخ: ${new Date().toLocaleDateString('ar-EG')}`
+      aoa.push(r2)
+      aoa.push(emptyRow.slice())   // صف فاصل
     }
-    for (let col=0; col<colCount; col++) {
-      const addr = XLSX.utils.encode_cell({r:colHdrRow,c:col})
-      if (ws[addr]) ws[addr].s = {
-        fill:{fgColor:{rgb:'1E3A5F'}},font:{bold:true,color:{rgb:'FFFFFF'}},
-        alignment:{horizontal:'center'},border:{bottom:{style:'thin',color:{rgb:'999999'}}}
-      }
-    }
-    if (!ws['!freeze']) ws['!freeze'] = {xSplit:0,ySplit:colHdrRow+1}
-    return ws
+    aoa.push(colHeaders)
+    dataRows.forEach(r => aoa.push(r))
+    return aoa
   }
 
-  function headerRows(campInfo, title) {
-    if (!campInfo) return [[title, '', ''], []]
-    const coord = (campInfo.lat&&campInfo.lng) ? `${campInfo.lat}, ${campInfo.lng}` : campInfo.address||'—'
-    return [
-      [`كشف أسر مخيم: ${campInfo.name}`, campInfo.delegateName, campInfo.delegatePhone],
-      [`الإحداثيات: ${coord}`, `التاريخ: ${new Date().toLocaleDateString('ar-EG')}`, ''],
-      [],
-    ]
+  function applyMergesAndStyle(ws, colCount, showBnr, campInfo) {
+    if (showBnr && campInfo) {
+      // دمج صفوف البانر كاملاً
+      ws['!merges'] = [
+        { s:{r:0,c:0}, e:{r:0,c:colCount-1} },  // صف اسم المخيم
+        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },  // صف المندوب
+      ]
+      // تنسيق صف اسم المخيم
+      const a0 = XLSX.utils.encode_cell({r:0,c:0})
+      if (ws[a0]) ws[a0].s = {
+        fill:{fgColor:{rgb:'0A3060'}},
+        font:{bold:true,color:{rgb:'FFFFFF'},sz:14},
+        alignment:{horizontal:'center',vertical:'center',wrapText:false}
+      }
+      // تنسيق صف المندوب
+      const a1 = XLSX.utils.encode_cell({r:1,c:0})
+      if (ws[a1]) ws[a1].s = {
+        fill:{fgColor:{rgb:'1A4A8A'}},
+        font:{bold:true,color:{rgb:'FFFFFF'},sz:11},
+        alignment:{horizontal:'center',vertical:'center'}
+      }
+    }
+    const hdrRow = (showBnr && campInfo) ? 3 : 0
+    // تنسيق رواسي الأعمدة
+    for (let col=0; col<colCount; col++) {
+      const addr = XLSX.utils.encode_cell({r:hdrRow,c:col})
+      if (ws[addr]) ws[addr].s = {
+        fill:{fgColor:{rgb:'1E3A5F'}},
+        font:{bold:true,color:{rgb:'FFFFFF'}},
+        alignment:{horizontal:'center'},
+        border:{bottom:{style:'thin',color:{rgb:'999999'}}}
+      }
+    }
+    ws['!freeze'] = {xSplit:0,ySplit:hdrRow+1}
+    ws['!rows'] = (showBnr&&campInfo)
+      ? [{hpt:22},{hpt:18},{hpt:6},{hpt:16}]
+      : [{hpt:16}]
+    return ws
   }
 
   // ── تصدير رباب الأسر ─────────────────────────────────
@@ -199,16 +225,45 @@ export default function ExportPage() {
         })
         return row
       })
-      const hdr = headerRows(campInfo, 'كشف رباب الأسر')
-      hdr.push(selected.map(c=>c.label))
-      rows.forEach(r => hdr.push(selected.map(c=>r[c.label]??'')))
+      // ترتيب حسب رقم الخيمة
+      const sortedData = [...data].sort((a,b)=>{
+        const tA=a.tent||'ٮ', tB=b.tent||'ٮ'
+        return tA.localeCompare(tB,'ar',{numeric:true})
+      })
+      const sortedRows = sortedData.map(f=>{
+        const mems=f.family_members||[]
+        const row={}
+        selected.forEach(col=>{
+          switch(col.key){
+            case 'head_name':        row[col.label]=f.head_name||''; break
+            case 'head_id':          row[col.label]=f.head_id||''; break
+            case 'phone1':           row[col.label]=f.phone1||''; break
+            case 'phone2':           row[col.label]=f.phone2||''; break
+            case 'camp':             row[col.label]=f.camps?.name||''; break
+            case 'tent':             row[col.label]=f.tent||''; break
+            case 'head_dob':         row[col.label]=f.head_dob||''; break
+            case 'head_gender':      row[col.label]=f.head_gender||''; break
+            case 'head_marital':     row[col.label]=f.head_marital||''; break
+            case 'members_count':    row[col.label]=mems.length+1; break
+            case 'category_tags':    row[col.label]=(Array.isArray(f.category_tags)?f.category_tags:[]).join(', '); break
+            case 'original_address': row[col.label]=f.original_address||''; break
+            case 'notes':            row[col.label]=f.notes||''; break
+          }
+        })
+        return row
+      })
       const XLSX = await getXLSX()
-      const ws = await buildSheet(hdr, selected.length, campInfo)
+      const colHeaders = selected.map(c=>c.label)
+      const dataRows   = sortedRows.map(r=>colHeaders.map(h=>r[h]??''))
+      const aoa = buildHeaderAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
+      const ws  = XLSX.utils.aoa_to_sheet(aoa)
+      ws['!cols'] = selected.map(()=>({wch:22}))
+      applyMergesAndStyle(ws, selected.length, showBanner, campInfo)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, campInfo?campInfo.name.substring(0,31):'كل المخيمات')
       const label = campInfo?campInfo.name:'كل_المخيمات'
       XLSX.writeFile(wb, `كشف_الأسر_${label}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
-      showToast(`✅ تم تصدير ${data.length} أسرة`)
+      showToast(`✅ تم تصدير ${data.length} أسرة مرتبة بالخيمة`)
       setExportModal(null)
     } catch(e){showToast('خطأ: '+e.message,true)}
     finally{setLoading(false)}
@@ -224,7 +279,13 @@ export default function ExportPage() {
       const campInfo = getCampInfo(filterCamp)
       const aoa = headerRows(campInfo, 'كشف أفراد الأسر')
       aoa.push(selected.map(c=>c.label))
-      data.forEach(f=>{
+// ترتيب حسب الخيمة
+      const sortedFams = [...data].sort((a,b)=>{
+        const tA=a.tent||'ٮ',tB=b.tent||'ٮ'
+        return tA.localeCompare(tB,'ar',{numeric:true})
+      })
+      sortedFams.forEach(f=>{
+      
         const mems = f.family_members||[]
         const all = [
           {name:f.head_name,national_id:f.head_id,relation:'رب الأسرة',dob:f.head_dob,gender:f.head_gender,health:''},
@@ -237,6 +298,7 @@ export default function ExportPage() {
               case 'head_id':     return f.head_id||''
               case 'phone1':      return f.phone1||''
               case 'camp':        return f.camps?.name||''
+              case 'tent':        return f.tent||''
               case 'name':        return m.name||''
               case 'national_id': return m.national_id||''
               case 'relation':    return m.relation||''
@@ -250,12 +312,20 @@ export default function ExportPage() {
         })
       })
       const XLSX = await getXLSX()
-      const ws = await buildSheet(aoa, selected.length, campInfo)
+      // aoa جاهزة من فوق لكن نعيد بناءها مع buildHeaderAoa
+      const colHeaders2 = selected.map(c=>c.label)
+      // الـ dataRows موجودة في aoa بعد headerRows
+      const hdrCount = (showBanner&&campInfo) ? 3 : 0
+      const dataOnly = aoa.slice(hdrCount+1)  // بعد هيدر الأعمدة
+      const aoa2 = buildHeaderAoa(showBanner?campInfo:null, colHeaders2, dataOnly, showBanner)
+      const ws  = XLSX.utils.aoa_to_sheet(aoa2)
+      ws['!cols'] = selected.map(()=>({wch:22}))
+      applyMergesAndStyle(ws, selected.length, showBanner, campInfo)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, campInfo?campInfo.name.substring(0,31):'كل المخيمات')
       const label = campInfo?campInfo.name:'كل_المخيمات'
       XLSX.writeFile(wb, `كشف_الأفراد_${label}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
-      showToast(`✅ تم تصدير ${aoa.length - (campInfo?4:2)} سجل`)
+      showToast(`✅ تم تصدير ${dataOnly.length} سجل مرتب بالخيمة`)
       setExportModal(null)
     } catch(e){showToast('خطأ: '+e.message,true)}
     finally{setLoading(false)}
@@ -360,10 +430,20 @@ export default function ExportPage() {
       />
 
       {/* فلتر المخيم */}
-      <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL+' mb-4'}>
+      <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL+' mb-3'}>
         <option value="">🏕️ كل المخيمات</option>
         {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
+
+      {/* خيار إظهار البانر */}
+      <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+        <div onClick={()=>setShowBanner(v=>!v)}
+          className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${showBanner?'bg-accent':'bg-surface2 border border-border'}`}>
+          <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${showBanner?'translate-x-4':''}`}/>
+        </div>
+        <span className="text-white text-xs font-bold">إظهار بانر المخيم في الكشف</span>
+        <span className="text-muted text-[10px]">(اسم المخيم + مندوب + إحداثيات)</span>
+      </label>
 
       {/* ═══ تصدير ═══ */}
       <Card title="📥 تصدير Excel" icon="">
