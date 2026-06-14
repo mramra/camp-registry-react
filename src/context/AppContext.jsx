@@ -8,28 +8,18 @@ const AppContext = createContext(null)
 export function AppProvider({ children }) {
   const [online, setOnline] = useState(navigator.onLine)
   const [toast,  setToast]  = useState(null)
-
-  // psReady و psStatus من PowerSyncProvider (الـ parent)
-  const { psReady, psStatus } = useSyncStatus()
+  const { psReady, psSynced, psStatus } = useSyncStatus()
 
   useEffect(() => {
     const onOnline = async () => {
       setOnline(true)
-      if (psReady) {
-        // PowerSync جاهز — المزامنة تلقائية بالكامل، لا حاجة للـ queue
-        console.log('[AppContext] متصل — PowerSync يتولى المزامنة')
-      } else {
+      if (!psReady) {
         // PowerSync غير جاهز — استخدم الطريقة القديمة
-        try {
-          await processSyncQueue()
-          await quickSync()
-        } catch(e) {
-          console.warn('[AppContext] sync queue error:', e.message)
-        }
+        try { await processSyncQueue(); await quickSync() } catch {}
       }
+      // إذا psReady — PowerSync يتولى المزامنة تلقائياً
     }
     const onOffline = () => setOnline(false)
-
     window.addEventListener('online',  onOnline)
     window.addEventListener('offline', onOffline)
     return () => {
@@ -44,7 +34,7 @@ export function AppProvider({ children }) {
   }, [])
 
   return (
-    <AppContext.Provider value={{ online, toast, showToast, psReady, psStatus }}>
+    <AppContext.Provider value={{ online, toast, showToast, psReady, psSynced, psStatus }}>
       {children}
     </AppContext.Provider>
   )
