@@ -1,7 +1,7 @@
 {
   "name": "camp-registry",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "build:check": "eslint src --ext .js,.jsx && vite build"
   },
   "dependencies": {
+    "@powersync/web": "^1.0.0",
     "@supabase/supabase-js": "^2.39.0",
     "dexie": "^3.2.7",
     "dexie-react-hooks": "^1.1.7",
