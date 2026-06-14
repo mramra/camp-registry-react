@@ -95,9 +95,16 @@ export default function DataPage() {
   // الجداول التي لها org_id مباشرة
   const TABLES_WITH_ORG = ['families','camps','org_members','family_movements','dist_rounds','camp_distributions']
 
+  const loadingRef = useRef(false)
+
   const loadStats = useCallback(async () => {
-    // نحمّل في الخلفية بـ Promise.all — كل الجداول معاً
+    if (loadingRef.current) return
+    loadingRef.current = true
     try {
+      // تأكد أن Supabase session جاهز
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
       const results = {}
       await Promise.all(TABLES.map(async ({ key }) => {
         try {
@@ -108,43 +115,59 @@ export default function DataPage() {
         } catch { results[key] = '—' }
       }))
       setStats(results)
-    } catch {}
 
-    // جلب المخيمات والمستخدمين
-    try {
-      const [{ data: c }, { data: m }] = await Promise.all([
+      // جلب المخيمات والمستخدمين
+      const [{ data: campsData }, { data: membersData }] = await Promise.all([
         supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
         supabase.from('org_members').select('user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
       ])
-      if (c) setCamps(c)
-      if (m) setOrgMembers(m)
-    } catch {}
+      if (campsData) setCamps(campsData)
+      if (membersData) setOrgMembers(membersData)
+    } catch(e) {
+      console.warn('[DataPage] loadStats error:', e.message)
+    } finally {
+      loadingRef.current = false
+    }
   }, [])
 
-  // ── إحصائيات PowerSync ──────────────────────────────
+  // ── إحصائيات PowerSync SQLite المحلي ────────────────
   const loadPsStats = useCallback(async () => {
-    if (!psReady) return
     try {
       const db = getPowerSync()
-      const status = db.currentStatus
       const results = {}
       await Promise.all(TABLES.map(async ({ key }) => {
         try {
           const rows = await db.getAll(`SELECT COUNT(*) as cnt FROM ${key}`)
-          results[key] = rows[0]?.cnt || 0
+          results[key] = Number(rows[0]?.cnt) || 0
         } catch { results[key] = 0 }
       }))
-      setPsStats({
-        counts: results,
-        status: psStatus,
-        synced: psSynced,
-      })
-    } catch {}
-  }, [psReady, psStatus, psSynced])
+      setPsStats({ counts: results, status: psStatus, synced: psSynced })
+    } catch(e) {
+      console.warn('[DataPage] loadPsStats error:', e.message)
+    }
+  }, [psStatus, psSynced])
 
-  useEffect(() => { loadStats() }, [])
-  useEffect(() => { if (psReady)  { loadStats(); loadPsStats() } }, [psReady])
-  useEffect(() => { if (psSynced) { loadStats(); loadPsStats() } }, [psSynced])
+  // تحميل عند الفتح بتأخير بسيط لانتظار Supabase session
+  useEffect(() => {
+    const t = setTimeout(() => loadStats(), 800)
+    return () => clearTimeout(t)
+  }, [])
+
+  // تحديث عند تغيير حالة PowerSync
+  useEffect(() => {
+    if (psReady) { loadStats(); loadPsStats() }
+  }, [psReady])
+
+  useEffect(() => {
+    if (psSynced) { loadStats(); loadPsStats() }
+  }, [psSynced])
+
+  // دالة التحديث اليدوي — تعيد المحاولة دائماً
+  const handleRefresh = useCallback(async () => {
+    loadingRef.current = false  // فعّل إعادة المحاولة
+    await loadStats()
+    await loadPsStats()
+  }, [loadStats, loadPsStats])
 
   // ── جلب البيانات للتصدير (من Supabase مباشرة) ───────
   async function getFullData() {
@@ -551,8 +574,8 @@ export default function DataPage() {
                 <span className="text-blue text-xs">Supabase + PowerSync</span>
               </div>
             </div>
-            <button onClick={loadStats}
-              className="w-full mt-3 py-2 rounded-xl text-xs font-bold border border-border text-muted">
+            <button onClick={handleRefresh}
+              className="w-full mt-3 py-2 rounded-xl text-xs font-bold border border-border text-muted active:scale-95 transition-transform">
               🔄 تحديث الإحصائيات
             </button>
           </Card>
@@ -572,24 +595,32 @@ export default function DataPage() {
           </Card>
 
           {/* إحصائيات PowerSync محلياً */}
-          {psStats && (
-            <Card title="💾 PowerSync SQLite المحلي" icon="">
-              <div className="flex flex-col gap-2">
-                {TABLES.map(t => (
-                  <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
-                    <span className="text-muted text-xs">{t.icon} {t.label}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-black text-sm">{psStats.counts[t.key]??'—'}</span>
-                      {stats[t.key] !== undefined && psStats.counts[t.key] !== stats[t.key] && (
-                        <span className="text-accent text-[10px]">⚠️ فرق</span>
-                      )}
-                    </div>
+          <Card title="💾 PowerSync SQLite المحلي" icon="">
+            <div className="flex flex-col gap-2">
+              {TABLES.map(t => (
+                <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                  <span className="text-muted text-xs">{t.icon} {t.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-black text-sm ${psStats ? 'text-white' : 'text-muted'}`}>
+                      {psStats ? (psStats.counts[t.key]??0) : '…'}
+                    </span>
+                    {psStats && stats[t.key] !== undefined && psStats.counts[t.key] !== stats[t.key] && (
+                      <span className="text-accent text-[10px]">⚠️</span>
+                    )}
                   </div>
-                ))}
-              </div>
-              <p className="text-muted text-[10px] mt-2 text-center">مقارنة: Supabase ↔ SQLite محلي</p>
-            </Card>
-          )}
+                </div>
+              ))}
+              {!psStats && (
+                <button onClick={loadPsStats}
+                  className="w-full mt-1 py-1.5 text-xs text-muted border border-border rounded-lg">
+                  🔄 تحميل إحصائيات SQLite
+                </button>
+              )}
+            </div>
+            <p className="text-muted text-[10px] mt-2 text-center">
+              {psReady ? '🟢 PowerSync متصل' : '🟡 PowerSync يتصل...'} — مقارنة Supabase ↔ SQLite
+            </p>
+          </Card>
         </div>
       )}
 
