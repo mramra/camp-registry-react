@@ -13,12 +13,11 @@ export function AppProvider({ children }) {
 
   // مزامنة Dexie عند أول اتصال بعد تسجيل الدخول (مرة واحدة لكل جلسة)
   useEffect(() => {
-    if (psReady && online && !syncedOnceRef.current) {
+    if (online && !syncedOnceRef.current) {
       syncedOnceRef.current = true
-      // PowerSync يتولى المزامنة — لكن نجلب Dexie أيضاً للـ fallback أوف لاين
       quickSync().catch(e => console.warn('[AppContext] quickSync:', e.message))
     }
-  }, [psReady, online])
+  }, [online])
 
   // مراقبة الإنترنت
   useEffect(() => {
