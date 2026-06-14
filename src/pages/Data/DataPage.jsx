@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 // SheetJS يُحمَّل ديناميكياً
 async function getXLSX() {
   if (window.XLSX) return window.XLSX
@@ -10,8 +10,8 @@ async function getXLSX() {
   })
   return window.XLSX
 }
-import { localDB } from '../../lib/db'
 import { supabase, ORG_ID } from '../../lib/supabase'
+import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -72,32 +72,38 @@ export default function DataPage() {
   const [loading,       setLoading]       = useState(false)
   const [filterCamp,    setFilterCamp]    = useState('')
   const [camps,         setCamps]         = useState([])
-  const [exportModal,   setExportModal]   = useState(null) // 'fam' | 'mem' | null
+  const [exportModal,   setExportModal]   = useState(null)
   const [famCols,       setFamCols]       = useState(() => FAM_COLS.map((c,i)=>({...c, order: c.def?i+1:0})))
   const [memCols,       setMemCols]       = useState(() => MEM_COLS.map((c,i)=>({...c, order: c.def?i+1:0})))
   const [ageFrom,       setAgeFrom]       = useState(0)
   const [ageTo,         setAgeTo]         = useState(120)
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
-  const importRef = useRef()
+  const importRef  = useRef()
   const restoreRef = useRef()
 
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
-  const { showToast } = useApp()
+  const { showToast, psReady, psSynced } = useApp()
   const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { query, bulkUpsert } = useRxDB()
 
-  useState(() => {
-    localDB.camps.toArray().catch(()=>[]).then(c => {
-      setCamps(c)
-      if (profile?.camp_id) setFilterCamp(profile.camp_id)
-    })
-  })
+  // ── تحميل المخيمات ──────────────────────────────────
+  async function loadCamps() {
+    const c = await query('camps')
+    setCamps(c || [])
+    if (profile?.camp_id) setFilterCamp(profile.camp_id)
+  }
 
+  useEffect(() => { loadCamps() }, [])
+  useEffect(() => { if (psReady)  loadCamps() }, [psReady])
+  useEffect(() => { if (psSynced) loadCamps() }, [psSynced])
+
+  // ── جلب البيانات (PowerSync أولاً) ──────────────────
   async function getData() {
-    const allFams = await localDB.families.toArray().catch(()=>[])
-    const allMems = await localDB.family_members.toArray().catch(()=>[])
-    const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
-    const campIds = getAllowedCampIds(camps)
+    const allFams = await query('families')
+    const allMems = await query('family_members')
+    const campMap = Object.fromEntries((camps.length ? camps : await query('camps')).map(c=>[c.id,c.name]))
+    const campIds = getAllowedCampIds(camps.length ? camps : Object.keys(campMap).map(id=>({id})))
     let fams = filterLocal(allFams, campIds)
     if (filterCamp) fams = fams.filter(f => f.camp_id === filterCamp)
     const famIds = new Set(fams.map(f=>f.id))
@@ -134,7 +140,7 @@ export default function DataPage() {
             case 'members_count':    row[col.label] = fMems.length+1; break
             case 'spouse_name':      row[col.label] = spouses[0]?.name||''; break
             case 'spouse_id':        row[col.label] = spouses[0]?.national_id||''; break
-            case 'category_tags':    row[col.label] = (f.category_tags||[]).join(', '); break
+            case 'category_tags':    row[col.label] = (Array.isArray(f.category_tags)?f.category_tags:(f.category_tags?[f.category_tags]:[])).join(', '); break
             case 'original_address': row[col.label] = f.original_address||''; break
             case 'address_details':  row[col.label] = f.address_details||''; break
             case 'notes':            row[col.label] = f.notes||''; break
@@ -208,8 +214,9 @@ export default function DataPage() {
       styleSheet(ws, selected.length)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'الأفراد')
-      addInfoSheet(wb, fams.length, Object.fromEntries(camps.map(c=>[c.id,c.name])))
-      const campName = filterCamp ? Object.fromEntries(camps.map(c=>[c.id,c.name]))[filterCamp] : 'كل المخيمات'
+      const campMap2 = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+      addInfoSheet(wb, fams.length, campMap2)
+      const campName = filterCamp ? campMap2[filterCamp] : 'كل المخيمات'
       XLSX.writeFile(wb, `كشف_الأفراد_${campName}_${today()}.xlsx`)
       showToast(`✅ تم تصدير ${memRows.length} سجل`)
       setExportModal(null)
@@ -245,9 +252,9 @@ export default function DataPage() {
 
   // ── تنسيق الورقة ──
   function styleSheet(ws, colCount) {
+    const XLSX = window.XLSX
     const range = XLSX.utils.decode_range(ws['!ref']||'A1')
     ws['!cols'] = Array(colCount).fill({ wch: 20 })
-    // تلوين الرأس
     for (let c = range.s.c; c <= range.e.c; c++) {
       const addr = XLSX.utils.encode_cell({ r: 0, c })
       if (!ws[addr]) continue
@@ -262,6 +269,7 @@ export default function DataPage() {
   }
 
   function addInfoSheet(wb, count, campMap) {
+    const XLSX = window.XLSX
     const campName = filterCamp ? campMap[filterCamp] : 'كل المخيمات'
     const ws = XLSX.utils.aoa_to_sheet([
       ['المخيم',    campName],
@@ -303,7 +311,8 @@ export default function DataPage() {
       const rows = XLSX.utils.sheet_to_json(ws, { defval:'' })
       if (!rows.length) return showToast('الملف فارغ', true)
 
-      const existingFams = await localDB.families.toArray().catch(()=>[])
+      // فحص المكررات من PowerSync
+      const existingFams = await query('families')
       const existingIds  = new Set(existingFams.map(f=>f.head_id).filter(Boolean))
       const campNameMap  = Object.fromEntries(camps.map(c=>[c.name.trim(), c.id]))
 
@@ -340,13 +349,25 @@ export default function DataPage() {
     setImporting(true)
     let ok=0, skip=0, err=0
     try {
-      for (const row of importPreview.filter(r=>r.valid&&!r.dup)) {
+      const toImport = importPreview.filter(r=>r.valid&&!r.dup)
+      for (const row of toImport) {
         try {
-          const fam = { id:crypto.randomUUID(), org_id:ORG_ID, ...row,
-            category_tags:[], created_at:new Date().toISOString(), updated_at:new Date().toISOString() }
+          const fam = {
+            id: crypto.randomUUID(),
+            org_id: ORG_ID,
+            ...row,
+            category_tags: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
           delete fam.dup; delete fam.valid; delete fam.campName
-          await localDB.families.put(fam)
-          if (navigator.onLine) await supabase.from('families').insert(fam)
+          // اكتب لـ Supabase مباشرة — PowerSync يزامن تلقائياً
+          if (navigator.onLine) {
+            const { error } = await supabase.from('families').insert(fam)
+            if (error) throw error
+          }
+          // اكتب لـ PowerSync محلياً أيضاً للعمل offline
+          await bulkUpsert('families', [fam])
           ok++
         } catch { err++ }
       }
@@ -361,17 +382,22 @@ export default function DataPage() {
   async function createBackup() {
     setLoading(true)
     try {
+      // اقرأ من PowerSync
       const [fams, mems, camps2, rounds, distFams] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.dist_rounds.toArray().catch(()=>[]),
-        localDB.camp_dist_families.toArray().catch(()=>[]),
+        query('families'),
+        query('family_members'),
+        query('camps'),
+        query('dist_rounds'),
+        query('camp_dist_families'),
       ])
-      const backup = { version:1, org_id:ORG_ID, created_at:new Date().toISOString(),
-        created_by:profile?.full_name,
-        counts:{families:fams.length,members:mems.length,camps:camps2.length},
-        data:{families:fams,family_members:mems,camps:camps2,dist_rounds:rounds,camp_dist_families:distFams} }
+      const backup = {
+        version: 1,
+        org_id: ORG_ID,
+        created_at: new Date().toISOString(),
+        created_by: profile?.full_name,
+        counts: { families:fams.length, members:mems.length, camps:camps2.length },
+        data: { families:fams, family_members:mems, camps:camps2, dist_rounds:rounds, camp_dist_families:distFams }
+      }
       const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'})
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
@@ -390,9 +416,10 @@ export default function DataPage() {
     try {
       const backup = JSON.parse(await file.text())
       if (!backup.data) return showToast('ملف غير صالح', true)
-      if (backup.data.families?.length)       await localDB.families.bulkPut(backup.data.families).catch(()=>{})
-      if (backup.data.family_members?.length) await localDB.family_members.bulkPut(backup.data.family_members).catch(()=>{})
-      if (backup.data.camps?.length)          await localDB.camps.bulkPut(backup.data.camps).catch(()=>{})
+      // استعدة في PowerSync (يزامن لـ Supabase تلقائياً)
+      if (backup.data.families?.length)       await bulkUpsert('families',       backup.data.families)
+      if (backup.data.family_members?.length) await bulkUpsert('family_members', backup.data.family_members)
+      if (backup.data.camps?.length)          await bulkUpsert('camps',          backup.data.camps)
       showToast(`✅ استُعيدت ${backup.data.families?.length||0} أسرة`)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false); if(restoreRef.current) restoreRef.current.value='' }
@@ -410,6 +437,13 @@ export default function DataPage() {
         <option value="">🏕️ كل المخيمات</option>
         {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
+
+      {!psSynced && !psReady && (
+        <div className="flex items-center gap-2 text-muted text-xs mb-3 bg-surface2 rounded-xl px-3 py-2">
+          <Spinner size="sm" />
+          <span>جاري الاتصال بقاعدة البيانات...</span>
+        </div>
+      )}
 
       {/* ═══ تصدير ═══ */}
       <Card title="📥 تصدير Excel" icon="">
@@ -507,7 +541,6 @@ export default function DataPage() {
       <Modal open={!!exportModal} onClose={()=>setExportModal(null)}
         title={exportModal==='fam'?'📊 تصدير كشف الأسر':'📊 تصدير كشف الأفراد'}>
         <div className="flex flex-col gap-3">
-          {/* فلتر العمر للأفراد */}
           {exportModal==='mem' && (
             <div className="bg-surface2 rounded-xl p-3">
               <div className="text-xs font-bold text-muted mb-2">🎂 فلتر العمر</div>
@@ -530,7 +563,6 @@ export default function DataPage() {
             </div>
           )}
 
-          {/* الأعمدة */}
           <div className="text-xs font-bold text-muted mb-1">
             اختر الأعمدة وترتيبها (رقم = الترتيب، فارغ = لا يُصدَّر)
           </div>
