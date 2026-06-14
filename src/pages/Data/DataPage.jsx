@@ -143,11 +143,7 @@ export default function DataPage() {
     }
   }, [psStatus, psSynced])
 
-  // تحميل عند الفتح بتأخير بسيط لانتظار Supabase session
-  useEffect(() => {
-    const t = setTimeout(() => loadStats(), 800)
-    return () => clearTimeout(t)
-  }, [])
+  useEffect(() => { loadStats() }, [])
 
   // تحديث عند تغيير حالة PowerSync
   useEffect(() => {
@@ -158,9 +154,7 @@ export default function DataPage() {
     if (psSynced) { loadStats(); loadPsStats() }
   }, [psSynced])
 
-  // دالة التحديث اليدوي — تعيد المحاولة دائماً
   const handleRefresh = useCallback(async () => {
-    loadingRef.current = false  // فعّل إعادة المحاولة
     await loadStats()
     await loadPsStats()
   }, [loadStats, loadPsStats])
