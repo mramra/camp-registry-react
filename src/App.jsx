@@ -28,6 +28,10 @@ const Subscription   = lazy(() => import('./pages/Subscription/Subscription'))
 const HelpPage       = lazy(() => import('./pages/Help/HelpPage'))
 const SMS            = lazy(() => import('./pages/SMS/SMS'))
 const FamilyPortal   = lazy(() => import('./pages/FamilyPortal/FamilyPortal'))
+const ChildrenPage   = lazy(() => import('./pages/Children/ChildrenPage'))
+const WomenPage      = lazy(() => import('./pages/Women/WomenPage'))
+const DistReportPage = lazy(() => import('./pages/DistReport/DistReportPage'))
+const HealthPage     = lazy(() => import('./pages/Health/HealthPage'))
 const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
 const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
 
@@ -101,6 +105,10 @@ function AppRoutes() {
           <Route path="subscription"  element={<Subscription />} />
           <Route path="help"          element={<HelpPage />} />
           <Route path="sms"           element={<SMS />} />
+          <Route path="children"     element={<ChildrenPage />} />
+          <Route path="women"        element={<WomenPage />} />
+          <Route path="dist-report"  element={<DistReportPage />} />
+          <Route path="health"       element={<HealthPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
