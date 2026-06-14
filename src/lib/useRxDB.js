@@ -2,7 +2,7 @@
  * useRxDB.js — Unified Data Hook
  * الأولوية: PowerSync SQLite → Dexie → Supabase (عند الفراغ + اتصال)
  */
-import { useCallback, useRef, useEffect , useRef } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 import { localDB } from './db'
 import { getPowerSync } from './powersync'
 import { useSyncStatus } from '../context/PowerSyncContext'
