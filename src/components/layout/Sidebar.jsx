@@ -22,6 +22,12 @@ const NAV_ITEMS = [
     { icon: '🔔', label: 'التنبيهات',       path: '/alerts' },
     { icon: '📋', label: 'سجل النشاط',      path: '/audit', adminOnly: true },
   ]},
+  { group: 'السجلات', items: [
+    { icon: '👶', label: 'سجل الأطفال',     path: '/children' },
+    { icon: '👩', label: 'سجل النساء',      path: '/women' },
+    { icon: '🏥', label: 'سجل الصحة',       path: '/health' },
+    { icon: '📦', label: 'تقرير التوزيعات', path: '/dist-report' },
+  ]},
   { group: 'الأدوات', items: [
     { icon: '💾', label: 'استيراد/تصدير',  path: '/export' },
     { icon: '💬', label: 'رسائل SMS',       path: '/sms' },
