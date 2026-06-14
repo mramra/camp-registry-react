@@ -133,7 +133,7 @@ export default function Analysis() {
   const [selFamily,  setSelFamily]  = useState(null)
   const [selMembers, setSelMembers] = useState([])
 
-  const { showToast, online } = useApp()
+  const { showToast, online, psReady, psSynced} = useApp()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const navigate = useNavigate()
 
@@ -143,6 +143,8 @@ export default function Analysis() {
 
   const { query } = useRxDB()
   useEffect(() => { loadStats() }, [filterCamp])
+  useEffect(() => { if (psReady)  loadStats() }, [psReady])
+  useEffect(() => { if (psSynced) loadStats() }, [psSynced])
 
   async function loadStats() {
     setLoading(true)
