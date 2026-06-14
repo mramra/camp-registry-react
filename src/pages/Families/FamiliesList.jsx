@@ -138,9 +138,9 @@ export default function FamiliesList() {
     }
   }, [location?.state])
 
+  // تحميل أولي عند فتح الصفحة
   useEffect(() => {
     loadLocal().then(async () => {
-      // تحقق من وقت آخر مزامنة — إذا مضى أكثر من 5 دقائق أو فارغة → زامن
       try {
         const meta = Promise.resolve(null)
         const lastSync = meta?.value ? new Date(meta.value) : null
@@ -150,6 +150,11 @@ export default function FamiliesList() {
       } catch { syncBackground() }
     })
   }, [])
+
+  // إعادة تحميل عند اكتمال أول PowerSync sync
+  useEffect(() => {
+    if (psSynced) loadLocal()
+  }, [psSynced])
 
   // ── 1. تحميل من Dexie فوراً ─────────────────────────
   async function loadLocal() {
