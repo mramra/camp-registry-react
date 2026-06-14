@@ -138,20 +138,17 @@ export default function FamiliesList() {
     }
   }, [location?.state])
 
-  // تحميل أولي عند فتح الصفحة
+  // 1) تحميل أولي من Dexie عند فتح الصفحة
   useEffect(() => {
-    loadLocal().then(async () => {
-      try {
-        const meta = Promise.resolve(null)
-        const lastSync = meta?.value ? new Date(meta.value) : null
-        const fiveMin = 5 * 60 * 1000
-        const needsSync = !lastSync || (Date.now() - lastSync.getTime() > fiveMin)
-        if (needsSync) syncBackground()
-      } catch { syncBackground() }
-    })
+    loadLocal().then(() => syncBackground())
   }, [])
 
-  // إعادة تحميل عند اكتمال أول PowerSync sync
+  // 2) psReady → بيانات الجلسة السابقة متاحة في PowerSync SQLite
+  useEffect(() => {
+    if (psReady) loadLocal()
+  }, [psReady])
+
+  // 3) psSynced → أحدث بيانات بعد اكتمال المزامنة
   useEffect(() => {
     if (psSynced) loadLocal()
   }, [psSynced])
