@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import XLSX from 'xlsx-js-style'
 import { supabase, ORG_ID } from '../../lib/supabase'
+import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -49,7 +50,8 @@ function calcAge(dob) {
 
 export default function ExportPage() {
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
-  const { showToast } = useApp()
+  const { showToast, psReady, psSynced } = useApp()
+  const { query } = useRxDB()
 
   const [loading,       setLoading]       = useState(false)
   const [camps,         setCamps]         = useState([])
@@ -68,23 +70,20 @@ export default function ExportPage() {
   const canImp  = canImport || isAdmin
 
   // ── تحميل المخيمات والمستخدمين ──────────────────────
+  // useRxDB.query: PowerSync → Dexie → Supabase تلقائياً
   const loadCamps = useCallback(async () => {
-    try {
-      const [{ data: c }, { data: m }] = await Promise.all([
-        supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
-        supabase.from('org_members').select('user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
-      ])
-      if (c?.length) setCamps(c)
-      if (m?.length) setOrgMembers(m)
-    } catch {}
-  }, [])
+    const [campsData, membersData] = await Promise.all([
+      query('camps'),
+      query('org_members'),
+    ])
+    if (campsData?.length)   setCamps(campsData)
+    if (membersData?.length) setOrgMembers(membersData)
+  }, [query])
 
-  // تحميل فوري + إعادة محاولة بعد ثانية
-  useEffect(() => {
-    loadCamps()
-    const t = setTimeout(loadCamps, 1500)
-    return () => clearTimeout(t)
-  }, [])
+  // تحميل عند الفتح + عند psReady + عند psSynced
+  useEffect(() => { loadCamps() }, [])
+  useEffect(() => { if (psReady)  loadCamps() }, [psReady])
+  useEffect(() => { if (psSynced) loadCamps() }, [psSynced])
 
   // ── معلومات المخيم (مندوب + إحداثيات) ──────────────
   function getCampInfo(campId) {
