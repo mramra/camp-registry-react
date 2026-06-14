@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
+import { PowerSyncProvider } from './context/PowerSyncContext'
 import Layout from './components/layout/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import Spinner from './components/ui/Spinner'
@@ -49,8 +49,8 @@ function ProtectedRoute({ children }) {
       <Spinner size="lg" />
     </div>
   )
-  if (!user)        return <Navigate to="/login" replace />
-  if (mustChange)   return <Navigate to="/change-password" replace />
+  if (!user)      return <Navigate to="/login" replace />
+  if (mustChange) return <Navigate to="/change-password" replace />
   return children
 }
 
@@ -88,8 +88,8 @@ function AppRoutes() {
           <Route path="users"         element={<UsersList />} />
           <Route path="distributions" element={<Distributions />} />
           <Route path="analysis"      element={<Analysis />} />
-          <Route path="camp-compare"   element={<CampCompare />} />
-          <Route path="needs-report"   element={<NeedsReport />} />
+          <Route path="camp-compare"  element={<CampCompare />} />
+          <Route path="needs-report"  element={<NeedsReport />} />
           <Route path="data"          element={<DataPage />} />
           <Route path="settings"      element={<Settings />} />
           <Route path="audit"         element={<AuditLog />} />
@@ -99,8 +99,6 @@ function AppRoutes() {
           <Route path="subscription"  element={<Subscription />} />
           <Route path="help"          element={<HelpPage />} />
           <Route path="sms"           element={<SMS />} />
-              <Route path="sync"          element={<SyncManager />} />
-
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -114,9 +112,12 @@ export default function App() {
   return (
     <BrowserRouter basename="/camp-registry-react">
       <AuthProvider>
-        <AppProvider>
-          <AppRoutes />
-        </AppProvider>
+        {/* PowerSyncProvider يعمل بعد تسجيل الدخول — يفشل بصمت إذا لم تكن sync rules جاهزة */}
+        <PowerSyncProvider>
+          <AppProvider>
+            <AppRoutes />
+          </AppProvider>
+        </PowerSyncProvider>
       </AuthProvider>
     </BrowserRouter>
   )
