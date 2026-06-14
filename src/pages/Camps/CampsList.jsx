@@ -21,6 +21,7 @@ export default function CampsList() {
   const [loading,     setLoading]     = useState(true)
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
+  const [search,      setSearch]      = useState('')
   const [collapsed,   setCollapsed]   = useState(new Set())
 
   function toggleCollapse(id) {
@@ -161,13 +162,29 @@ export default function CampsList() {
 
   const visible    = visibleCamps()
   const visibleIds  = new Set(visible.map(c => c.id))
-  // هرمي: parent = بدون parent_camp_id أو parent غير موجود
-  const parents     = visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
-  const children    = visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
+  // عند البحث: اعرض كل المخيمات المطابقة بشكل مسطح
+  const searchLower = search.trim().toLowerCase()
+  const isSearching = !!searchLower
+  const searchResults = isSearching
+    ? visible.filter(c => c.name?.toLowerCase().includes(searchLower))
+    : []
+  // هرمي: parent = بدون parent_camp_id أو parent غير موجود في القائمة
+  const parents     = isSearching ? searchResults
+    : visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
+  const children    = isSearching ? []
+    : visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
   const mainCamps   = camps.filter(c => !c.parent_camp_id)
 
   return (
     <div>
+      <div className="mb-3">
+        <input
+          value={search}
+          onChange={e=>setSearch(e.target.value)}
+          placeholder="🔍 ابحث باسم المخيم..."
+          className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"
+        />
+      </div>
       <PageHeader icon="⛺" title="إدارة المخيمات"
         subtitle={
           <span className="flex items-center gap-2">
