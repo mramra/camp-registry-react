@@ -152,14 +152,9 @@ export default function CampsList() {
 
   const visible    = visibleCamps()
   const visibleIds  = new Set(visible.map(c => c.id))
-  // عرض مسطح — كل المخيمات في قائمة واحدة (افتراضي للوضوح)
-  const flatMode    = true
-  const parents     = flatMode
-    ? visible   // عرض الكل بالتسلسل
-    : visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
-  const children    = flatMode
-    ? []
-    : visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
+  // هرمي: parent = بدون parent_camp_id أو parent غير موجود
+  const parents     = visible.filter(c => !c.parent_camp_id || !visibleIds.has(c.parent_camp_id))
+  const children    = visible.filter(c => !!c.parent_camp_id && visibleIds.has(c.parent_camp_id))
   const mainCamps   = camps.filter(c => !c.parent_camp_id)
 
   return (
@@ -193,6 +188,8 @@ export default function CampsList() {
               profile={profile}
               onEdit={openEdit}
               onDelete={handleDelete}
+              collapsed={collapsed.has(camp.id)}
+              onToggle={()=>toggleCollapse(camp.id)}
             />
           ))}
         </div>
@@ -293,7 +290,7 @@ export default function CampsList() {
   )
 }
 
-function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCampDelegate, profile, onEdit, onDelete }) {
+function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCampDelegate, profile, onEdit, onDelete, collapsed, onToggle }) {
   const fc = famCount[camp.id] || 0
   const st = STATUS_MAP[camp.status] || { label: camp.status||'—', color:'#6b7280' }
   const canEdit = isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)
@@ -312,7 +309,13 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
             {camp.address && <div className="text-muted text-[10px] mt-0.5">📍 {camp.address}</div>}
             <div className="text-muted text-[10px] mt-0.5">
               👥 {fc} أسرة{camp.capacity ? ` من ${camp.capacity}` : ''}
-              {sub.length > 0 && ` • 🏕️ ${sub.length} فرع`}
+              {sub.length > 0 && (
+                <span
+                  onClick={e=>{e.stopPropagation();onToggle()}}
+                  className="cursor-pointer ml-1 text-blue hover:text-accent">
+                  • 🏕️ {sub.length} فرع {collapsed?'▼':'▲'}
+                </span>
+              )}
             </div>
             {camp.latitude && camp.longitude && (
               <a href={`https://maps.google.com/?q=${Number(camp.latitude).toFixed(6)},${Number(camp.longitude).toFixed(6)}`}
@@ -351,7 +354,7 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
         )}
       </div>
       {/* الفروع */}
-      {sub.map(s => (
+      {!collapsed && sub.map(s => (
         <div key={s.id} className="bg-surface border border-border rounded-xl p-3 mr-4 mt-1.5"
           style={{borderRight:'3px solid #3b82f6'}}>
           <div className="flex items-start justify-between">
