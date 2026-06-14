@@ -1,9 +1,9 @@
 /**
  * powersync.js — إعداد PowerSync مع Supabase
  * ─────────────────────────────────────────────
- * يستبدل syncAll.js + useRxDB.js
- * التخزين: SQLite محلي (عبر PowerSync)
- * المزامنة: تلقائية ثنائية الاتجاه
+ * المزامنة: تلقائية ثنائية الاتجاه مع Supabase
+ * التخزين: SQLite محلي (WASM)
+ * enableMultiTabs: false  → يعمل بدون SharedArrayBuffer (GitHub Pages safe)
  */
 import {
   PowerSyncDatabase,
@@ -13,15 +13,15 @@ import {
 } from '@powersync/web'
 import { supabase } from './supabase'
 
-// ── تعريف الـ Schema ─────────────────────────────────────
+// ── تعريف الـ Schema ──────────────────────────────────────
 const families = new Table({
-  org_id:           column.text,
-  camp_id:          column.text,
-  head_name:        column.text,
-  head_id:          column.text,
-  head_gender:      column.text,
-  head_dob:         column.text,
-  head_marital:     column.text,
+  org_id:                column.text,
+  camp_id:               column.text,
+  head_name:             column.text,
+  head_id:               column.text,
+  head_gender:           column.text,
+  head_dob:              column.text,
+  head_marital:          column.text,
   head_chronic_diseases: column.text,
   head_disabilities:     column.text,
   head_injuries:         column.text,
@@ -29,28 +29,28 @@ const families = new Table({
   head_orphan_status:    column.integer,
   head_orphan_cause:     column.text,
   head_photo_url:        column.text,
-  phone1:           column.text,
-  phone2:           column.text,
-  tent:             column.text,
-  tent2:            column.text,
-  address:          column.text,
-  address_details:  column.text,
-  original_address: column.text,
-  notes:            column.text,
-  category_tags:    column.text,  // JSON string
-  category_details: column.text,
-  economic_level:   column.text,
-  entry_date:       column.text,
-  exit_date:        column.text,
-  exit_reason:      column.text,
+  phone1:                column.text,
+  phone2:                column.text,
+  tent:                  column.text,
+  tent2:                 column.text,
+  address:               column.text,
+  address_details:       column.text,
+  original_address:      column.text,
+  notes:                 column.text,
+  category_tags:         column.text,   // JSON string
+  category_details:      column.text,
+  economic_level:        column.text,
+  entry_date:            column.text,
+  exit_date:             column.text,
+  exit_reason:           column.text,
   transferred_to_camp_id: column.text,
-  tags:             column.text,
-  version:          column.integer,
-  created_at:       column.text,
-  updated_at:       column.text,
-  created_by:       column.text,
-  updated_by:       column.text,
-  client_id:        column.text,
+  tags:                  column.text,
+  version:               column.integer,
+  created_at:            column.text,
+  updated_at:            column.text,
+  created_by:            column.text,
+  updated_by:            column.text,
+  client_id:             column.text,
 })
 
 const family_members = new Table({
@@ -156,7 +156,7 @@ export const AppSchema = new Schema({
   camp_dist_families,
 })
 
-// ── PowerSync Instance ────────────────────────────────────
+// ── PowerSync Instance ─────────────────────────────────────
 let _db = null
 
 export function getPowerSync() {
@@ -164,24 +164,33 @@ export function getPowerSync() {
     _db = new PowerSyncDatabase({
       schema: AppSchema,
       database: { dbFilename: 'camp_registry.db' },
+      flags: {
+        // ✅ enableMultiTabs: false → يعمل بدون SharedArrayBuffer
+        // هذا ضروري لـ GitHub Pages التي لا تدعم COOP/COEP headers
+        enableMultiTabs: false,
+      },
     })
   }
   return _db
 }
 
-// ── Supabase Connector ────────────────────────────────────
-// يربط PowerSync بـ Supabase للكتابة والقراءة
+// ── Supabase Connector ─────────────────────────────────────
+// يربط PowerSync بـ Supabase للقراءة والكتابة
 export class SupabaseConnector {
   constructor() {
     this.client = supabase
   }
 
-  // PowerSync يستدعيه لجلب token الجلسة
+  // PowerSync يستدعيه لجلب token الجلسة + endpoint
   async fetchCredentials() {
     const { data: { session }, error } = await this.client.auth.getSession()
-    if (error || !session) throw new Error('No session')
+    if (error || !session) throw new Error('No session — يجب تسجيل الدخول أولاً')
+
+    const psUrl = import.meta.env.VITE_POWERSYNC_URL
+      || 'https://6a2d74dd0ef84ed671a15a84.powersync.journeyapps.com'
+
     return {
-      endpoint: import.meta.env.VITE_POWERSYNC_URL || 'https://6a2d74dd0ef84ed671a15a84.powersync.journeyapps.com',
+      endpoint:  psUrl,
       token:     session.access_token,
       expiresAt: session.expires_at
         ? new Date(session.expires_at * 1000)
