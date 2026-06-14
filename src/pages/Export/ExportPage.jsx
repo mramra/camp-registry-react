@@ -103,15 +103,36 @@ export default function ExportPage() {
     }
   }
 
-  // ── جلب البيانات من Supabase ─────────────────────────
+  // ── جلب البيانات (Supabase أون لاين | PowerSync أوف لاين) ──
   async function getFullData() {
-    let q = supabase.from('families').select(`
-      *, camps!camp_id(id,name,latitude,longitude,address,manager_id), family_members(*)
-    `).eq('org_id',ORG_ID)
-    if (filterCamp) q = q.eq('camp_id',filterCamp)
-    const { data, error } = await q
-    if (error) throw error
-    return data || []
+    if (navigator.onLine) {
+      // أون لاين: Supabase مباشرة — أحدث بيانات
+      let q = supabase.from('families').select(`
+        *, camps!camp_id(id,name,latitude,longitude,address,manager_id), family_members(*)
+      `).eq('org_id',ORG_ID)
+      if (filterCamp) q = q.eq('camp_id',filterCamp)
+      const { data, error } = await q
+      if (error) throw error
+      return data || []
+    }
+
+    // أوف لاين: PowerSync SQLite المحلي
+    const { getPowerSync } = await import('../../lib/powersync')
+    const db = getPowerSync()
+    let famSql = 'SELECT * FROM families WHERE org_id = ?'
+    const famParams = [ORG_ID]
+    if (filterCamp) { famSql += ' AND camp_id = ?'; famParams.push(filterCamp) }
+    const families = await db.getAll(famSql, famParams)
+    const allMembers = await db.getAll('SELECT * FROM family_members')
+    const campsData  = await db.getAll('SELECT * FROM camps WHERE org_id = ?', [ORG_ID])
+    const campMap    = Object.fromEntries(campsData.map(c=>[c.id,c]))
+    return families.map(f => ({
+      ...f,
+      // تحويل category_tags من JSON string إذا لزم
+      category_tags: (() => { try { return JSON.parse(f.category_tags||'[]') } catch { return [] } })(),
+      camps: campMap[f.camp_id] ? { name: campMap[f.camp_id].name } : null,
+      family_members: allMembers.filter(m => m.family_id === f.id),
+    }))
   }
 
   // ── بناء ورقة Excel مع رأسية المخيم ─────────────────
@@ -334,7 +355,9 @@ export default function ExportPage() {
 
   return (
     <div>
-      <PageHeader icon="💾" title="استيراد وتصدير" />
+      <PageHeader icon="💾" title="استيراد وتصدير"
+        subtitle={!navigator.onLine ? <span className="text-accent text-xs">📴 وضع أوف لاين — البيانات من الذاكرة المحلية</span> : null}
+      />
 
       {/* فلتر المخيم */}
       <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL+' mb-4'}>
