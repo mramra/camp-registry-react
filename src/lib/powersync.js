@@ -37,7 +37,7 @@ const families = new Table({
   address_details:       column.text,
   original_address:      column.text,
   notes:                 column.text,
-  category_tags:         column.text,   // JSON string
+  category_tags:         column.text,
   category_details:      column.text,
   economic_level:        column.text,
   entry_date:            column.text,
@@ -136,6 +136,21 @@ const dist_rounds = new Table({
   updated_at:  column.text,
 })
 
+// دفعات التوزيع (camp_distributions)
+const camp_distributions = new Table({
+  org_id:          column.text,
+  round_id:        column.text,
+  camp_id:         column.text,
+  name:            column.text,
+  status:          column.text,
+  description:     column.text,
+  distribution_date: column.text,
+  created_by:      column.text,
+  created_at:      column.text,
+  updated_at:      column.text,
+})
+
+// سجل استلام الأسر
 const camp_dist_families = new Table({
   org_id:          column.text,
   distribution_id: column.text,
@@ -153,6 +168,7 @@ export const AppSchema = new Schema({
   org_members,
   family_movements,
   dist_rounds,
+  camp_distributions,
   camp_dist_families,
 })
 
@@ -165,8 +181,7 @@ export function getPowerSync() {
       schema: AppSchema,
       database: { dbFilename: 'camp_registry.db' },
       flags: {
-        // ✅ enableMultiTabs: false → يعمل بدون SharedArrayBuffer
-        // هذا ضروري لـ GitHub Pages التي لا تدعم COOP/COEP headers
+        // ✅ بدون SharedArrayBuffer — يعمل على GitHub Pages
         enableMultiTabs: false,
       },
     })
@@ -175,22 +190,17 @@ export function getPowerSync() {
 }
 
 // ── Supabase Connector ─────────────────────────────────────
-// يربط PowerSync بـ Supabase للقراءة والكتابة
 export class SupabaseConnector {
   constructor() {
     this.client = supabase
   }
 
-  // PowerSync يستدعيه لجلب token الجلسة + endpoint
   async fetchCredentials() {
     const { data: { session }, error } = await this.client.auth.getSession()
-    if (error || !session) throw new Error('No session — يجب تسجيل الدخول أولاً')
-
-    const psUrl = import.meta.env.VITE_POWERSYNC_URL
-      || 'https://6a2d74dd0ef84ed671a15a84.powersync.journeyapps.com'
-
+    if (error || !session) throw new Error('No session')
     return {
-      endpoint:  psUrl,
+      endpoint:  import.meta.env.VITE_POWERSYNC_URL
+                 || 'https://6a2d74dd0ef84ed671a15a84.powersync.journeyapps.com',
       token:     session.access_token,
       expiresAt: session.expires_at
         ? new Date(session.expires_at * 1000)
@@ -198,36 +208,26 @@ export class SupabaseConnector {
     }
   }
 
-  // PowerSync يستدعيه لرفع التعديلات المحلية لـ Supabase
+  // رفع التعديلات المحلية إلى Supabase
   async uploadData(database) {
     const transaction = await database.getNextCrudTransaction()
     if (!transaction) return
-
     try {
       for (const op of transaction.crud) {
         const { op: operation, table, opData, id } = op
-
         if (operation === 'PUT') {
-          const { error } = await this.client
-            .from(table)
-            .upsert({ ...opData, id })
+          const { error } = await this.client.from(table).upsert({ ...opData, id })
           if (error) throw error
         } else if (operation === 'PATCH') {
-          const { error } = await this.client
-            .from(table)
-            .update(opData)
-            .eq('id', id)
+          const { error } = await this.client.from(table).update(opData).eq('id', id)
           if (error) throw error
         } else if (operation === 'DELETE') {
-          const { error } = await this.client
-            .from(table)
-            .delete()
-            .eq('id', id)
+          const { error } = await this.client.from(table).delete().eq('id', id)
           if (error) throw error
         }
       }
       await transaction.complete()
-    } catch (e) {
+    } catch(e) {
       console.error('[PowerSync uploadData]', e)
       throw e
     }
