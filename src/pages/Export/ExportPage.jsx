@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -87,7 +87,7 @@ export default function ExportPage() {
     setOrgMembers(m || [])
   }, [])
 
-  useState(() => { loadCamps() })
+  useEffect(() => { loadCamps() }, [])
 
   // ── معلومات المخيم (مندوب + إحداثيات) ──────────────
   function getCampInfo(campId) {
