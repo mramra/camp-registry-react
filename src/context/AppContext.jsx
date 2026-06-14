@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { processSyncQueue } from '../lib/sync'
 import { quickSync } from '../lib/syncAll'
 import { useSyncStatus } from './PowerSyncContext'
@@ -9,16 +9,20 @@ export function AppProvider({ children }) {
   const [online, setOnline] = useState(navigator.onLine)
   const [toast,  setToast]  = useState(null)
   const { psReady, psSynced, psStatus } = useSyncStatus()
+  const syncedOnceRef = useRef(false)
 
+  // مزامنة Dexie عند أول اتصال بعد تسجيل الدخول (مرة واحدة لكل جلسة)
   useEffect(() => {
-    const onOnline = async () => {
-      setOnline(true)
-      if (!psReady) {
-        // PowerSync غير جاهز — استخدم الطريقة القديمة
-        try { await processSyncQueue(); await quickSync() } catch {}
-      }
-      // إذا psReady — PowerSync يتولى المزامنة تلقائياً
+    if (psReady && online && !syncedOnceRef.current) {
+      syncedOnceRef.current = true
+      // PowerSync يتولى المزامنة — لكن نجلب Dexie أيضاً للـ fallback أوف لاين
+      quickSync().catch(e => console.warn('[AppContext] quickSync:', e.message))
     }
+  }, [psReady, online])
+
+  // مراقبة الإنترنت
+  useEffect(() => {
+    const onOnline  = () => setOnline(true)
     const onOffline = () => setOnline(false)
     window.addEventListener('online',  onOnline)
     window.addEventListener('offline', onOffline)
@@ -26,7 +30,7 @@ export function AppProvider({ children }) {
       window.removeEventListener('online',  onOnline)
       window.removeEventListener('offline', onOffline)
     }
-  }, [psReady])
+  }, [])
 
   const showToast = useCallback((msg, isError = false) => {
     setToast({ msg, isError })
