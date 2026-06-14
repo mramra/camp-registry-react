@@ -83,6 +83,7 @@ export default function DataPage() {
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
   const [activeTab,     setActiveTab]     = useState('stats')
+  const [orgMembers,    setOrgMembers]    = useState([])
   const importRef  = useRef()
   const restoreRef = useRef()
 
@@ -91,26 +92,38 @@ export default function DataPage() {
   const canImp  = canImport || isAdmin
 
   // ── تحميل الإحصائيات من Supabase مباشرة ────────────
+  // الجداول التي لها org_id مباشرة
+  const TABLES_WITH_ORG = ['families','camps','org_members','family_movements','dist_rounds','camp_distributions']
+
   const loadStats = useCallback(async () => {
     setLoading(true)
     try {
       const results = {}
       await Promise.all(TABLES.map(async ({ key }) => {
-        const { count } = await supabase
-          .from(key)
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', ORG_ID)
-          .catch(() => ({ count: 0 }))
-        results[key] = count || 0
+        try {
+          let q = supabase.from(key).select('*', { count: 'exact', head: true })
+          if (TABLES_WITH_ORG.includes(key)) q = q.eq('org_id', ORG_ID)
+          const { count } = await q
+          results[key] = count ?? 0
+        } catch { results[key] = 0 }
       }))
       setStats(results)
 
-      // إحصائيات المخيمات
+      // جلب المخيمات مع بيانات المندوب والإحداثيات
       const { data: campsData } = await supabase
-        .from('camps').select('id,name').eq('org_id', ORG_ID)
+        .from('camps')
+        .select('id, name, latitude, longitude, address, manager_id')
+        .eq('org_id', ORG_ID)
       setCamps(campsData || [])
+
+      // جلب المستخدمين لربط المندوبين
+      const { data: membersData } = await supabase
+        .from('org_members')
+        .select('user_id, full_name, phone, camp_id, role')
+        .eq('org_id', ORG_ID)
+      setOrgMembers(membersData || [])
     } catch(e) {
-      showToast('خطأ في جلب الإحصائيات', true)
+      showToast('خطأ في جلب الإحصائيات: ' + e.message, true)
     } finally {
       setLoading(false)
     }
@@ -145,13 +158,32 @@ export default function DataPage() {
   async function getFullData() {
     let query = supabase.from('families').select(`
       *,
-      camps!camp_id(name),
+      camps!camp_id(id, name, latitude, longitude, address, manager_id),
       family_members(*)
     `).eq('org_id', ORG_ID)
     if (filterCamp) query = query.eq('camp_id', filterCamp)
     const { data, error } = await query
     if (error) throw error
     return data || []
+  }
+
+  // معلومات المخيم المحدد (اسم + مندوب + إحداثيات)
+  function getCampInfo(campId) {
+    if (!campId) return null
+    const camp = camps.find(c => c.id === campId)
+    if (!camp) return null
+    // البحث عن المندوب: role=camp_delegate و camp_id = campId
+    const delegate = orgMembers.find(m =>
+      m.camp_id === campId && m.role === 'camp_delegate'
+    ) || orgMembers.find(m => m.user_id === camp.manager_id)
+    return {
+      name: camp.name,
+      lat: camp.latitude,
+      lng: camp.longitude,
+      address: camp.address,
+      delegateName: delegate?.full_name || '',
+      delegatePhone: delegate?.phone || '',
+    }
   }
 
   // ── تصدير Excel ─────────────────────────────────────
