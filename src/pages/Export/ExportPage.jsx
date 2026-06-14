@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import XLSX from 'xlsx-js-style'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -6,17 +7,6 @@ import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
-
-async function getXLSX() {
-  if (window.XLSX) return window.XLSX
-  await new Promise((res, rej) => {
-    const s = document.createElement('script')
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
-    s.onload = res; s.onerror = rej
-    document.head.appendChild(s)
-  })
-  return window.XLSX
-}
 
 const FAM_COLS = [
   { key:'head_name',        label:'اسم رب الأسرة',    def:true  },
@@ -158,66 +148,70 @@ export default function ExportPage() {
     return aoa
   }
 
-  // ── تطبيق التنسيق: دمج + توسيط + ألوان متبادلة ─────────────
+  // ── تطبيق التنسيق (xlsx-js-style) ──────────────────────────
   function styleSheet(ws, colCount, showBnr, campInfo, totalDataRows) {
-    const hasBnr  = showBnr && campInfo
-    const hdrRow  = hasBnr ? 2 : 0   // صف رواسي الأعمدة
+    const hasBnr    = showBnr && campInfo
+    const hdrRow    = hasBnr ? 2 : 0
     const dataStart = hdrRow + 1
 
+    // ── دمج البانر ──
     if (hasBnr) {
-      // دمج الخلايا كاملاً في الصفين
       ws['!merges'] = [
-        { s:{r:0,c:0}, e:{r:0,c:colCount-1} },
-        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },
+        { s:{r:0,c:0}, e:{r:0,c:colCount-1} },  // اسم المخيم
+        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },  // بيانات المندوب
       ]
-      // صف 1 — اسم المخيم: ذهبي على كحلي، مُوسَّط
-      const a0 = XLSX.utils.encode_cell({r:0,c:0})
-      if (ws[a0]) ws[a0].s = {
-        fill:{patternType:'solid',fgColor:{rgb:'0A3060'}},
-        font:{bold:true,color:{rgb:'FFD700'},sz:16,name:'Arial'},
-        alignment:{horizontal:'center',vertical:'center',readingOrder:2},
-        border:{bottom:{style:'thin',color:{rgb:'1A6AB0'}}}
+      // صف 1 — اسم المخيم
+      const cell0 = ws[XLSX.utils.encode_cell({r:0,c:0})]
+      if (cell0) cell0.s = {
+        fill: { patternType:'solid', fgColor:{rgb:'0A3060'}, bgColor:{rgb:'0A3060'} },
+        font: { bold:true, color:{rgb:'FFD700'}, sz:18, name:'Arial' },
+        alignment: { horizontal:'center', vertical:'center', wrapText:false },
+        border: { bottom:{ style:'medium', color:{rgb:'1A6AB0'} } }
       }
-      // صف 2 — بيانات المندوب: أبيض على كحلي متوسط، مُوسَّط
-      const a1 = XLSX.utils.encode_cell({r:1,c:0})
-      if (ws[a1]) ws[a1].s = {
-        fill:{patternType:'solid',fgColor:{rgb:'1A4A8A'}},
-        font:{bold:false,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
-        alignment:{horizontal:'center',vertical:'center',readingOrder:2},
-        border:{bottom:{style:'medium',color:{rgb:'0A3060'}}}
+      // صف 2 — بيانات المندوب
+      const cell1 = ws[XLSX.utils.encode_cell({r:1,c:0})]
+      if (cell1) cell1.s = {
+        fill: { patternType:'solid', fgColor:{rgb:'154580'}, bgColor:{rgb:'154580'} },
+        font: { bold:true, color:{rgb:'FFFFFF'}, sz:11, name:'Arial' },
+        alignment: { horizontal:'center', vertical:'center', wrapText:false },
+        border: { bottom:{ style:'medium', color:{rgb:'0A3060'} } }
       }
-      ws['!rows'] = [{hpt:30},{hpt:18}]
+      ws['!rows'] = [{ hpt:32 }, { hpt:20 }]
     }
 
-    // صف رواسي الأعمدة — كحلي غامق مع نص أبيض
-    for (let col=0; col<colCount; col++) {
-      const addr = XLSX.utils.encode_cell({r:hdrRow,c:col})
-      if (ws[addr]) ws[addr].s = {
-        fill:{patternType:'solid',fgColor:{rgb:'1E3A5F'}},
-        font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
-        alignment:{horizontal:'center',vertical:'center',readingOrder:2},
-        border:{
-          top:{style:'thin',color:{rgb:'0A3060'}},
-          bottom:{style:'medium',color:{rgb:'0A3060'}}
+    // ── رواسي الأعمدة ──
+    for (let col = 0; col < colCount; col++) {
+      const cell = ws[XLSX.utils.encode_cell({r:hdrRow, c:col})]
+      if (cell) cell.s = {
+        fill: { patternType:'solid', fgColor:{rgb:'1E3A5F'}, bgColor:{rgb:'1E3A5F'} },
+        font: { bold:true, color:{rgb:'FFFFFF'}, sz:10, name:'Arial' },
+        alignment: { horizontal:'center', vertical:'center', wrapText:false },
+        border: {
+          top:    { style:'medium', color:{rgb:'0A3060'} },
+          bottom: { style:'medium', color:{rgb:'0A3060'} },
+          left:   { style:'thin',   color:{rgb:'2A4A7F'} },
+          right:  { style:'thin',   color:{rgb:'2A4A7F'} },
         }
       }
     }
 
-    // ألوان متبادلة: أبيض / رمادي فاتح
-    for (let row=dataStart; row<dataStart+totalDataRows; row++) {
-      const bg = (row-dataStart)%2===0 ? 'FFFFFF' : 'EEF2F7'
-      for (let col=0; col<colCount; col++) {
-        const addr = XLSX.utils.encode_cell({r:row,c:col})
-        if (ws[addr]) ws[addr].s = {
-          fill:{patternType:'solid',fgColor:{rgb:bg}},
-          font:{sz:10,name:'Arial'},
-          alignment:{horizontal:'right',vertical:'center',readingOrder:2},
-          border:{bottom:{style:'thin',color:{rgb:'DDDDDD'}}}
+    // ── صفوف البيانات: أبيض / رمادي فاتح ──
+    for (let row = dataStart; row < dataStart + totalDataRows; row++) {
+      const isEven = (row - dataStart) % 2 === 0
+      const bgHex  = isEven ? 'FFFFFF' : 'EEF2F7'
+      for (let col = 0; col < colCount; col++) {
+        const cell = ws[XLSX.utils.encode_cell({r:row, c:col})]
+        if (cell) cell.s = {
+          fill: { patternType:'solid', fgColor:{rgb:bgHex}, bgColor:{rgb:bgHex} },
+          font: { sz:10, name:'Arial' },
+          alignment: { horizontal:'center', vertical:'center', wrapText:false },
+          border: { bottom:{ style:'thin', color:{rgb:'CCCCCC'} } }
         }
       }
     }
 
-    ws['!freeze'] = {xSplit:0,ySplit:hdrRow+1}
+    ws['!cols']   = Array(colCount).fill({ wch:20 })
+    ws['!freeze'] = { xSplit:0, ySplit: hdrRow+1 }
     return ws
   }
 
@@ -278,7 +272,6 @@ export default function ExportPage() {
         })
         return row
       })
-      const XLSX = await getXLSX()
       const colHeaders = selected.map(c=>c.label)
       const dataRows   = sortedRows.map(r=>colHeaders.map(h=>r[h]??''))
       const aoa = buildAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
@@ -338,7 +331,6 @@ export default function ExportPage() {
         })
       })
 
-      const XLSX = await getXLSX()
       const colHeaders = selected.map(c=>c.label)
       const aoa = buildAoa(showBanner?campInfo:null, colHeaders, dataRows, showBanner)
       const ws  = XLSX.utils.aoa_to_sheet(aoa)
@@ -386,7 +378,6 @@ export default function ExportPage() {
     const file = e.target.files?.[0]; if (!file) return
     setLoading(true)
     try {
-      const XLSX = await getXLSX()
       const rows = XLSX.utils.sheet_to_json(
         XLSX.read(await file.arrayBuffer(),{type:'array'}).Sheets[
           XLSX.read(await file.arrayBuffer(),{type:'array'}).SheetNames[0]
@@ -438,7 +429,6 @@ export default function ExportPage() {
   }
 
   async function downloadTemplate() {
-    const XLSX = await getXLSX()
     const headers = ['اسم رب الأسرة*','رقم الهوية*','رقم الجوال*','جوال بديل','الجنس','الحالة الاجتماعية','تاريخ الميلاد','اسم المخيم*','الخيمة','المنطقة الأصلية','ملاحظات']
     const example = ['محمد أحمد علي','123456789','0599000000','','ذكر','متزوج','1980-01-15',camps[0]?.name||'مخيم السلام','A1','غزة','']
     const ws = XLSX.utils.aoa_to_sheet([headers,example])
@@ -548,11 +538,9 @@ export default function ExportPage() {
       </Card>
 
       {loading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-2xl p-6 flex flex-col items-center gap-3">
-            <Spinner size="lg"/>
-            <p className="text-white text-sm">جاري المعالجة...</p>
-          </div>
+        <div className="flex items-center justify-center gap-2 py-2 mb-2 bg-accent/10 rounded-xl">
+          <Spinner size="sm"/>
+          <span className="text-accent text-xs font-bold">جاري التصدير...</span>
         </div>
       )}
 
