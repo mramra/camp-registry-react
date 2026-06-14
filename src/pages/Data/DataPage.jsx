@@ -101,22 +101,18 @@ export default function DataPage() {
     if (loadingRef.current) return
     loadingRef.current = true
     try {
-      // تأكد أن Supabase session جاهز
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-
+      // استعلام مباشر بدون فحص session — الـ RLS تحمي البيانات
       const results = {}
       await Promise.all(TABLES.map(async ({ key }) => {
         try {
           let q = supabase.from(key).select('*', { count: 'exact', head: true })
           if (TABLES_WITH_ORG.includes(key)) q = q.eq('org_id', ORG_ID)
           const { count, error } = await q
-          results[key] = error ? '—' : (count ?? 0)
+          results[key] = (error || count === null) ? '—' : count
         } catch { results[key] = '—' }
       }))
       setStats(results)
 
-      // جلب المخيمات والمستخدمين
       const [{ data: campsData }, { data: membersData }] = await Promise.all([
         supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
         supabase.from('org_members').select('user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
@@ -124,7 +120,7 @@ export default function DataPage() {
       if (campsData) setCamps(campsData)
       if (membersData) setOrgMembers(membersData)
     } catch(e) {
-      console.warn('[DataPage] loadStats error:', e.message)
+      console.warn('[DataPage] loadStats:', e.message)
     } finally {
       loadingRef.current = false
     }
