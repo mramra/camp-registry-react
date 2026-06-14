@@ -21,6 +21,15 @@ export default function CampsList() {
   const [loading,     setLoading]     = useState(true)
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
+  const [collapsed,   setCollapsed]   = useState(new Set())
+
+  function toggleCollapse(id) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
   const [editCamp,    setEditCamp]    = useState(null)
   const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', coordinates:'' })
   const [saving,      setSaving]      = useState(false)
