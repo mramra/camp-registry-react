@@ -515,8 +515,6 @@ export default function DataPage() {
       <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
         {[
           {id:'stats',  label:'📊 الإحصائيات'},
-          {id:'export', label:'📥 تصدير'},
-          {id:'import', label:'📤 استيراد'},
           {id:'backup', label:'💾 نسخ احتياطية'},
           {id:'danger', label:'⚠️ خطر'},
         ].map(t => (
@@ -596,86 +594,7 @@ export default function DataPage() {
         </div>
       )}
 
-      {/* ═══ تصدير ═══ */}
-      {activeTab==='export' && canExp && (
-        <div className="flex flex-col gap-3">
-          <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)} className={SEL}>
-            <option value="">🏕️ كل المخيمات</option>
-            {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
 
-          <Card title="📥 تصدير Excel" icon="">
-            <div className="flex flex-col gap-2">
-              <p className="text-muted text-xs mb-1">يقرأ من Supabase مباشرة — دقة 100%</p>
-              <button onClick={()=>setExportModal('fam')} disabled={loading}
-                className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
-                👨‍👩‍👧 كشف رباب الأسر
-              </button>
-              <button onClick={()=>setExportModal('mem')} disabled={loading}
-                className="w-full py-3 rounded-xl text-sm font-bold border border-blue/40 text-blue"
-                style={{background:'rgba(59,130,246,0.08)'}}>
-                👤 كشف أفراد الأسر
-              </button>
-              <button onClick={exportMissing} disabled={loading}
-                className="w-full py-3 rounded-xl text-sm font-bold border border-red/40 text-red"
-                style={{background:'rgba(239,68,68,0.08)'}}>
-                ⚠️ الأسر الناقصة
-              </button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* ═══ استيراد ═══ */}
-      {activeTab==='import' && canImp && (
-        <div className="flex flex-col gap-3">
-          <Card title="📤 استيراد Excel → Supabase" icon="">
-            <div className="flex flex-col gap-2">
-              <p className="text-muted text-xs">
-                يتحقق من التكرار من Supabase مباشرة — يكتب مباشرة في قاعدة البيانات
-              </p>
-              <button onClick={()=>importRef.current?.click()} disabled={loading}
-                className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
-                📂 اختيار ملف Excel
-              </button>
-              <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportFile}/>
-
-              {importPreview && (
-                <div className="mt-2">
-                  <div className="flex gap-3 text-xs mb-3 flex-wrap">
-                    <span className="text-white font-bold">{importPreview.length} سجل</span>
-                    <span className="text-green">✅ {importPreview.filter(r=>r.valid&&!r.dup).length} جديد</span>
-                    <span className="text-accent">🔁 {importPreview.filter(r=>r.dup).length} مكرر</span>
-                    <span className="text-red">❌ {importPreview.filter(r=>!r.valid).length} ناقص</span>
-                  </div>
-                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto mb-3">
-                    {importPreview.map((r,i)=>(
-                      <div key={i} className="text-[11px] px-3 py-1.5 rounded-lg flex justify-between items-center"
-                        style={{background:r.dup?'rgba(245,158,11,0.1)':r.valid?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)'}}>
-                        <div>
-                          <span className="text-white">{r.head_name}</span>
-                          <span className="text-muted ml-2">{r.campName}</span>
-                        </div>
-                        <span>{r.dup?'🔁':r.valid?'✅':'❌'}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={confirmImport} disabled={importing}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-black text-bg bg-accent">
-                      {importing?'⏳ جاري الاستيراد...':'✅ تأكيد الاستيراد'}
-                    </button>
-                    <button onClick={()=>setImportPreview(null)}
-                      className="flex-1 py-2.5 rounded-xl text-sm border border-border text-muted">
-                      إلغاء
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* ═══ نسخ احتياطية ═══ */}
       {activeTab==='backup' && (
