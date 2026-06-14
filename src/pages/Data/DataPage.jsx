@@ -46,6 +46,20 @@ const FAM_COLS = [
   { key:'notes',            label:'ملاحظات',             def:false },
 ]
 
+const MEM_COLS = [
+  { key:'fam_name',    label:'اسم رب الأسرة',    def:true  },
+  { key:'head_id',     label:'هوية رب الأسرة',   def:true  },
+  { key:'phone1',      label:'رقم الجوال',        def:true  },
+  { key:'camp',        label:'المخيم',             def:true  },
+  { key:'name',        label:'اسم الفرد',          def:true  },
+  { key:'national_id', label:'رقم الهوية',         def:true  },
+  { key:'relation',    label:'صلة القرابة',        def:true  },
+  { key:'dob',         label:'تاريخ الميلاد',      def:false },
+  { key:'age',         label:'العمر',              def:true  },
+  { key:'gender',      label:'الجنس',              def:false },
+  { key:'health',      label:'الحالة الصحية',      def:false },
+]
+
 function calcAge(dob) {
   if (!dob) return null
   const b = new Date(dob), t = new Date()
@@ -65,6 +79,7 @@ export default function DataPage() {
   const [filterCamp,    setFilterCamp]    = useState('')
   const [exportModal,   setExportModal]   = useState(false)
   const [famCols,       setFamCols]       = useState(() => FAM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
+  const [memCols,       setMemCols]       = useState(() => MEM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
   const [activeTab,     setActiveTab]     = useState('stats')
@@ -195,6 +210,82 @@ export default function DataPage() {
       XLSX.writeFile(wb, `كشف_الأسر_${campLabel}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
       showToast(`✅ تم تصدير ${data.length} أسرة`)
       setExportModal(false)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  // ── تصدير أفراد الأسر ─────────────────────────────
+  async function exportMembers() {
+    setLoading(true)
+    try {
+      const selected = memCols.filter(c=>c.order>0).sort((a,b)=>a.order-b.order)
+      if (!selected.length) return showToast('اختر عموداً على الأقل', true)
+      const data = await getFullData()
+      const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+      const rows = []
+      data.forEach(f => {
+        const mems = f.family_members || []
+        const allPersons = [
+          { _head:true, name:f.head_name, national_id:f.head_id, dob:f.head_dob, gender:f.head_gender, relation:'رب الأسرة', health:'' },
+          ...mems
+        ]
+        allPersons.forEach(m => {
+          const row = {}
+          selected.forEach(col => {
+            switch(col.key) {
+              case 'fam_name':    row[col.label] = f.head_name||''; break
+              case 'head_id':     row[col.label] = f.head_id||''; break
+              case 'phone1':      row[col.label] = f.phone1||''; break
+              case 'camp':        row[col.label] = f.camps?.name||campMap[f.camp_id]||''; break
+              case 'name':        row[col.label] = m.name||''; break
+              case 'national_id': row[col.label] = m.national_id||''; break
+              case 'relation':    row[col.label] = m.relation||''; break
+              case 'dob':         row[col.label] = m.dob||''; break
+              case 'age':         row[col.label] = calcAge(m.dob)??''; break
+              case 'gender':      row[col.label] = m.gender||''; break
+              case 'health':      row[col.label] = m.health||''; break
+            }
+          })
+          rows.push(row)
+        })
+      })
+      const XLSX = await getXLSX()
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws['!cols'] = selected.map(()=>({wch:20}))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'الأفراد')
+      const campLabel = filterCamp ? camps.find(c=>c.id===filterCamp)?.name||'' : 'كل_المخيمات'
+      XLSX.writeFile(wb, `كشف_الأفراد_${campLabel}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
+      showToast(`✅ تم تصدير ${rows.length} فرد`)
+      setExportModal(false)
+    } catch(e) { showToast('خطأ: '+e.message, true) }
+    finally { setLoading(false) }
+  }
+
+  // ── تصدير الأسر الناقصة ─────────────────────────────
+  async function exportMissing() {
+    setLoading(true)
+    try {
+      const data = await getFullData()
+      const XLSX = await getXLSX()
+      const missing = data.filter(f => !f.head_name||!f.head_id||!f.phone1||!f.camp_id)
+      const rows = missing.map((f,i) => ({
+        '#': i+1,
+        'اسم رب الأسرة': f.head_name||'—',
+        'رقم الهوية': f.head_id||'—',
+        'رقم الجوال': f.phone1||'—',
+        'المخيم': f.camps?.name||'—',
+        'النواقص': [
+          !f.head_name&&'الاسم', !f.head_id&&'الهوية',
+          !f.phone1&&'الجوال', !f.camp_id&&'المخيم'
+        ].filter(Boolean).join(' + ')
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws['!cols'] = Array(6).fill({wch:20})
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'الناقصة')
+      XLSX.writeFile(wb, `ناقصة_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
+      showToast(`✅ ${missing.length} أسرة ناقصة`)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }
@@ -592,31 +683,40 @@ export default function DataPage() {
       )}
 
       {/* Modal تصدير */}
-      <Modal open={exportModal} onClose={()=>setExportModal(false)} title="📊 اختيار أعمدة التصدير">
+      <Modal open={!!exportModal} onClose={()=>setExportModal(false)} title={exportModal==='mem'?'📊 كشف أفراد الأسر':'📊 كشف رباب الأسر'}>
         <div className="flex flex-col gap-3">
-          <div className="flex gap-2">
-            <button onClick={()=>setFamCols(famCols.map((c,i)=>({...c,order:i+1})))}
-              className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">تحديد الكل</button>
-            <button onClick={()=>setFamCols(FAM_COLS.map(c=>({...c,order:0})))}
-              className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">إلغاء الكل</button>
-          </div>
-          <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
-            {famCols.map((col,i)=>(
-              <div key={col.key} className="flex items-center gap-2 bg-surface2 border border-border rounded-xl px-3 py-2">
-                <input type="number" min="0" max="20" value={col.order||''} placeholder="—"
-                  onChange={e=>{
-                    const v=parseInt(e.target.value)||0
-                    setFamCols(prev=>prev.map((c,j)=>j===i?{...c,order:v}:c))
-                  }}
-                  className="w-12 bg-surface border border-border rounded-lg text-accent font-black text-center text-sm focus:outline-none py-1"/>
-                <span className="text-white text-xs flex-1">{col.label}</span>
+          {(() => {
+            const isMem = exportModal==='mem'
+            const cols = isMem ? memCols : famCols
+            const setCols = isMem ? setMemCols : setFamCols
+            const DEF = isMem ? MEM_COLS : FAM_COLS
+            const onExport = isMem ? exportMembers : exportFamilies
+            return (<>
+              <div className="flex gap-2">
+                <button onClick={()=>setCols(cols.map((c,i)=>({...c,order:i+1})))}
+                  className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">تحديد الكل</button>
+                <button onClick={()=>setCols(DEF.map(c=>({...c,order:0})))}
+                  className="text-[11px] px-3 py-1.5 rounded-lg border border-border text-muted">إلغاء الكل</button>
               </div>
-            ))}
-          </div>
-          <button onClick={exportFamilies} disabled={loading}
-            className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
-            {loading?'⏳ جاري التصدير...':'📥 تصدير Excel'}
-          </button>
+              <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+                {cols.map((col,i)=>(
+                  <div key={col.key} className="flex items-center gap-2 bg-surface2 border border-border rounded-xl px-3 py-2">
+                    <input type="number" min="0" max="20" value={col.order||''} placeholder="—"
+                      onChange={e=>{
+                        const v=parseInt(e.target.value)||0
+                        setCols(prev=>prev.map((c,j)=>j===i?{...c,order:v}:c))
+                      }}
+                      className="w-12 bg-surface border border-border rounded-lg text-accent font-black text-center text-sm focus:outline-none py-1"/>
+                    <span className="text-white text-xs flex-1">{col.label}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={onExport} disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-black text-bg bg-accent">
+                {loading?'⏳ جاري التصدير...':'📥 تصدير Excel'}
+              </button>
+            </>)
+          })()}
         </div>
       </Modal>
     </div>
