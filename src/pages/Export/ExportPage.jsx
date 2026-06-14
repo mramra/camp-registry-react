@@ -138,6 +138,8 @@ export default function ExportPage() {
   }
 
   // ── بناء الـ aoa مع البانر ──────────────────────────────────
+  // الترتيب: صف1 (مخيم) + صف2 (مندوب) + صف3 (رواسي) + بيانات
+  // بدون سطر فاصل
   function buildAoa(campInfo, colHeaders, dataRows, showBnr) {
     const aoa = []
     const empty = () => Array(colHeaders.length).fill('')
@@ -145,80 +147,77 @@ export default function ExportPage() {
       const coord = (campInfo.lat&&campInfo.lng)
         ? `${campInfo.lat}, ${campInfo.lng}`
         : (campInfo.address||'—')
-      const r1 = empty(); r1[0] = `🏕️  مخيم:  ${campInfo.name}`
-      const r2 = empty(); r2[0] = `👤 المندوب: ${campInfo.delegateName||'—'}   |   📞 ${campInfo.delegatePhone||'—'}   |   📍 ${coord}   |   📅 ${new Date().toLocaleDateString('ar-EG')}`
-      aoa.push(r1, r2, empty())       // بانر + فاصل
+      const r1 = empty()
+      r1[0] = `🏕️  مخيم:  ${campInfo.name}`
+      const r2 = empty()
+      r2[0] = `👤 ${campInfo.delegateName||'—'}   |   📞 ${campInfo.delegatePhone||'—'}   |   📍 ${coord}   |   📅 ${new Date().toLocaleDateString('ar-EG')}`
+      aoa.push(r1, r2)   // صفان فقط بلا فاصل
     }
-    aoa.push(colHeaders)              // رواسي الأعمدة
+    aoa.push(colHeaders)
     dataRows.forEach(r => aoa.push(r))
     return aoa
   }
 
-  // ── تطبيق التنسيق: دمج + ألوان متبادلة ─────────────────────
+  // ── تطبيق التنسيق: دمج + توسيط + ألوان متبادلة ─────────────
   function styleSheet(ws, colCount, showBnr, campInfo, totalDataRows) {
-    const hasBnr = showBnr && campInfo
-    const hdrRow = hasBnr ? 3 : 0    // صف رواسي الأعمدة (0-based)
-    const dataStart = hdrRow + 1      // أول صف بيانات
+    const hasBnr  = showBnr && campInfo
+    const hdrRow  = hasBnr ? 2 : 0   // صف رواسي الأعمدة
+    const dataStart = hdrRow + 1
 
-    // دمج البانر
     if (hasBnr) {
+      // دمج الخلايا كاملاً في الصفين
       ws['!merges'] = [
-        { s:{r:0,c:0}, e:{r:0,c:colCount-1} },  // صف اسم المخيم
-        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },  // صف التفاصيل
+        { s:{r:0,c:0}, e:{r:0,c:colCount-1} },
+        { s:{r:1,c:0}, e:{r:1,c:colCount-1} },
       ]
-      // تنسيق صف اسم المخيم
+      // صف 1 — اسم المخيم: ذهبي على كحلي، مُوسَّط
       const a0 = XLSX.utils.encode_cell({r:0,c:0})
       if (ws[a0]) ws[a0].s = {
-        fill:{fgColor:{rgb:'0A3060'}},
+        fill:{patternType:'solid',fgColor:{rgb:'0A3060'}},
         font:{bold:true,color:{rgb:'FFD700'},sz:16,name:'Arial'},
-        alignment:{horizontal:'center',vertical:'center',wrapText:false},
-        border:{bottom:{style:'medium',color:{rgb:'1A6AB0'}}}
+        alignment:{horizontal:'center',vertical:'center',readingOrder:2},
+        border:{bottom:{style:'thin',color:{rgb:'1A6AB0'}}}
       }
-      // تنسيق صف التفاصيل
+      // صف 2 — بيانات المندوب: أبيض على كحلي متوسط، مُوسَّط
       const a1 = XLSX.utils.encode_cell({r:1,c:0})
       if (ws[a1]) ws[a1].s = {
-        fill:{fgColor:{rgb:'1A4A8A'}},
-        font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
-        alignment:{horizontal:'center',vertical:'center',wrapText:false}
+        fill:{patternType:'solid',fgColor:{rgb:'1A4A8A'}},
+        font:{bold:false,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
+        alignment:{horizontal:'center',vertical:'center',readingOrder:2},
+        border:{bottom:{style:'medium',color:{rgb:'0A3060'}}}
       }
-      ws['!rows'] = ws['!rows']||[]
-      ws['!rows'][0] = {hpt:28}
-      ws['!rows'][1] = {hpt:20}
-      ws['!rows'][2] = {hpt:4}
+      ws['!rows'] = [{hpt:30},{hpt:18}]
     }
 
-    // تنسيق رواسي الأعمدة
+    // صف رواسي الأعمدة — كحلي غامق مع نص أبيض
     for (let col=0; col<colCount; col++) {
       const addr = XLSX.utils.encode_cell({r:hdrRow,c:col})
       if (ws[addr]) ws[addr].s = {
-        fill:{fgColor:{rgb:'1E3A5F'}},
+        fill:{patternType:'solid',fgColor:{rgb:'1E3A5F'}},
         font:{bold:true,color:{rgb:'FFFFFF'},sz:10,name:'Arial'},
-        alignment:{horizontal:'center',vertical:'center'},
+        alignment:{horizontal:'center',vertical:'center',readingOrder:2},
         border:{
-          bottom:{style:'medium',color:{rgb:'0A3060'}},
-          top:{style:'medium',color:{rgb:'0A3060'}}
+          top:{style:'thin',color:{rgb:'0A3060'}},
+          bottom:{style:'medium',color:{rgb:'0A3060'}}
         }
       }
     }
 
-    // ألوان متبادلة للصفوف
+    // ألوان متبادلة: أبيض / رمادي فاتح
     for (let row=dataStart; row<dataStart+totalDataRows; row++) {
-      const isEven = (row - dataStart) % 2 === 0
-      const bg = isEven ? 'FFFFFF' : 'EEF2F7'
+      const bg = (row-dataStart)%2===0 ? 'FFFFFF' : 'EEF2F7'
       for (let col=0; col<colCount; col++) {
         const addr = XLSX.utils.encode_cell({r:row,c:col})
-        if (ws[addr]) {
-          ws[addr].s = {
-            fill:{fgColor:{rgb:bg}},
-            font:{sz:10,name:'Arial'},
-            alignment:{horizontal:'right',vertical:'center'},
-            border:{bottom:{style:'thin',color:{rgb:'CCCCCC'}}}
-          }
+        if (ws[addr]) ws[addr].s = {
+          fill:{patternType:'solid',fgColor:{rgb:bg}},
+          font:{sz:10,name:'Arial'},
+          alignment:{horizontal:'right',vertical:'center',readingOrder:2},
+          border:{bottom:{style:'thin',color:{rgb:'DDDDDD'}}}
         }
       }
     }
 
-    ws['!freeze'] = {xSplit:0, ySplit:hdrRow+1}
+    ws['!freeze'] = {xSplit:0,ySplit:hdrRow+1}
     return ws
   }
 
