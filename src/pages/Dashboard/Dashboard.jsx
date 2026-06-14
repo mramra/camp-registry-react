@@ -43,19 +43,15 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useRxDB()
-  // تحميل عند أول sync فعلي (psSynced) أو عند psReady إذا عندنا بيانات قديمة
+  // 1) psReady → اقرأ من SQLite المحلي (بيانات الجلسة السابقة)
+  useEffect(() => {
+    if (psReady) loadStats()
+  }, [psReady])
+
+  // 2) psSynced → اقرأ بعد اكتمال المزامنة (أحدث بيانات)
   useEffect(() => {
     if (psSynced) loadStats()
   }, [psSynced])
-
-  // fallback: إذا ما جاء psSynced بعد 8 ثوانٍ — حاول من Supabase مباشرة
-  useEffect(() => {
-    if (!psReady) return
-    const timer = setTimeout(() => {
-      if (!psSynced) loadStats()
-    }, 8000)
-    return () => clearTimeout(timer)
-  }, [psReady])
 
   async function loadStats() {
     try {
