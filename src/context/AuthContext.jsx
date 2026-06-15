@@ -116,6 +116,12 @@ export function AuthProvider({ children }) {
       'انتهت مهلة الاتصال (20 ثانية)\n\nتحقق من اتصالك بالإنترنت وحاول مرة أخرى'
     )
     if (error) throw error
+
+    // ── مزامنة فورية في الخلفية (Supabase → Dexie) ──────────
+    import('../lib/syncAll').then(({ quickSync }) =>
+      quickSync().catch(e => console.warn('[login] sync:', e.message))
+    )
+
     return data
   }
 
