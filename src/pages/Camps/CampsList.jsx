@@ -40,6 +40,13 @@ export default function CampsList() {
 
   const { query, upsert, remove, bulkUpsert } = useRxDB()
   useEffect(() => { loadData() }, [])
+  // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
+  useEffect(() => {
+    const handler = () => loadData()
+    window.addEventListener('delta-sync', handler)
+    return () => window.removeEventListener('delta-sync', handler)
+  }, [])
+
   useEffect(() => { loadData() }, [])
   useEffect(() => { if (psReady)  loadData() }, [psReady])
   useEffect(() => { if (psSynced) loadData() }, [psSynced])
