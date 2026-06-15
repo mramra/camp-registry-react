@@ -143,6 +143,7 @@ export default function Analysis() {
 
   const { query } = useRxDB()
   useEffect(() => { loadStats() }, [filterCamp])
+  useEffect(() => { loadData() }, [])
   useEffect(() => { if (psReady)  loadStats() }, [psReady])
   useEffect(() => { if (psSynced) loadStats() }, [psSynced])
 
