@@ -40,6 +40,7 @@ export default function CampsList() {
 
   const { query, upsert, remove, bulkUpsert } = useRxDB()
   useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [])
   useEffect(() => { if (psReady)  loadData() }, [psReady])
   useEffect(() => { if (psSynced) loadData() }, [psSynced])
 
