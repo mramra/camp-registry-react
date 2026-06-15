@@ -212,55 +212,65 @@ function sortMembers(mems) {
 
 
 // ── مدخل التاريخ: يوم / شهر / سنة ─────────────────────
+function calcAgeFromDob(dob) {
+  if (!dob) return null
+  const b = new Date(dob), t = new Date()
+  let a = t.getFullYear() - b.getFullYear()
+  if (t.getMonth() < b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) a--
+  return a >= 0 && a < 120 ? a : null
+}
+
 function DateInput({ value, onChange, maxYear, minYear }) {
   const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
                   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const parts  = value ? value.split('-') : ['','','']
   const yr = parts[0] || '', mo = parts[1] || '', dy = parts[2] || ''
 
-  const curYear  = new Date().getFullYear()
-  const maxYr    = maxYear || curYear
-  const minYr    = minYear || 1900
+  const curYear     = new Date().getFullYear()
+  const maxYr       = maxYear || curYear
+  const minYr       = minYear || 1900
   const daysInMonth = mo && yr ? new Date(parseInt(yr), parseInt(mo), 0).getDate() : 31
+  const age         = calcAgeFromDob(value)
 
   function update(newYr, newMo, newDy) {
     if (!newYr && !newMo && !newDy) { onChange(''); return }
-    const y = newYr.padStart(4,'0').slice(-4)
-    const m = newMo.padStart(2,'0')
-    const d = newDy.padStart(2,'0')
+    const y = String(newYr).padStart(4,'0').slice(-4)
+    const m = String(newMo).padStart(2,'0')
+    const d = String(newDy).padStart(2,'0')
     if (newYr && newMo && newDy) onChange(`${y}-${m}-${d}`)
-    else if (newYr && newMo) onChange(`${y}-${m}-`)
     else onChange('')
   }
 
-  const INP = "bg-surface2 border border-border rounded-xl text-white text-sm focus:outline-none focus:border-accent text-center"
+  const SEL = "bg-surface2 border border-border rounded-xl text-white text-sm focus:outline-none focus:border-accent py-2.5 px-1 text-center"
 
   return (
-    <div className="flex gap-1.5 items-center" dir="rtl">
-      {/* يوم */}
-      <select value={dy} onChange={e=>update(yr,mo,e.target.value)}
-        className={`${INP} flex-1 py-2 px-1`}>
-        <option value="">يوم</option>
-        {Array.from({length:daysInMonth},(_,i)=>i+1).map(d=>(
-          <option key={d} value={String(d).padStart(2,'0')}>{d}</option>
-        ))}
-      </select>
-      {/* شهر */}
-      <select value={mo} onChange={e=>update(yr,e.target.value,dy)}
-        className={`${INP} flex-[1.5] py-2 px-1`}>
-        <option value="">شهر</option>
-        {MONTHS.map((m,i)=>(
-          <option key={i} value={String(i+1).padStart(2,'0')}>{m}</option>
-        ))}
-      </select>
-      {/* سنة */}
-      <select value={yr} onChange={e=>update(e.target.value,mo,dy)}
-        className={`${INP} flex-[1.5] py-2 px-1`}>
-        <option value="">سنة</option>
-        {Array.from({length:maxYr-minYr+1},(_,i)=>maxYr-i).map(y=>(
-          <option key={y} value={y}>{y}</option>
-        ))}
-      </select>
+    <div>
+      <div className="grid gap-1.5" style={{gridTemplateColumns:'1fr 2fr 2fr'}}>
+        {/* يوم */}
+        <select value={dy} onChange={e=>update(yr,mo,e.target.value)} className={SEL}>
+          <option value="">يوم</option>
+          {Array.from({length:daysInMonth},(_,i)=>i+1).map(d=>(
+            <option key={d} value={String(d).padStart(2,'0')}>{d}</option>
+          ))}
+        </select>
+        {/* شهر */}
+        <select value={mo} onChange={e=>update(yr,e.target.value,dy)} className={SEL}>
+          <option value="">الشهر</option>
+          {MONTHS.map((m,i)=>(
+            <option key={i} value={String(i+1).padStart(2,'0')}>{m}</option>
+          ))}
+        </select>
+        {/* سنة */}
+        <select value={yr} onChange={e=>update(e.target.value,mo,dy)} className={SEL}>
+          <option value="">السنة</option>
+          {Array.from({length:maxYr-minYr+1},(_,i)=>maxYr-i).map(y=>(
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+      {age !== null && (
+        <p className="text-accent text-[11px] mt-1 text-left">العمر: {age} سنة</p>
+      )}
     </div>
   )
 }
@@ -637,15 +647,7 @@ export default function FamilyForm() {
 
             {/* تاريخ الميلاد */}
             <div>
-              <label className="text-xs font-bold text-muted block mb-1.5">
-                تاريخ الميلاد
-                {form.head_dob && (() => {
-                  const b=new Date(form.head_dob),t=new Date()
-                  let a=t.getFullYear()-b.getFullYear()
-                  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--
-                  return a>=0&&a<120 ? <span className="text-accent mr-2">({a} سنة)</span> : null
-                })()}
-              </label>
+              <label className="text-xs font-bold text-muted block mb-1.5">تاريخ الميلاد</label>
               <DateInput
                 value={form.head_dob || ''}
                 onChange={v => setF('head_dob', v)}
