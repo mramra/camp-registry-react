@@ -148,44 +148,40 @@ export default function DataPage() {
 
   const loadMonitor = useCallback(async () => {
     setMonLoading(true)
-    try {
-      // جلب كل البيانات معاً
-      const [infraRes, authRes, famRes, memRes, campRes, movRes, distRes, distFamRes] =
-        await Promise.all([
-          supabase.rpc('get_infra_stats').catch(() => ({ data: null })),
-          supabase.from('org_members').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
-          supabase.from('families').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
-          supabase.from('family_members').select('*',{count:'exact',head:true}),
-          supabase.from('camps').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
-          supabase.from('family_movements').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
-          supabase.from('dist_rounds').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
-          supabase.from('camp_dist_families').select('*',{count:'exact',head:true}),
-        ])
+    // كل query مستقلة — فشل واحد لا يوقف الباقين
+    const safe = async (fn) => { try { return await fn() } catch { return {} } }
 
-      const infra    = infraRes.data
-      const dbMB     = Number(infra?.db_size_mb || 0)
-      const authUsers = authRes.count || 0
-      const totalRows = (famRes.count||0)+(memRes.count||0)+(campRes.count||0)+
-                        (movRes.count||0)+(distRes.count||0)+(distFamRes.count||0)
+    const [infraRes, famRes, memRes, campRes, movRes, distRes, distFamRes] =
+      await Promise.all([
+        safe(() => supabase.rpc('get_infra_stats')),
+        safe(() => supabase.from('families').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
+        safe(() => supabase.from('family_members').select('*',{count:'exact',head:true})),
+        safe(() => supabase.from('camps').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
+        safe(() => supabase.from('family_movements').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
+        safe(() => supabase.from('dist_rounds').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
+        safe(() => supabase.from('camp_dist_families').select('*',{count:'exact',head:true})),
+      ])
 
-      setMonitor({
-        dbMB, dbPct: Math.round(dbMB/500*100),
-        authUsers, authPct: Math.round(authUsers/50000*100),
-        totalRows,
-        // موارد البنية التحتية
-        connTotal:    Number(infra?.conn_total || 0),
-        connActive:   Number(infra?.conn_active || 0),
-        connIdle:     Number(infra?.conn_idle || 0),
-        connMax:      Number(infra?.conn_max || 60),
-        connPct:      Math.round(Number(infra?.conn_total||0)/Number(infra?.conn_max||60)*100),
-        cacheHit:     Number(infra?.cache_hit_ratio || 0),
-        tables:       infra?.tables || [],
-        lastChecked:  new Date().toLocaleTimeString('ar'),
-        hasInfra:     !!infra,
-      })
-    } catch(e) {
-      showToast('خطأ: '+e.message, true)
-    } finally { setMonLoading(false) }
+    const infra   = infraRes?.data || null
+    const dbMB    = Number(infra?.db_size_mb || 0)
+    const totalRows = (famRes?.count||0)+(memRes?.count||0)+(campRes?.count||0)+
+                      (movRes?.count||0)+(distRes?.count||0)+(distFamRes?.count||0)
+
+    setMonitor({
+      dbMB,    dbPct:    Math.round(dbMB/500*100),
+      totalRows,
+      famCount: famRes?.count||0, memCount: memRes?.count||0, campCount: campRes?.count||0,
+      connTotal:  Number(infra?.conn_total||0),
+      connActive: Number(infra?.conn_active||0),
+      connIdle:   Number(infra?.conn_idle||0),
+      connMax:    Number(infra?.conn_max||60),
+      connPct:    infra ? Math.round(Number(infra.conn_total||0)/Number(infra.conn_max||60)*100) : 0,
+      cacheHit:   Number(infra?.cache_hit_ratio||0),
+      tables:     infra?.tables||[],
+      lastChecked:new Date().toLocaleTimeString('ar'),
+      hasInfra:   !!infra,
+    })
+    setMonLoading(false)
   }, [])
 
   const handleRefresh = useCallback(async () => {
