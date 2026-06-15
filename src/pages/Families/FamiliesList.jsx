@@ -142,6 +142,13 @@ export default function FamiliesList() {
   useEffect(() => {
     loadLocal().then(() => syncBackground())
   }, [])
+  // Delta Sync — يحدّث قائمة الأسر عند وصول تغييرات
+  useEffect(() => {
+    const handler = () => loadLocal()
+    window.addEventListener('delta-sync', handler)
+    return () => window.removeEventListener('delta-sync', handler)
+  }, [])
+
 
   // 2) psReady → بيانات الجلسة السابقة متاحة في PowerSync SQLite
   useEffect(() => {
