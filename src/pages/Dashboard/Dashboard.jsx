@@ -43,15 +43,12 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useRxDB()
-  // 1) psReady → اقرأ من SQLite المحلي (بيانات الجلسة السابقة)
-  useEffect(() => {
-    if (psReady) loadStats()
-  }, [psReady])
+  // تحميل فوري عند فتح الصفحة
+  useEffect(() => { loadStats() }, [])
 
-  // 2) psSynced → اقرأ بعد اكتمال المزامنة (أحدث بيانات)
-  useEffect(() => {
-    if (psSynced) loadStats()
-  }, [psSynced])
+  // تحديث عند تغيّر حالة المزامنة
+  useEffect(() => { if (psReady)  loadStats() }, [psReady])
+  useEffect(() => { if (psSynced) loadStats() }, [psSynced])
 
   async function loadStats() {
     try {
