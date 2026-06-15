@@ -1,0 +1,23 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # كل يومين الساعة 6 صباحاً UTC
+    - cron: '0 6 */2 * *'
+  workflow_dispatch:  # يدوي عند الحاجة
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        run: |
+          echo "🔔 Pinging Supabase to prevent inactivity pause..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: sb_publishable_d6q8hoDDcohuZFHk3jxI7g_IBWWCmNu" \
+            -H "Authorization: Bearer sb_publishable_d6q8hoDDcohuZFHk3jxI7g_IBWWCmNu" \
+            "https://ojclpkenecicujkqhhlu.supabase.co/rest/v1/camps?select=id&limit=1")
+          echo "✅ Supabase responded with status: $STATUS"
+          if [ "$STATUS" -ge 400 ]; then
+            echo "⚠️ Warning: Supabase may be paused (status $STATUS)"
+          fi
