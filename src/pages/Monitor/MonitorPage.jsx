@@ -4,186 +4,220 @@ import { localDB } from '../../lib/db'
 import { useApp } from '../../context/AppContext'
 import { quickSync } from '../../lib/syncAll'
 import PageHeader from '../../components/ui/PageHeader'
-import Card from '../../components/ui/Card'
 
-const LIMITS = {
-  db_mb:      { max: 500,    label: '💾 قاعدة البيانات',  unit: 'MB'   },
-  auth_users: { max: 50000,  label: '👥 مستخدمون/شهر',   unit: 'مستخدم' },
-  egress_gb:  { max: 5,      label: '🌐 نقل البيانات',   unit: 'GB'   },
-  storage_gb: { max: 1,      label: '📁 تخزين الملفات',  unit: 'GB'   },
-}
-
-function Bar({ pct, label, current, max, unit, warn=75, danger=90 }) {
-  const color = pct>=danger ? 'bg-red' : pct>=warn ? 'bg-accent' : 'bg-green'
-  const text  = pct>=danger ? 'text-red' : pct>=warn ? 'text-accent' : 'text-green'
+// ── شريط تقدم مع لون ديناميكي ────────────────────────────
+function Bar({ label, value, max, unit='', warn=70, danger=90, note='' }) {
+  const pct   = max ? Math.round(Math.min(100, value/max*100)) : 0
+  const color = pct>=danger ? '#EF4444' : pct>=warn ? '#F59E0B' : '#10B981'
   return (
     <div className="mb-3">
       <div className="flex justify-between text-xs mb-1">
         <span className="text-muted">{label}</span>
-        <span className={`font-black ${text}`}>{current} / {max} {unit} ({pct}%)</span>
+        <span className="font-black" style={{color}}>
+          {value}{unit}{max ? ` / ${max}${unit} (${pct}%)` : ''}
+        </span>
       </div>
-      <div className="w-full bg-surface2 rounded-full h-2.5">
-        <div className={`h-2.5 rounded-full transition-all ${color}`}
-          style={{width:`${Math.min(100,pct)}%`}}/>
+      <div className="w-full bg-surface2 rounded-full h-2.5 overflow-hidden">
+        <div className="h-2.5 rounded-full transition-all duration-500"
+          style={{width:`${pct}%`, background:color}}/>
       </div>
-      {pct>=danger && <p className="text-red text-[10px] mt-0.5">⚠️ قارب الحد الأقصى!</p>}
-      {pct>=warn && pct<danger && <p className="text-accent text-[10px] mt-0.5">⚡ تجاوز 75%</p>}
+      {note && <p className="text-[10px] mt-0.5" style={{color}}>{note}</p>}
+    </div>
+  )
+}
+
+// ── بطاقة مقياس دائري صغير ────────────────────────────────
+function Gauge({ label, value, max, unit='' }) {
+  const pct   = max ? Math.min(100, Math.round(value/max*100)) : value
+  const color = pct>=90?'#EF4444':pct>=70?'#F59E0B':'#10B981'
+  return (
+    <div className="flex flex-col items-center bg-surface border border-border rounded-xl p-3">
+      <div className="relative w-14 h-14 mb-1">
+        <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1e293b" strokeWidth="3"/>
+          <circle cx="18" cy="18" r="15.9" fill="none"
+            stroke={color} strokeWidth="3"
+            strokeDasharray={`${pct} ${100-pct}`}
+            strokeDashoffset="0" strokeLinecap="round"/>
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-white font-black text-xs">{pct}%</span>
+        </div>
+      </div>
+      <span className="text-muted text-[10px] text-center">{label}</span>
+      <span className="font-bold text-xs" style={{color}}>{value}{unit}</span>
     </div>
   )
 }
 
 export default function MonitorPage() {
   const { online, showToast } = useApp()
-  const [data,      setData]      = useState(null)
+  const [infra,     setInfra]     = useState(null)
+  const [counts,    setCounts]    = useState(null)
+  const [dexie,     setDexie]     = useState(null)
   const [loading,   setLoading]   = useState(false)
   const [syncing,   setSyncing]   = useState(false)
-  const [syncDone,  setSyncDone]  = useState(false)
-  const [dexieRows, setDexieRows] = useState(null)
+  const [syncInfo,  setSyncInfo]  = useState(null)
 
-  const loadMonitor = useCallback(async () => {
-    if (!online) return showToast('يحتاج اتصال بالإنترنت', true)
+  const loadAll = useCallback(async () => {
+    if (!online) return showToast('يحتاج اتصال', true)
     setLoading(true)
     try {
-      // حجم DB
-      const { data: dbStats } = await supabase.rpc('get_db_stats').catch(() => ({ data: null }))
+      // ── جلب إحصائيات البنية التحتية
+      const { data: infraData, error: ie } = await supabase.rpc('get_infra_stats')
+      if (!ie && infraData) setInfra(infraData)
 
-      // عدد السجلات
+      // ── عدد السجلات من كل جدول
       const tables = ['families','family_members','camps','org_members',
                       'family_movements','dist_rounds','camp_distributions','camp_dist_families']
-      const counts = {}
+      const c = {}
       await Promise.all(tables.map(async t => {
-        try {
-          let q = supabase.from(t).select('*',{count:'exact',head:true})
-          if (['families','camps','org_members','family_movements','dist_rounds','camp_distributions'].includes(t))
-            q = q.eq('org_id', ORG_ID)
-          const { count } = await q
-          counts[t] = count ?? 0
-        } catch { counts[t] = 0 }
+        let q = supabase.from(t).select('*',{count:'exact',head:true})
+        if (['families','camps','org_members','family_movements','dist_rounds','camp_distributions'].includes(t))
+          q = q.eq('org_id', ORG_ID)
+        const { count } = await q.catch(()=>({count:0}))
+        c[t] = count ?? 0
       }))
+      setCounts(c)
 
-      const totalRows = Object.values(counts).reduce((s,v)=>s+v,0)
-      const dbMB = dbStats?.db_size_mb ?? 0
-
-      // Dexie local rows
-      const dRows = {}
-      for (const t of ['families','family_members','camps']) {
-        dRows[t] = (await localDB[t]?.count?.()) ?? 0
+      // ── Dexie local
+      const d = {}
+      for (const t of ['families','family_members','camps','org_members']) {
+        d[t] = (await localDB[t]?.count?.().catch(()=>0)) ?? 0
       }
-      setDexieRows(dRows)
+      setDexie(d)
 
-      setData({
-        dbMB, dbPct: Math.round(dbMB/500*100),
-        authUsers: counts.org_members, authPct: Math.round(counts.org_members/50000*100),
-        totalRows, counts,
-        lastChecked: new Date().toLocaleTimeString('ar'),
-      })
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }, [online])
 
   async function doSync() {
     if (!online) return showToast('يحتاج اتصال', true)
-    setSyncing(true); setSyncDone(false)
+    setSyncing(true)
+    const start = Date.now()
     try {
       await quickSync()
-      setSyncDone(true)
-      showToast('✅ تمت المزامنة بنجاح')
-      // تحديث عداد Dexie
-      const dRows = {}
-      for (const t of ['families','family_members','camps']) {
-        dRows[t] = (await localDB[t]?.count?.()) ?? 0
-      }
-      setDexieRows(dRows)
+      const elapsed = ((Date.now()-start)/1000).toFixed(1)
+      setSyncInfo({ time: elapsed, at: new Date().toLocaleTimeString('ar') })
+      showToast('✅ مزامنة مكتملة')
+      // تحديث Dexie
+      const d = {}
+      for (const t of ['families','family_members','camps','org_members'])
+        d[t] = (await localDB[t]?.count?.().catch(()=>0)) ?? 0
+      setDexie(d)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setSyncing(false) }
   }
 
+  const dbMB   = infra?.db_size_mb ?? 0
+  const dbPct  = Math.round(dbMB/500*100)
+  const connTotal = infra?.conn_total ?? 0
+  const connMax   = infra?.conn_max ?? 60
+  const connPct   = Math.round(connTotal/connMax*100)
+  const cacheHit  = infra?.cache_hit_ratio ?? 0
+  const totalRows = counts ? Object.values(counts).reduce((s,v)=>s+v,0) : 0
+
   return (
     <div>
-      <PageHeader icon="🔭" title="مراقبة الموارد" subtitle="Supabase Free Tier"/>
+      <PageHeader icon="🔭" title="مراقبة الموارد" subtitle="Supabase NANO"/>
 
-      {/* حدود الخطة */}
-      <Card title="🆓 حدود الخطة المجانية" icon="">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-          {[
-            ['💾 قاعدة البيانات','500 MB'],
-            ['👥 مستخدمين/شهر','50,000'],
-            ['🌐 نقل بيانات','5 GB/شهر'],
-            ['📁 تخزين ملفات','1 GB'],
-            ['🏗️ مشاريع نشطة','2'],
-            ['⏸️ إيقاف تلقائي','7 أيام بلا نشاط'],
-          ].map(([l,v])=>(
-            <div key={l} className="flex justify-between py-1 border-b border-border/20">
-              <span className="text-muted">{l}</span>
-              <span className="text-white font-bold">{v}</span>
+      {/* ── زر الفحص ───────────────────────── */}
+      <button onClick={loadAll} disabled={loading||!online}
+        className="w-full mb-4 py-3 rounded-xl text-sm font-black text-bg bg-accent disabled:opacity-50 active:scale-95">
+        {loading ? '⏳ جاري الفحص...' : '🔭 فحص الموارد الآن'}
+      </button>
+
+      {/* ── مقاييس دائرية (مثل Supabase Dashboard) ─── */}
+      {infra && (
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <Gauge label="قاعدة البيانات" value={dbMB} max={500} unit=" MB"/>
+          <Gauge label="الاتصالات"       value={connTotal} max={connMax}/>
+          <Gauge label="Cache Hit"        value={cacheHit} unit="%"/>
+        </div>
+      )}
+
+      {/* ── شرائط تفصيلية ───────────────────── */}
+      {infra && (
+        <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+          <p className="text-accent text-xs font-black mb-3">📊 موارد Supabase NANO</p>
+
+          <Bar label="💾 قاعدة البيانات"
+            value={dbMB} max={500} unit=" MB"
+            note={dbPct>=80?'⚠️ قارب الحد! فكر في تنظيف البيانات القديمة':''}/>
+
+          <Bar label="🔌 الاتصالات النشطة"
+            value={connTotal} max={connMax}
+            note={connPct>=80?'⚠️ قارب الحد الأقصى للاتصالات!':''}/>
+
+          <Bar label="⚡ Cache Hit Ratio" value={cacheHit} max={100} unit="%"
+            warn={0} danger={0}
+            note={cacheHit<90?'نسبة جيدة إذا فوق 90%':'✅ أداء ممتاز'}/>
+
+          <div className="flex justify-between text-xs mt-3 pt-3 border-t border-border/30">
+            <span className="text-muted">🔵 اتصالات نشطة</span>
+            <span className="text-green font-bold">{infra.conn_active}</span>
+          </div>
+          <div className="flex justify-between text-xs mt-1.5">
+            <span className="text-muted">⚪ اتصالات خاملة</span>
+            <span className="text-muted font-bold">{infra.conn_idle}</span>
+          </div>
+          <div className="flex justify-between text-xs mt-1.5">
+            <span className="text-muted">📊 إجمالي الصفوف</span>
+            <span className="text-white font-bold">{totalRows.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── تفصيل الجداول ───────────────────── */}
+      {infra?.tables && (
+        <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+          <p className="text-accent text-xs font-black mb-3">🗂️ حجم الجداول</p>
+          {infra.tables.slice(0,8).map(t=>(
+            <div key={t.name} className="flex justify-between items-center py-1.5 border-b border-border/20 last:border-0">
+              <span className="text-muted text-xs">{t.name}</span>
+              <div className="text-right">
+                <span className="text-white text-xs font-bold">{t.size_mb} MB</span>
+                <span className="text-muted text-[10px] mr-2">{Number(t.rows||0).toLocaleString()} صف</span>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-2 bg-green/10 border border-green/30 rounded-xl px-3 py-2">
-          <p className="text-green text-[11px] font-bold">✅ Keep-Alive مفعّل</p>
-          <p className="text-muted text-[10px]">GitHub Actions يُوقظ Supabase كل 48 ساعة</p>
-        </div>
-      </Card>
+      )}
 
-      {/* الاستخدام الحالي */}
-      <Card title="📊 الاستخدام الحالي" icon="">
-        {data ? (
-          <>
-            <Bar label="💾 قاعدة البيانات"
-              pct={data.dbPct} current={data.dbMB} max={500} unit="MB"/>
-            <Bar label="👥 مستخدمو النظام"
-              pct={data.authPct} current={data.authUsers} max={50000} unit="مستخدم"/>
-
-            <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-border/30">
-              <p className="text-muted text-[10px] mb-1">تفصيل السجلات ({data.totalRows} إجمالي):</p>
-              {[
-                ['👨‍👩‍👧 الأسر',          data.counts.families],
-                ['👤 أفراد الأسر',    data.counts.family_members],
-                ['🏕️ المخيمات',        data.counts.camps],
-                ['🔄 الحركات',        data.counts.family_movements],
-                ['📦 جولات التوزيع', data.counts.dist_rounds],
-                ['✅ استلام التوزيع', data.counts.camp_dist_families],
-              ].map(([l,v])=>(
-                <div key={l} className="flex justify-between text-xs">
-                  <span className="text-muted">{l}</span>
-                  <span className="text-white font-bold">{v?.toLocaleString()??0}</span>
+      {/* ── عداد Supabase vs محلي ──────────── */}
+      {counts && dexie && (
+        <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+          <p className="text-accent text-xs font-black mb-3">⚖️ Supabase vs محلي (Dexie)</p>
+          {['families','family_members','camps','org_members'].map(t=>{
+            const sup = counts[t] ?? 0
+            const loc = dexie[t] ?? 0
+            const diff = sup - loc
+            return (
+              <div key={t} className="flex justify-between items-center py-1.5 border-b border-border/20 last:border-0">
+                <span className="text-muted text-xs">
+                  {t==='families'?'👨‍👩‍👧 أسر':t==='family_members'?'👤 أفراد':t==='camps'?'🏕️ مخيمات':'👥 مستخدمون'}
+                </span>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-blue">{sup} ☁️</span>
+                  <span className="text-muted">{loc} 💾</span>
+                  {diff!==0&&<span className={diff>0?'text-accent':'text-green'}>{diff>0?`+${diff}`:`${diff}`}</span>}
                 </div>
-              ))}
-            </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
-            <p className="text-muted text-[10px] text-center mt-3">
-              آخر فحص: {data.lastChecked}
-            </p>
-          </>
-        ) : (
-          <p className="text-muted text-xs text-center py-4">
-            اضغط "فحص الآن" لعرض الاستخدام الحالي
-          </p>
-        )}
-        <button onClick={loadMonitor} disabled={loading||!online}
-          className="w-full mt-3 py-2.5 rounded-xl text-sm font-black text-bg bg-accent disabled:opacity-50">
-          {loading ? '⏳ جاري الفحص...' : '🔭 فحص الآن'}
-        </button>
-      </Card>
-
-      {/* المزامنة اليدوية */}
-      <Card title="🔄 مزامنة البيانات المحلية" icon="">
-        <p className="text-muted text-xs mb-3">
-          تنزيل كل البيانات من Supabase → حفظها محلياً (Dexie) للعمل أوف لاين
+      {/* ── مزامنة ──────────────────────────── */}
+      <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+        <p className="text-accent text-xs font-black mb-1">🔄 مزامنة يدوية</p>
+        <p className="text-muted text-[11px] mb-3">
+          Supabase → Dexie — تلقائياً عند تسجيل الدخول فقط
         </p>
-        {dexieRows && (
-          <div className="flex gap-3 mb-3 text-xs">
-            <span className="bg-surface2 px-2 py-1 rounded-lg text-muted">
-              👨‍👩‍👧 {dexieRows.families} أسرة محلياً
-            </span>
-            <span className="bg-surface2 px-2 py-1 rounded-lg text-muted">
-              👤 {dexieRows.family_members} فرد
-            </span>
-          </div>
-        )}
-        {syncDone && (
+        {syncInfo && (
           <div className="bg-green/10 border border-green/30 rounded-xl px-3 py-2 mb-3">
-            <p className="text-green text-xs font-bold">✅ تمت المزامنة — البيانات محدّثة محلياً</p>
+            <p className="text-green text-[11px] font-bold">✅ مزامنة مكتملة في {syncInfo.time}s</p>
+            <p className="text-muted text-[10px]">آخر تحديث: {syncInfo.at}</p>
           </div>
         )}
         <button onClick={doSync} disabled={syncing||!online}
@@ -191,21 +225,30 @@ export default function MonitorPage() {
           style={{background:'rgba(245,158,11,0.08)'}}>
           {syncing ? '⏳ جاري التنزيل...' : '📥 مزامنة الآن'}
         </button>
-        <p className="text-muted text-[10px] text-center mt-2">
-          المزامنة التلقائية تحدث عند تسجيل الدخول فقط
-        </p>
-      </Card>
+      </div>
 
-      {/* نصائح */}
-      <Card title="💡 نصائح لتجنب التوقف" icon="">
-        <div className="flex flex-col gap-1.5 text-[11px] text-muted">
-          <p>✅ Keep-Alive يعمل كل 48 ساعة تلقائياً</p>
-          <p>✅ مزامنة تلقائية عند تسجيل الدخول فقط (لا streaming دائم)</p>
-          <p>⚡ عند تجاوز 80% من DB: احذف السجلات القديمة</p>
-          <p>⚡ عند تجاوز 90%: ترقية لـ Pro ($25/شهر) ضرورة</p>
-          <p>🔴 إذا ظهرت "Exhausting resources": توقف PowerSync فعّال</p>
+      {/* ── حدود الخطة المجانية ─────────────── */}
+      <div className="bg-surface border border-border rounded-xl p-4 mb-3">
+        <p className="text-accent text-xs font-black mb-3">🆓 حدود Supabase المجانية</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+          {[['💾 DB','500 MB'],['🌐 Egress','5 GB/شهر'],['👥 MAU','50,000'],
+            ['📁 Storage','1 GB'],['🔌 Connections','60'],['⏸️ Pause','7 أيام بلا نشاط']
+          ].map(([l,v])=>(
+            <div key={l} className="flex justify-between py-1 border-b border-border/20">
+              <span className="text-muted">{l}</span><span className="text-white font-bold">{v}</span>
+            </div>
+          ))}
         </div>
-      </Card>
+        <div className="mt-2 bg-green/10 border border-green/30 rounded-xl px-3 py-1.5">
+          <p className="text-green text-[11px] font-bold">✅ Keep-Alive: كل 48 ساعة تلقائياً</p>
+        </div>
+      </div>
+
+      {!infra && !loading && (
+        <p className="text-muted text-xs text-center py-4">
+          اضغط "فحص الموارد" لعرض البيانات
+        </p>
+      )}
     </div>
   )
 }
