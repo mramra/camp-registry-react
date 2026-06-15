@@ -45,6 +45,13 @@ export default function Dashboard() {
   const { query, bulkUpsert } = useRxDB()
   // تحميل فوري عند فتح الصفحة
   useEffect(() => { loadStats() }, [])
+  // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
+  useEffect(() => {
+    const handler = () => loadStats()
+    window.addEventListener('delta-sync', handler)
+    return () => window.removeEventListener('delta-sync', handler)
+  }, [])
+
 
   // تحديث عند تغيّر حالة المزامنة
   useEffect(() => { if (psReady)  loadStats() }, [psReady])
