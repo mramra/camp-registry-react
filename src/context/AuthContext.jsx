@@ -4,65 +4,61 @@ import { localDB } from '../lib/db'
 
 const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
+const SUPA_URL    = 'https://ojclpkenecicujkqhhlu.supabase.co'
+
+// وظيفة مساعدة: أي promise مع timeout
+function withTimeout(promise, ms, msg) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))
+  ])
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser]             = useState(null)
-  const [profile, setProfile]       = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [mustChange, setMustChange] = useState(false)
-  const [previewAs, setPreviewAs]   = useState(null)
+  const [user,      setUser]      = useState(null)
+  const [profile,   setProfile]   = useState(null)
+  const [loading,   setLoading]   = useState(true)
+  const [mustChange,setMustChange]= useState(false)
+  const [previewAs, setPreviewAs] = useState(null)
 
-  useEffect(() => {
-    initAuth()
-  }, [])
+  useEffect(() => { initAuth() }, [])
 
   async function initAuth() {
-    // ── أولاً: تحقق من الجلسة المحلية فوراً ──
+    // ① استخدم الكاش فوراً
     try {
       const cached = localStorage.getItem(PROFILE_KEY)
       if (cached) {
-        const p = JSON.parse(cached)
-        setProfile(p)
-        setLoading(false)  // أظهر التطبيق فوراً من الكاش
+        setProfile(JSON.parse(cached))
+        setLoading(false)
       }
     } catch {}
 
-    // ── ثانياً: getSession مع timeout ──
+    // ② تحقق من الجلسة مع timeout
     try {
-      const sessionPromise = supabase.auth.getSession()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 5000)
+      const { data: { session } } = await withTimeout(
+        supabase.auth.getSession(),
+        6000, 'timeout'
       )
-      const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise])
-
-      if (session?.user) {
-        setUser(session.user)
-        await fetchProfile(session.user.id)
-      } else {
-        // لا جلسة → امسح الكاش وأظهر Login
-        localStorage.removeItem(PROFILE_KEY)
-        setProfile(null)
-        setLoading(false)
-      }
-    } catch (err) {
-      // timeout أو خطأ شبكة → استخدم الكاش إذا موجود
-      const cached = localStorage.getItem(PROFILE_KEY)
-      if (!cached) {
-        setProfile(null)
-        setLoading(false)
-      }
-      // إذا كاش موجود → loading=false تم أعلاه، التطبيق يعمل أوف لاين
-      console.warn('[auth] offline mode:', err.message)
-    }
-
-    // ── ثالثاً: استمع لتغييرات المصادقة ──
-    supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
       } else {
-        setUser(null)
+        localStorage.removeItem(PROFILE_KEY)
         setProfile(null)
+        setLoading(false)
+      }
+    } catch {
+      // timeout أو أوف لاين — استخدم الكاش
+      if (!localStorage.getItem(PROFILE_KEY)) setLoading(false)
+    }
+
+    // ③ مراقبة تغييرات الجلسة
+    supabase.auth.onAuthStateChange((_ev, session) => {
+      if (session?.user) {
+        setUser(session.user)
+        fetchProfile(session.user.id)
+      } else {
+        setUser(null); setProfile(null)
         localStorage.removeItem(PROFILE_KEY)
         setLoading(false)
       }
@@ -70,58 +66,64 @@ export function AuthProvider({ children }) {
   }
 
   async function fetchProfile(userId) {
+    // ① Dexie أولاً (فوري)
     try {
-      // ① Dexie أولاً
-      const localMembers = await localDB.org_members
+      const local = await localDB.org_members
         .filter(m => m.user_id === userId && m.org_id === ORG_ID)
         .toArray().catch(() => [])
-      if (localMembers.length) {
-        const p = localMembers[0]
-        setProfile(p)
-        localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
+      if (local.length) {
+        setProfile(local[0])
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(local[0]))
         setLoading(false)
       }
+    } catch {}
 
-      // ② Supabase في الخلفية
-      if (!navigator.onLine) return
-      const { data: members, error } = await supabase
-        .from('org_members')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('org_id', ORG_ID)
-        .limit(1)
-
-      const data = members?.[0]
-      if (!error && data) {
-        setProfile(data)
-        localStorage.setItem(PROFILE_KEY, JSON.stringify(data))
-        try { await localDB.org_members.put(data) } catch {}
+    // ② Supabase في الخلفية مع timeout
+    if (!navigator.onLine) { setLoading(false); return }
+    try {
+      const { data: members, error } = await withTimeout(
+        supabase.from('org_members').select('*')
+          .eq('user_id', userId).eq('org_id', ORG_ID).limit(1),
+        10000, 'profile_timeout'
+      )
+      const p = members?.[0]
+      if (!error && p) {
+        setProfile(p)
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
+        try { await localDB.org_members.put(p) } catch {}
         const { data: meta } = await supabase.auth.getUser()
-        const userMeta = meta?.user?.user_metadata || {}
-        setMustChange(!!userMeta.must_change_pass)
-      } else if (error) {
-        console.warn('[fetchProfile] error:', error.message)
+        setMustChange(!!(meta?.user?.user_metadata?.must_change_pass))
       }
-    } catch (err) {
-      console.warn('[fetchProfile]', err.message)
-    } finally {
-      setLoading(false)
-    }
+    } catch {}
+    setLoading(false)
   }
 
   async function signIn(nationalId, password) {
     const email = `${nationalId}@c.co`
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+    // أيقظ Supabase أولاً (ping خفيف) 
+    try {
+      await withTimeout(
+        fetch(`${SUPA_URL}/auth/v1/health`),
+        3000, 'ping_timeout'
+      )
+    } catch {}
+
+    // تسجيل الدخول مع timeout 20 ثانية
+    const { data, error } = await withTimeout(
+      supabase.auth.signInWithPassword({ email, password }),
+      20000,
+      'انتهت مهلة الاتصال (20 ثانية)\n\nتحقق من اتصالك بالإنترنت وحاول مرة أخرى'
+    )
     if (error) throw error
     return data
   }
 
   async function signOut() {
     localStorage.removeItem(PROFILE_KEY)
-    await supabase.auth.signOut()
+    try { await supabase.auth.signOut() } catch {}
   }
 
-  // ======== صلاحيات ========
   const effectiveProfile = previewAs || profile
   const role = effectiveProfile?.role
   const isOwner        = role === 'platform_owner'
@@ -136,12 +138,8 @@ export function AuthProvider({ children }) {
   const canImport = isOwner || isSuperAdmin || effectiveProfile?.can_import
 
   const value = {
-    user,
-    profile: effectiveProfile,
-    effectiveProfile,
-    realProfile: profile,
-    loading, mustChange, setMustChange,
-    previewAs, setPreviewAs,
+    user, profile: effectiveProfile, effectiveProfile, realProfile: profile,
+    loading, mustChange, setMustChange, previewAs, setPreviewAs,
     isPreviewMode: !!previewAs,
     role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
     canWrite, canEdit, canDelete, canExport, canImport,
