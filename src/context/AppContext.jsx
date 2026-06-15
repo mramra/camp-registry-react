@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { processSyncQueue } from '../lib/sync'
-import { quickSync } from '../lib/syncAll'
 import { useSyncStatus } from './PowerSyncContext'
 
 const AppContext = createContext(null)
@@ -9,7 +8,6 @@ export function AppProvider({ children }) {
   const [online, setOnline] = useState(navigator.onLine)
   const [toast,  setToast]  = useState(null)
   const { psReady, psSynced, psStatus } = useSyncStatus()
-  const syncedOnceRef = useRef(false)
 
   // مزامنة Dexie عند أول اتصال بعد تسجيل الدخول (مرة واحدة لكل جلسة)
   useEffect(() => {
