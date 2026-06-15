@@ -696,6 +696,41 @@ export default function DataPage() {
             </div>
           </div>
 
+          {/* موارد البنية التحتية */}
+          {monitor?.hasInfra && (
+            <div className="bg-surface border border-border rounded-xl p-3">
+              <p className="text-accent text-xs font-black mb-3">⚙️ موارد قاعدة البيانات</p>
+              {[
+                {label:'💾 حجم DB',    v:monitor.dbMB,     max:500,           unit:'MB', pct:monitor.dbPct,   rev:false},
+                {label:'🔌 الاتصالات', v:monitor.connTotal,max:monitor.connMax,unit:'',   pct:monitor.connPct, rev:false},
+                {label:'⚡ Cache Hit', v:monitor.cacheHit, max:100,           unit:'%',  pct:monitor.cacheHit,rev:true},
+              ].map(({label,v,max,unit,pct,rev})=>{
+                const col = rev?(pct>=90?'#10B981':pct>=60?'#F59E0B':'#EF4444'):(pct>=90?'#EF4444':pct>=70?'#F59E0B':'#10B981')
+                return (
+                  <div key={label} className="mb-2">
+                    <div className="flex justify-between text-xs mb-0.5">
+                      <span className="text-muted">{label}</span>
+                      <span className="font-black" style={{color:col}}>{v}{unit}/{max}{unit} ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-surface2 rounded-full h-1.5">
+                      <div className="h-1.5 rounded-full" style={{width:`${Math.min(100,pct)}%`,background:col}}/>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="grid grid-cols-3 gap-1 mt-2 pt-2 border-t border-border/30 text-center text-[11px]">
+                <div><span className="text-green font-black block">{monitor.connActive}</span><span className="text-muted">نشط</span></div>
+                <div><span className="text-muted font-black block">{monitor.connIdle}</span><span className="text-muted">خامل</span></div>
+                <div><span className="text-white font-black block">{monitor.connTotal}</span><span className="text-muted">الكل</span></div>
+              </div>
+            </div>
+          )}
+          {monitor && !monitor.hasInfra && (
+            <div className="text-center py-2">
+              <p className="text-muted text-[10px]">⚠️ لعرض موارد الاتصالات شغّل SQL Function في Supabase</p>
+            </div>
+          )}
+
           {/* الاستخدام الحالي */}
           <div className="bg-surface border border-border rounded-xl p-3">
             <div className="flex justify-between items-center mb-3">
