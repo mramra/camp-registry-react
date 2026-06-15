@@ -117,10 +117,11 @@ export function AuthProvider({ children }) {
     )
     if (error) throw error
 
-    // ── مزامنة فورية في الخلفية (Supabase → Dexie) ──────────
+    // ── مزامنة فورية + إعادة ضبط Delta Sync ─────────────────
     import('../lib/syncAll').then(({ quickSync }) =>
       quickSync().catch(e => console.warn('[login] sync:', e.message))
     )
+    import('../lib/deltaSync').then(({ resetDeltaSync }) => resetDeltaSync())
 
     return data
   }
