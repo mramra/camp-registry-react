@@ -31,7 +31,6 @@ const NAV_ITEMS = [
     { icon: '⚙️', label: 'الإعدادات',       path: '/settings' },
     { icon: '💎', label: 'الاشتراك',        path: '/subscription' },
     { icon: '🛠️', label: 'إدارة البيانات',  path: '/data',  ownerOnly: true },
-    { icon: '🔭', label: 'مراقبة الموارد',  path: '/monitor', ownerOnly: true },
     { icon: '❓', label: 'المساعدة',        path: '/help' },
   ]},
 ]
