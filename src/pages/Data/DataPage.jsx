@@ -535,11 +535,17 @@ export default function DataPage() {
       {activeTab==='stats' && (
         <div className="flex flex-col gap-3">
           {/* حالة الاتصال */}
-          <Card title="🔄 حالة الاتصال" icon="">
+          <Card title="🔄 حالة المزامنة" icon="">
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted">وضع العمل</span>
-                <span className="text-accent font-bold text-xs">🌐 أون لاين فقط</span>
+                <span className="text-muted">PowerSync</span>
+                <span className={psStatus==='connected'?'text-green':psStatus==='connecting'?'text-accent':'text-muted'}>
+                  {psStatus==='connected'?'🟢 متصل':psStatus==='connecting'?'🟡 يتصل...':'⚪ غير متصل'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">أول sync</span>
+                <span className={psSynced?'text-green':'text-muted'}>{psSynced?'✅ اكتمل':'⏳ انتظار'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">الإنترنت</span>
@@ -547,17 +553,34 @@ export default function DataPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">قاعدة البيانات</span>
-                <span className="text-blue text-xs">Supabase مباشر</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">التخزين المحلي</span>
-                <span className="text-muted text-xs">غير مفعّل</span>
+                <span className="text-blue text-xs">Supabase + PowerSync</span>
               </div>
             </div>
             <button onClick={handleRefresh}
               className="w-full mt-3 py-2 rounded-xl text-xs font-bold border border-border text-muted active:scale-95 transition-transform">
               🔄 تحديث الإحصائيات
             </button>
+          </Card>
+
+          <Card title="💾 PowerSync SQLite المحلي" icon="">
+            <div className="flex flex-col gap-2">
+              {TABLES.map(t => (
+                <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                  <span className="text-muted text-xs">{t.icon} {t.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-black text-sm ${psStats?'text-white':'text-muted'}`}>
+                      {psStats?(psStats.counts[t.key]??0):'…'}
+                    </span>
+                    {psStats&&stats[t.key]!==undefined&&psStats.counts[t.key]!==stats[t.key]&&(
+                      <span className="text-accent text-[10px]">⚠️</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-muted text-[10px] mt-2 text-center">
+              {psReady?'🟢 PowerSync متصل':'🟡 PowerSync يتصل...'} — مقارنة Supabase ↔ SQLite
+            </p>
           </Card>
 
           {/* إحصائيات Supabase */}
