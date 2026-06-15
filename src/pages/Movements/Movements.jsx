@@ -35,6 +35,7 @@ export default function Movements() {
   const { showToast, psReady, psSynced} = useApp()
 
   useEffect(() => { loadData() }, [filterType, filterCamp])
+  useEffect(() => { loadData() }, [])
   useEffect(() => { if (psReady)  loadData() }, [psReady])
   useEffect(() => { if (psSynced) loadData() }, [psSynced])
 
