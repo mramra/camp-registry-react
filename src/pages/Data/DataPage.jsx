@@ -173,8 +173,8 @@ export default function DataPage() {
     setMonitor({
       // أساسيات — تعمل دائماً
       dbMB, dbPct: Math.round(dbMB/500*100),
-      authUsers:   authRes?.count||0,
-      authPct:     Math.round((authRes?.count||0)/50000*100),
+      authUsers:   authRes?.count ?? stats?.org_members ?? 0,
+      authPct:     Math.round((authRes?.count ?? stats?.org_members ?? 0)/50000*100),
       totalRows,
       famCount:    famRes?.count||0,
       memCount:    memRes?.count||0,
@@ -780,7 +780,7 @@ export default function DataPage() {
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-muted">👥 مستخدمو النظام</span>
                     <span className={`font-black ${monitor.authPct>80?'text-red':'text-green'}`}>
-                      {monitor.authUsers} / 50,000
+                      {monitor.authUsers ?? stats?.org_members ?? '—'} / 50,000
                     </span>
                   </div>
                   <div className="w-full bg-surface2 rounded-full h-2">
