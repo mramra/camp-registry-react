@@ -148,12 +148,14 @@ export default function DataPage() {
 
   const loadMonitor = useCallback(async () => {
     setMonLoading(true)
-    // كل query مستقلة — فشل واحد لا يوقف الباقين
-    const safe = async (fn) => { try { return await fn() } catch { return {} } }
+    const safe = async (fn) => { try { return await fn() } catch(e) { console.warn('[monitor]', e.message); return {} } }
 
-    const [infraRes, famRes, memRes, campRes, movRes, distRes, distFamRes] =
+    // جلب كل البيانات بشكل مستقل
+    const [dbRes, infraRes, authRes, famRes, memRes, campRes, movRes, distRes, cdfRes] =
       await Promise.all([
-        safe(() => supabase.rpc('get_infra_stats')),
+        safe(() => supabase.rpc('get_db_stats')),           // حجم DB — يعمل دائماً
+        safe(() => supabase.rpc('get_infra_stats')),         // بنية تحتية — تحتاج SQL function
+        safe(() => supabase.from('org_members').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
         safe(() => supabase.from('families').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
         safe(() => supabase.from('family_members').select('*',{count:'exact',head:true})),
         safe(() => supabase.from('camps').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)),
@@ -162,24 +164,31 @@ export default function DataPage() {
         safe(() => supabase.from('camp_dist_families').select('*',{count:'exact',head:true})),
       ])
 
-    const infra   = infraRes?.data || null
-    const dbMB    = Number(infra?.db_size_mb || 0)
+    // DB size: من get_db_stats أولاً، ثم get_infra_stats كـ fallback
+    const dbMB   = Number(dbRes?.data?.db_size_mb || infraRes?.data?.db_size_mb || 0)
+    const infra  = infraRes?.data || null
     const totalRows = (famRes?.count||0)+(memRes?.count||0)+(campRes?.count||0)+
-                      (movRes?.count||0)+(distRes?.count||0)+(distFamRes?.count||0)
+                      (movRes?.count||0)+(distRes?.count||0)+(cdfRes?.count||0)
 
     setMonitor({
-      dbMB,    dbPct:    Math.round(dbMB/500*100),
+      // أساسيات — تعمل دائماً
+      dbMB, dbPct: Math.round(dbMB/500*100),
+      authUsers:   authRes?.count||0,
+      authPct:     Math.round((authRes?.count||0)/50000*100),
       totalRows,
-      famCount: famRes?.count||0, memCount: memRes?.count||0, campCount: campRes?.count||0,
-      connTotal:  Number(infra?.conn_total||0),
-      connActive: Number(infra?.conn_active||0),
-      connIdle:   Number(infra?.conn_idle||0),
-      connMax:    Number(infra?.conn_max||60),
-      connPct:    infra ? Math.round(Number(infra.conn_total||0)/Number(infra.conn_max||60)*100) : 0,
-      cacheHit:   Number(infra?.cache_hit_ratio||0),
-      tables:     infra?.tables||[],
-      lastChecked:new Date().toLocaleTimeString('ar'),
-      hasInfra:   !!infra,
+      famCount:    famRes?.count||0,
+      memCount:    memRes?.count||0,
+      campCount:   campRes?.count||0,
+      lastChecked: new Date().toLocaleTimeString('ar'),
+      // بنية تحتية — تحتاج get_infra_stats()
+      hasInfra:    !!infra,
+      connTotal:   Number(infra?.conn_total||0),
+      connActive:  Number(infra?.conn_active||0),
+      connIdle:    Number(infra?.conn_idle||0),
+      connMax:     Number(infra?.conn_max||60),
+      connPct:     infra ? Math.round(Number(infra.conn_total||0)/Number(infra.conn_max||60)*100) : 0,
+      cacheHit:    Number(infra?.cache_hit_ratio||0),
+      tables:      infra?.tables||[],
     })
     setMonLoading(false)
   }, [])
