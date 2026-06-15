@@ -73,6 +73,8 @@ export default function DataPage() {
   const { showToast, psReady, psSynced, psStatus, online } = useApp()
 
   const [loading,       setLoading]       = useState(false)
+  const [monitor,       setMonitor]       = useState(null)
+  const [monLoading,    setMonLoading]    = useState(false)
   const [stats,         setStats]         = useState({})
   const [psStats,       setPsStats]       = useState(null)
   const [camps,         setCamps]         = useState([])
@@ -143,6 +145,42 @@ export default function DataPage() {
   useEffect(() => {
     if (psSynced) { loadStats(); loadPsStats() }
   }, [psSynced])
+
+  const loadMonitor = useCallback(async () => {
+    setMonLoading(true)
+    try {
+      // حجم قاعدة البيانات
+      const { data: dbStats } = await supabase.rpc('get_db_stats')
+
+      // عدد المستخدمين (authenticated)
+      const { count: authUsers } = await supabase
+        .from('org_members').select('*', { count: 'exact', head: true }).eq('org_id', ORG_ID)
+
+      // عدد الجداول والصفوف
+      const { count: totalFams   } = await supabase.from('families').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)
+      const { count: totalMems   } = await supabase.from('family_members').select('*',{count:'exact',head:true})
+      const { count: totalCamps  } = await supabase.from('camps').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)
+
+      // حساب إجمالي الصفوف
+      const totalRows = (totalFams||0)+(totalMems||0)+(totalCamps||0)+
+        ((await supabase.from('family_movements').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)).count||0)+
+        ((await supabase.from('dist_rounds').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)).count||0)+
+        ((await supabase.from('camp_dist_families').select('*',{count:'exact',head:true})).count||0)
+
+      const dbMB = dbStats?.db_size_mb || 0
+
+      setMonitor({
+        dbMB,          dbLimit: 500,
+        authUsers:     authUsers||0,  authLimit: 50000,
+        totalRows,     rowsLimit: 500000,
+        lastChecked:   new Date().toLocaleTimeString('ar'),
+        dbPct:         Math.round(dbMB/500*100),
+        authPct:       Math.round((authUsers||0)/50000*100),
+      })
+    } catch(e) {
+      showToast('خطأ في جلب بيانات المراقبة: '+e.message, true)
+    } finally { setMonLoading(false) }
+  }, [])
 
   const handleRefresh = useCallback(async () => {
     await loadStats()
@@ -516,9 +554,10 @@ export default function DataPage() {
       {/* ═══ تبويبات ═══ */}
       <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
         {[
-          {id:'stats',  label:'📊 الإحصائيات'},
-          {id:'backup', label:'💾 نسخ احتياطية'},
-          {id:'danger', label:'⚠️ خطر'},
+          {id:'stats',   label:'📊 الإحصائيات'},
+          {id:'monitor', label:'🔭 المراقبة'},
+          {id:'backup',  label:'💾 نسخ احتياطية'},
+          {id:'danger',  label:'⚠️ خطر'},
         ].map(t => (
           <button key={t.id} onClick={()=>setActiveTab(t.id)}
             className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
@@ -632,6 +671,104 @@ export default function DataPage() {
               <input ref={restoreRef} type="file" accept=".json" className="hidden" onChange={handleRestoreFile}/>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* ═══ المراقبة ═══ */}
+      {activeTab==='monitor' && (
+        <div className="flex flex-col gap-3">
+          {/* حدود Supabase المجانية */}
+          <div className="bg-surface border border-border rounded-xl p-3">
+            <p className="text-accent text-xs font-black mb-2">🆓 حدود الخطة المجانية</p>
+            <div className="flex flex-col gap-1.5 text-xs text-muted">
+              <div className="flex justify-between"><span>💾 قاعدة البيانات</span><span className="text-white font-bold">500 MB</span></div>
+              <div className="flex justify-between"><span>👥 مستخدمين/شهر</span><span className="text-white font-bold">50,000</span></div>
+              <div className="flex justify-between"><span>🌐 نقل بيانات</span><span className="text-white font-bold">5 GB/شهر</span></div>
+              <div className="flex justify-between"><span>📁 تخزين ملفات</span><span className="text-white font-bold">1 GB</span></div>
+              <div className="flex justify-between"><span>🏗️ مشاريع نشطة</span><span className="text-white font-bold">2 مشاريع</span></div>
+              <div className="flex justify-between"><span>⏸️ إيقاف تلقائي</span><span className="text-red font-bold">7 أيام بلا نشاط</span></div>
+            </div>
+          </div>
+
+          {/* الاستخدام الحالي */}
+          <div className="bg-surface border border-border rounded-xl p-3">
+            <div className="flex justify-between items-center mb-3">
+              <p className="text-accent text-xs font-black">📊 استخدامك الحالي</p>
+              {monitor && <span className="text-muted text-[10px]">آخر فحص: {monitor.lastChecked}</span>}
+            </div>
+
+            {monLoading ? (
+              <div className="flex justify-center py-4 text-muted text-xs">جاري الفحص...</div>
+            ) : monitor ? (
+              <div className="flex flex-col gap-3">
+                {/* حجم DB */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted">💾 حجم قاعدة البيانات</span>
+                    <span className={`font-black ${monitor.dbPct>80?'text-red':monitor.dbPct>60?'text-accent':'text-green'}`}>
+                      {monitor.dbMB} MB / 500 MB ({monitor.dbPct}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-surface2 rounded-full h-2">
+                    <div className={`h-2 rounded-full transition-all ${monitor.dbPct>80?'bg-red':monitor.dbPct>60?'bg-accent':'bg-green'}`}
+                      style={{width:`${Math.min(100,monitor.dbPct)}%`}}/>
+                  </div>
+                  {monitor.dbPct>80&&<p className="text-red text-[10px] mt-1">⚠️ تقترب من الحد! فكر في حذف البيانات القديمة</p>}
+                </div>
+
+                {/* عدد الأسر */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted">📋 إجمالي الصفوف</span>
+                    <span className="text-white font-black">{monitor.totalRows.toLocaleString()}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className="bg-surface2 px-2 py-0.5 rounded-lg text-muted">👨‍👩‍👧 {stats.families||0} أسرة</span>
+                    <span className="bg-surface2 px-2 py-0.5 rounded-lg text-muted">👤 {stats.family_members||0} فرد</span>
+                    <span className="bg-surface2 px-2 py-0.5 rounded-lg text-muted">🏕️ {stats.camps||0} مخيم</span>
+                  </div>
+                </div>
+
+                {/* المستخدمون */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted">👥 مستخدمو النظام</span>
+                    <span className={`font-black ${monitor.authPct>80?'text-red':'text-green'}`}>
+                      {monitor.authUsers} / 50,000
+                    </span>
+                  </div>
+                  <div className="w-full bg-surface2 rounded-full h-2">
+                    <div className="h-2 rounded-full bg-green transition-all"
+                      style={{width:`${Math.min(100,monitor.authPct)}%`}}/>
+                  </div>
+                </div>
+
+                {/* تنبيه Keep-Alive */}
+                <div className="bg-green/10 border border-green/30 rounded-xl p-2">
+                  <p className="text-green text-[11px] font-bold">✅ Keep-Alive مفعّل</p>
+                  <p className="text-muted text-[10px]">Supabase يُوقَظ تلقائياً كل 48 ساعة عبر GitHub Actions</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted text-xs text-center py-2">اضغط "فحص الآن" لعرض الاستخدام</p>
+            )}
+
+            <button onClick={loadMonitor} disabled={monLoading}
+              className="w-full mt-3 py-2.5 rounded-xl text-sm font-black text-bg bg-accent active:scale-95">
+              {monLoading ? '⏳ جاري الفحص...' : '🔭 فحص الآن'}
+            </button>
+          </div>
+
+          {/* نصائح التوفير */}
+          <div className="bg-surface border border-border rounded-xl p-3">
+            <p className="text-accent text-xs font-black mb-2">💡 نصائح لتجنب التوقف</p>
+            <div className="flex flex-col gap-1.5 text-[11px] text-muted">
+              <p>• Keep-Alive يعمل كل 48 ساعة تلقائياً ✅</p>
+              <p>• تسجيل الدخول بانتظام يمنع الإيقاف</p>
+              <p>• عند تجاوز 80% من DB حذف سجلات قديمة</p>
+              <p>• إذا تجاوزت الحدود → ترقية Pro ($25/شهر)</p>
+            </div>
+          </div>
         </div>
       )}
 
