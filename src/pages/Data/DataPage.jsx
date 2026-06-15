@@ -149,36 +149,42 @@ export default function DataPage() {
   const loadMonitor = useCallback(async () => {
     setMonLoading(true)
     try {
-      // حجم قاعدة البيانات
-      const { data: dbStats } = await supabase.rpc('get_db_stats')
+      // جلب كل البيانات معاً
+      const [infraRes, authRes, famRes, memRes, campRes, movRes, distRes, distFamRes] =
+        await Promise.all([
+          supabase.rpc('get_infra_stats').catch(() => ({ data: null })),
+          supabase.from('org_members').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
+          supabase.from('families').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
+          supabase.from('family_members').select('*',{count:'exact',head:true}),
+          supabase.from('camps').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
+          supabase.from('family_movements').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
+          supabase.from('dist_rounds').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID),
+          supabase.from('camp_dist_families').select('*',{count:'exact',head:true}),
+        ])
 
-      // عدد المستخدمين (authenticated)
-      const { count: authUsers } = await supabase
-        .from('org_members').select('*', { count: 'exact', head: true }).eq('org_id', ORG_ID)
-
-      // عدد الجداول والصفوف
-      const { count: totalFams   } = await supabase.from('families').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)
-      const { count: totalMems   } = await supabase.from('family_members').select('*',{count:'exact',head:true})
-      const { count: totalCamps  } = await supabase.from('camps').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)
-
-      // حساب إجمالي الصفوف
-      const totalRows = (totalFams||0)+(totalMems||0)+(totalCamps||0)+
-        ((await supabase.from('family_movements').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)).count||0)+
-        ((await supabase.from('dist_rounds').select('*',{count:'exact',head:true}).eq('org_id',ORG_ID)).count||0)+
-        ((await supabase.from('camp_dist_families').select('*',{count:'exact',head:true})).count||0)
-
-      const dbMB = dbStats?.db_size_mb || 0
+      const infra    = infraRes.data
+      const dbMB     = Number(infra?.db_size_mb || 0)
+      const authUsers = authRes.count || 0
+      const totalRows = (famRes.count||0)+(memRes.count||0)+(campRes.count||0)+
+                        (movRes.count||0)+(distRes.count||0)+(distFamRes.count||0)
 
       setMonitor({
-        dbMB,          dbLimit: 500,
-        authUsers:     authUsers||0,  authLimit: 50000,
-        totalRows,     rowsLimit: 500000,
-        lastChecked:   new Date().toLocaleTimeString('ar'),
-        dbPct:         Math.round(dbMB/500*100),
-        authPct:       Math.round((authUsers||0)/50000*100),
+        dbMB, dbPct: Math.round(dbMB/500*100),
+        authUsers, authPct: Math.round(authUsers/50000*100),
+        totalRows,
+        // موارد البنية التحتية
+        connTotal:    Number(infra?.conn_total || 0),
+        connActive:   Number(infra?.conn_active || 0),
+        connIdle:     Number(infra?.conn_idle || 0),
+        connMax:      Number(infra?.conn_max || 60),
+        connPct:      Math.round(Number(infra?.conn_total||0)/Number(infra?.conn_max||60)*100),
+        cacheHit:     Number(infra?.cache_hit_ratio || 0),
+        tables:       infra?.tables || [],
+        lastChecked:  new Date().toLocaleTimeString('ar'),
+        hasInfra:     !!infra,
       })
     } catch(e) {
-      showToast('خطأ في جلب بيانات المراقبة: '+e.message, true)
+      showToast('خطأ: '+e.message, true)
     } finally { setMonLoading(false) }
   }, [])
 
