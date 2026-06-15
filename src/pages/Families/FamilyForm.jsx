@@ -159,27 +159,28 @@ function MemberRow({ member, index, onUpdate, onRemove, errors }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[10px] font-bold text-muted block mb-1">رقم الهوية</label>
-            <input value={member.national_id}
-              onChange={e => onUpdate(member.id,'national_id',e.target.value)}
-              type="tel" inputMode="numeric" placeholder="9 أرقام" maxLength={9} dir="ltr"
-              className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
-            {member.national_id?.length >= 9 && (
-              <p className={`text-[10px] mt-0.5 ${luhnCheck(member.national_id)?'text-green':'text-red'}`}>
-                {luhnCheck(member.national_id) ? '✅ هوية صحيحة' : '❌ هوية غير صحيحة'}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="text-[10px] font-bold text-muted block mb-1">تاريخ الميلاد</label>
-            <DateInput
-              value={member.dob || ''}
-              onChange={v => onUpdate(member.id,'dob',v)}
-            />
-            {dobErr && <p className="text-red text-[10px] mt-0.5">{dobErr}</p>}
-          </div>
+        {/* رقم الهوية */}
+        <div>
+          <label className="text-[10px] font-bold text-muted block mb-1">رقم الهوية</label>
+          <input value={member.national_id}
+            onChange={e => onUpdate(member.id,'national_id',e.target.value)}
+            type="tel" inputMode="numeric" placeholder="9 أرقام" maxLength={9} dir="ltr"
+            className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          {member.national_id?.length >= 9 && (
+            <p className={`text-[10px] mt-0.5 ${luhnCheck(member.national_id)?'text-green':'text-red'}`}>
+              {luhnCheck(member.national_id) ? '✅ هوية صحيحة' : '❌ هوية غير صحيحة'}
+            </p>
+          )}
+        </div>
+
+        {/* تاريخ الميلاد — full width */}
+        <div>
+          <label className="text-[10px] font-bold text-muted block mb-1">تاريخ الميلاد</label>
+          <DateInput
+            value={member.dob || ''}
+            onChange={v => onUpdate(member.id,'dob',v)}
+          />
+          {dobErr && <p className="text-red text-[10px] mt-0.5">{dobErr}</p>}
         </div>
 
         <div>
