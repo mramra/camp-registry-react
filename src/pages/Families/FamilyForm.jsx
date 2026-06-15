@@ -637,12 +637,18 @@ export default function FamilyForm() {
 
             {/* تاريخ الميلاد */}
             <div>
-              <label className="text-xs font-bold text-muted block mb-1.5">تاريخ الميلاد</label>
-              <input
+              <label className="text-xs font-bold text-muted block mb-1.5">
+                تاريخ الميلاد
+                {form.head_dob && (() => {
+                  const b=new Date(form.head_dob),t=new Date()
+                  let a=t.getFullYear()-b.getFullYear()
+                  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--
+                  return a>=0&&a<120 ? <span className="text-accent mr-2">({a} سنة)</span> : null
+                })()}
+              </label>
+              <DateInput
                 value={form.head_dob || ''}
-                onChange={e => setF('head_dob', e.target.value)}
-                type="date" dir="ltr" max={new Date().toISOString().slice(0,10)}
-                className={`w-full bg-surface2 border ${errors.head_dob?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}
+                onChange={v => setF('head_dob', v)}
               />
               {errors.head_dob && <p className="text-red text-[11px] mt-1">{errors.head_dob}</p>}
             </div>
