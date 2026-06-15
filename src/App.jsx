@@ -18,7 +18,6 @@ const UsersList      = lazy(() => import('./pages/Users/UsersList'))
 const Distributions  = lazy(() => import('./pages/Distributions/Distributions'))
 const Analysis       = lazy(() => import('./pages/Analysis/Analysis'))
 const DataPage       = lazy(() => import('./pages/Data/DataPage'))
-const MonitorPage    = lazy(() => import('./pages/Monitor/MonitorPage'))
 const ExportPage     = lazy(() => import('./pages/Export/ExportPage'))
 const Settings       = lazy(() => import('./pages/Settings/Settings'))
 const AuditLog       = lazy(() => import('./pages/Audit/AuditLog'))
@@ -93,7 +92,6 @@ function AppRoutes() {
           <Route path="analysis"      element={<Analysis />} />
           <Route path="camp-compare"  element={<CampCompare />} />
           <Route path="needs-report"  element={<NeedsReport />} />
-          <Route path="monitor"       element={<MonitorPage />} />
           <Route path="data"          element={<DataPage />} />
           <Route path="export"        element={<ExportPage />} />
           <Route path="settings"      element={<Settings />} />
