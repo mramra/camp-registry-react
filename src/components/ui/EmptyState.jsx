@@ -1,10 +1,14 @@
-export default function EmptyState({ icon='📭', title='لا توجد بيانات', subtitle, action }) {
+export default function EmptyState({ icon, title, subtitle, action, onAction }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="text-5xl mb-4">{icon}</div>
-      <h3 className="text-white font-bold text-base mb-1">{title}</h3>
-      {subtitle && <p className="text-muted text-sm mb-4">{subtitle}</p>}
-      {action}
+      <span className="text-5xl mb-3">{icon || '📭'}</span>
+      <p className="text-white font-bold text-sm">{title || 'لا توجد بيانات'}</p>
+      {subtitle && <p className="text-muted text-xs mt-1">{subtitle}</p>}
+      {action && onAction && (
+        <button onClick={onAction} className="mt-4 px-4 py-2 bg-accent text-bg rounded-xl text-sm font-bold">
+          {action}
+        </button>
+      )}
     </div>
   )
 }
