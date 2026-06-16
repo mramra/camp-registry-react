@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
@@ -225,66 +225,71 @@ function DateInput({ value, onChange, maxYear, minYear }) {
   const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
                   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 
-  // state داخلي — يحفظ الجزء المختار حتى لو لم يكتمل التاريخ
-  const parse = (v) => { const p = (v||'').split('-'); return [p[0]||'', p[1]||'', p[2]||''] }
-  const [yr, setYr] = useState(() => parse(value)[0])
-  const [mo, setMo] = useState(() => parse(value)[1])
-  const [dy, setDy] = useState(() => parse(value)[2])
+  // useRef للاحتفاظ بالاختيارات الجزئية بدون فقدانها عند re-render
+  const parts    = (value || '').split('-')
+  const initYr   = parts[0] || ''
+  const initMo   = parts[1] || ''
+  const initDy   = parts[2] || ''
 
-  // مزامنة مع القيمة الخارجية عند تغييرها برمجياً
-  useEffect(() => {
-    const [y,m,d] = parse(value)
-    setYr(y); setMo(m); setDy(d)
-  }, [value])
+  const partial  = useRef({ yr: initYr, mo: initMo, dy: initDy })
+  const [tick, setTick] = useState(0)   // لإجبار الـ re-render عند التغيير
 
+  // مزامنة مع value الخارجية فقط إذا تغيّرت لقيمة كاملة
+  const prevValue = useRef(value)
+  if (value !== prevValue.current) {
+    prevValue.current = value
+    if (value) {
+      const p = value.split('-')
+      partial.current = { yr: p[0]||'', mo: p[1]||'', dy: p[2]||'' }
+    }
+  }
+
+  const { yr, mo, dy } = partial.current
   const curYear     = new Date().getFullYear()
   const maxYr       = maxYear || curYear
   const minYr       = minYear || 1900
   const daysInMonth = mo && yr ? new Date(parseInt(yr), parseInt(mo), 0).getDate() : 31
   const age         = calcAgeFromDob(value)
 
-  function update(newYr, newMo, newDy) {
-    // فقط عند اكتمال الثلاثة نُخبر الـ parent
-    if (newYr && newMo && newDy) {
-      const y = String(newYr).padStart(4,'0').slice(-4)
-      const m = String(newMo).padStart(2,'0')
-      const d = String(newDy).padStart(2,'0')
-      onChange(`${y}-${m}-${d}`)
-    } else if (!newYr && !newMo && !newDy) {
-      onChange('')
+  function select(field, val) {
+    partial.current = { ...partial.current, [field]: val }
+    setTick(t => t + 1)   // أعد الرسم لإظهار الاختيار
+    const { yr: y, mo: m, dy: d } = partial.current
+    if (y && m && d) {
+      // اكتمل التاريخ — أخبر الـ parent
+      onChange(`${String(y).padStart(4,'0').slice(-4)}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`)
     }
-    // إذا ناقص واحد → لا نُفرغ، نترك القيمة الحالية
   }
 
-  const SEL = "bg-surface2 border border-border rounded-xl text-white text-sm focus:outline-none focus:border-accent py-2.5 px-1 text-center"
+  const SEL = "bg-surface2 border border-border rounded-xl text-white text-sm focus:outline-none focus:border-accent py-2.5 px-1 text-center w-full"
 
   return (
     <div>
       <div className="grid gap-1.5" style={{gridTemplateColumns:'1fr 2fr 2fr'}}>
         {/* يوم */}
-        <select value={dy} onChange={e=>{const v=e.target.value; setDy(v); update(yr,mo,v)}} className={SEL}>
+        <select value={dy} onChange={e => select('dy', e.target.value)} className={SEL}>
           <option value="">يوم</option>
-          {Array.from({length:daysInMonth},(_,i)=>i+1).map(d=>(
+          {Array.from({length: daysInMonth}, (_, i) => i + 1).map(d => (
             <option key={d} value={String(d).padStart(2,'0')}>{d}</option>
           ))}
         </select>
         {/* شهر */}
-        <select value={mo} onChange={e=>{const v=e.target.value; setMo(v); update(yr,v,dy)}} className={SEL}>
+        <select value={mo} onChange={e => select('mo', e.target.value)} className={SEL}>
           <option value="">الشهر</option>
-          {MONTHS.map((m,i)=>(
+          {MONTHS.map((m, i) => (
             <option key={i} value={String(i+1).padStart(2,'0')}>{m}</option>
           ))}
         </select>
         {/* سنة */}
-        <select value={yr} onChange={e=>{const v=e.target.value; setYr(v); update(v,mo,dy)}} className={SEL}>
+        <select value={yr} onChange={e => select('yr', e.target.value)} className={SEL}>
           <option value="">السنة</option>
-          {Array.from({length:maxYr-minYr+1},(_,i)=>maxYr-i).map(y=>(
+          {Array.from({length: maxYr - minYr + 1}, (_, i) => maxYr - i).map(y => (
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
       </div>
       {age !== null && (
-        <p className="text-accent text-[11px] mt-1 text-left">العمر: {age} سنة</p>
+        <p className="text-accent text-[11px] mt-1 text-right">العمر: {age} سنة</p>
       )}
     </div>
   )
