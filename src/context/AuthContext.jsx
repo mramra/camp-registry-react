@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
 import { localDB } from '../lib/db'
+import { hasPermission, hasPagePermission, getCampFilter } from '../lib/permissions'
 
 const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
@@ -138,11 +139,15 @@ export function AuthProvider({ children }) {
   const isCampDelegate = role === 'camp_delegate' || isSuperAdmin
   const isAssistant    = role === 'assistant'
 
-  const canWrite  = isOwner || isSuperAdmin || isCampDelegate || effectiveProfile?.can_add
-  const canEdit   = isOwner || isSuperAdmin || isCampDelegate || effectiveProfile?.can_edit
-  const canDelete = isOwner || isSuperAdmin || effectiveProfile?.can_delete
-  const canExport = isOwner || isSuperAdmin || effectiveProfile?.can_export
-  const canImport = isOwner || isSuperAdmin || effectiveProfile?.can_import
+  // صلاحيات مبنية على permissions.js
+  const can = (action) => hasPermission(effectiveProfile, action)
+  const canPage = (pageKey, op='view') => hasPagePermission(effectiveProfile, pageKey, op)
+  const canWrite  = can('write')
+  const canEdit   = can('edit')
+  const canDelete = can('delete')
+  const canExport = can('export')
+  const canImport = can('import')
+  const campFilter = getCampFilter(effectiveProfile)
 
   const value = {
     user, profile: effectiveProfile, effectiveProfile, realProfile: profile,
@@ -150,6 +155,7 @@ export function AuthProvider({ children }) {
     isPreviewMode: !!previewAs,
     role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
     canWrite, canEdit, canDelete, canExport, canImport,
+    can, canPage, campFilter,
     signIn, signOut,
     refetchProfile: () => user && fetchProfile(user.id),
   }
