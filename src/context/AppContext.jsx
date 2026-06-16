@@ -9,9 +9,20 @@ export function AppProvider({ children }) {
   const [toast,  setToast]  = useState(null)
   const { psReady, psSynced, psStatus } = useSyncStatus()
 
-  // مراقبة الإنترنت
+  // مراقبة الإنترنت + معالجة قائمة الانتظار
   useEffect(() => {
-    const onOnline  = () => setOnline(true)
+    async function onOnline() {
+      setOnline(true)
+      // معالجة العمليات المعلقة عند عودة الإنترنت
+      try {
+        const { processQueue } = await import('../lib/syncQueue')
+        const result = await processQueue()
+        if (result.processed > 0) {
+          window.dispatchEvent(new CustomEvent('sync-queue-done', { detail: result }))
+          console.log(`[AppContext] queue: ${result.processed} عملية رُفعت`)
+        }
+      } catch {}
+    }
     const onOffline = () => setOnline(false)
     window.addEventListener('online',  onOnline)
     window.addEventListener('offline', onOffline)
@@ -45,8 +56,22 @@ export function AppProvider({ children }) {
     setTimeout(() => setToast(null), 3500)
   }, [])
 
+  const [pendingSync, setPendingSync] = useState(0)
+
+  // فحص القائمة عند الفتح
+  useEffect(() => {
+    import('../lib/syncQueue').then(({ getPendingCount }) =>
+      getPendingCount().then(n => setPendingSync(n))
+    )
+    const handler = () => import('../lib/syncQueue').then(({ getPendingCount }) =>
+      getPendingCount().then(n => setPendingSync(n))
+    )
+    window.addEventListener('sync-queue-done', handler)
+    return () => window.removeEventListener('sync-queue-done', handler)
+  }, [])
+
   return (
-    <AppContext.Provider value={{ online, toast, showToast, psReady, psSynced, psStatus, resetDeltaSync }}>
+    <AppContext.Provider value={{ online, toast, showToast, psReady, psSynced, psStatus, resetDeltaSync, pendingSync }}>
       {children}
     </AppContext.Provider>
   )
