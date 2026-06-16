@@ -262,21 +262,21 @@ function DateInput({ value, onChange, maxYear, minYear }) {
     <div>
       <div className="grid gap-1.5" style={{gridTemplateColumns:'1fr 2fr 2fr'}}>
         {/* يوم */}
-        <select value={dy} onChange={e=>update(yr,mo,e.target.value)} className={SEL}>
+        <select value={dy} onChange={e=>{const v=e.target.value; setDy(v); update(yr,mo,v)}} className={SEL}>
           <option value="">يوم</option>
           {Array.from({length:daysInMonth},(_,i)=>i+1).map(d=>(
             <option key={d} value={String(d).padStart(2,'0')}>{d}</option>
           ))}
         </select>
         {/* شهر */}
-        <select value={mo} onChange={e=>update(yr,e.target.value,dy)} className={SEL}>
+        <select value={mo} onChange={e=>{const v=e.target.value; setMo(v); update(yr,v,dy)}} className={SEL}>
           <option value="">الشهر</option>
           {MONTHS.map((m,i)=>(
             <option key={i} value={String(i+1).padStart(2,'0')}>{m}</option>
           ))}
         </select>
         {/* سنة */}
-        <select value={yr} onChange={e=>update(e.target.value,mo,dy)} className={SEL}>
+        <select value={yr} onChange={e=>{const v=e.target.value; setYr(v); update(v,mo,dy)}} className={SEL}>
           <option value="">السنة</option>
           {Array.from({length:maxYr-minYr+1},(_,i)=>maxYr-i).map(y=>(
             <option key={y} value={y}>{y}</option>
