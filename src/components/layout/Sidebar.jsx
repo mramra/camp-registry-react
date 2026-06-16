@@ -34,15 +34,19 @@ export default function Sidebar({ open, onClose }) {
     {
       group: 'التحليل والتقارير',
       items: [
-        { icon:'📊', label:'التحليل',            path:'/analysis',  need:'reports' },
-        { icon:'📤', label:'الاستيراد والتصدير', path:'/export',    needExport: true },
+        { icon:'📊', label:'التحليل',             path:'/analysis',      need:'reports' },
+        { icon:'📋', label:'تقارير الاحتياجات',   path:'/needs-report',  need:'reports' },
+        { icon:'🏕️', label:'مقارنة المخيمات',    path:'/camp-compare',  need:'reports' },
+        { icon:'📤', label:'الاستيراد والتصدير',  path:'/export',        needExport: true },
       ]
     },
     {
       group: 'الإدارة',
       items: [
-        { icon:'👥', label:'المستخدمون',   path:'/users', needAdmin: true },
-        { icon:'🛠️', label:'إدارة البيانات', path:'/data', needOwner: true },
+        { icon:'👥', label:'المستخدمون',    path:'/users',  needAdmin: true },
+        { icon:'📝', label:'سجل التغييرات', path:'/audit',  needAdmin: true },
+        { icon:'🔔', label:'التنبيهات',     path:'/alerts', needAdmin: true },
+        { icon:'🛠️', label:'إدارة البيانات', path:'/data',  needOwner: true },
       ]
     },
   ]
