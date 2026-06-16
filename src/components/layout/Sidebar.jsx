@@ -1,133 +1,136 @@
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { roleLabel } from '../../lib/utils'
+import { ROLE_LABELS, ROLE_COLORS } from '../../lib/permissions'
 
-const NAV_ITEMS = [
-  { group: 'الرئيسية', items: [
-    { icon: '📊', label: 'لوحة التحكم',   path: '/' },
-  ]},
-  { group: 'الأسر', items: [
-    { icon: '👨‍👩‍👧‍👦', label: 'قائمة الأسر',     path: '/families' },
-    { icon: '➕', label: 'إضافة أسرة',     path: '/families/add' },
-    { icon: '🔄', label: 'حركات الأسر',    path: '/movements' },
-  ]},
-  { group: 'الإدارة', items: [
-    { icon: '🏕️', label: 'إدارة المخيمات', path: '/camps' },
-    { icon: '👥', label: 'المستخدمون',     path: '/users', adminOnly: true },
-    { icon: '📦', label: 'التوزيعات',       path: '/distributions' },
-    { icon: '📱', label: 'الأجهزة',         path: '/devices', adminOnly: true },
-  ]},
-  { group: 'التقارير', items: [
-    { icon: '📈', label: 'التقارير',        path: '/analysis' },
-    { icon: '🔔', label: 'التنبيهات',       path: '/alerts' },
-    { icon: '📋', label: 'سجل النشاط',      path: '/audit', adminOnly: true },
-  ]},
-  { group: 'السجلات', items: [
-    { icon: '📋', label: 'السجلات',  path: '/registries' },
-  ]},
-  { group: 'الأدوات', items: [
-    { icon: '💾', label: 'استيراد/تصدير',  path: '/export' },
-    { icon: '💬', label: 'رسائل SMS',       path: '/sms' },
-    { icon: '⚙️', label: 'الإعدادات',       path: '/settings' },
-    { icon: '💎', label: 'الاشتراك',        path: '/subscription' },
-    { icon: '🛠️', label: 'إدارة البيانات',  path: '/data',  ownerOnly: true },
-    { icon: '❓', label: 'المساعدة',        path: '/help' },
-  ]},
-]
-
-export default function Sidebar({ open, onClose }) {
-  const { profile, role, isOwner, isSuperAdmin, signOut, isPreviewMode, previewAs, setPreviewAs, realProfile } = useAuth()
+export default function Sidebar({ onClose }) {
+  const { profile, role, isOwner, isSuperAdmin, isCampDelegate,
+          canWrite, canExport, canImport, canPage, signOut } = useAuth()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const [confirmLogout, setConfirmLogout] = useState(false)
 
-  function go(path) {
-    navigate(path)
-    onClose()
+  // ── تعريف الصفحات مع شروط الظهور ────────────────────────
+  const NAV = [
+    {
+      group: 'الرئيسية',
+      items: [
+        { icon:'🏠', label:'الرئيسية',   path:'/',           always: true },
+      ]
+    },
+    {
+      group: 'الأسر',
+      items: [
+        { icon:'👨‍👩‍👧', label:'قائمة الأسر',  path:'/families',   always: true,  pageKey:'page-families' },
+        { icon:'🏕️', label:'المخيمات',    path:'/camps',      always: true },
+      ]
+    },
+    {
+      group: 'العمليات',
+      items: [
+        { icon:'🔄', label:'حركات الأسر', path:'/movements',  always: true,    pageKey:'page-movements' },
+        { icon:'📦', label:'التوزيعات',   path:'/distributions', always: true, pageKey:'page-dist' },
+        { icon:'📋', label:'السجلات',     path:'/registers',  always: true,    pageKey:'page-children' },
+      ]
+    },
+    {
+      group: 'التحليل والتقارير',
+      items: [
+        { icon:'📊', label:'التحليل',     path:'/analysis',   reports: true },
+        { icon:'📤', label:'الاستيراد والتصدير', path:'/export', exportOrImport: true },
+      ]
+    },
+    {
+      group: 'الإدارة',
+      items: [
+        { icon:'👥', label:'المستخدمون',  path:'/users',      admin: true },
+        { icon:'🛠️', label:'إدارة البيانات', path:'/data',   owner: true },
+      ]
+    },
+  ]
+
+  function isVisible(item) {
+    if (item.always) {
+      // المساعد يتحقق من allowed_pages
+      if (role === 'assistant' && item.pageKey)
+        return canPage(item.pageKey, 'view')
+      return true
+    }
+    if (item.owner)         return isOwner
+    if (item.admin)         return isSuperAdmin || isOwner || isCampDelegate
+    if (item.reports)       return isSuperAdmin || isOwner || isCampDelegate
+    if (item.exportOrImport)return canExport || canImport
+    return false
   }
 
-  function isActive(path) {
-    if (path === '/') return pathname === '/'
-    return pathname.startsWith(path)
+  async function handleLogout() {
+    if (!confirmLogout) { setConfirmLogout(true); return }
+    await signOut()
+    navigate('/login')
   }
+
+  const LI = "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+  const ACT = "bg-accent/15 text-accent"
+  const INP = "text-muted hover:text-white hover:bg-surface2"
 
   return (
-    <aside className={`fixed top-0 right-0 w-72 h-full bg-surface border-l border-border z-[300] flex flex-col transition-transform duration-300 overflow-y-auto ${open ? 'translate-x-0' : 'translate-x-full'}`}>
-      {/* شريط المحاكاة */}
-      {isPreviewMode && (
-        <div style={{background:'linear-gradient(135deg,#7c3aed,#4f46e5)',padding:'10px 14px'}}>
-          <div style={{color:'white',fontSize:'11px',marginBottom:'6px',fontWeight:'bold'}}>
-            👁️ محاكاة: {previewAs?.full_name}
-          </div>
-          <button
-            onClick={() => { setPreviewAs(null); navigate('/users'); onClose() }}
-            style={{width:'100%',background:'white',color:'#7c3aed',border:'none',
-              borderRadius:'8px',padding:'6px',fontSize:'12px',fontWeight:'900',cursor:'pointer'}}>
-            ← رجوع لحسابي الحقيقي
-          </button>
+    <div className="flex flex-col h-full bg-bg">
+      {/* رأس الـ sidebar */}
+      <div className="p-5 border-b border-border">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-2xl">🏕️</span>
+          <button onClick={onClose} className="text-muted text-xl">✕</button>
         </div>
-      )}
-      {/* Header */}
-      <div className="flex items-center gap-3 p-5 border-b border-border">
-        <div className="w-11 h-11 bg-accent rounded-xl flex items-center justify-center text-2xl flex-shrink-0">⛺</div>
-        <div>
-          <div className="font-black text-white text-base">نبض المخيم</div>
-          <div className="text-muted text-xs">v2.0 React</div>
-        </div>
-        <button onClick={onClose} className="mr-auto text-muted text-xl">✕</button>
+        <p className="text-white font-black text-sm">{profile?.full_name || '—'}</p>
+        <p className={`text-xs font-bold mt-0.5 ${ROLE_COLORS[role] || 'text-muted'}`}>
+          {ROLE_LABELS[role] || role}
+        </p>
+        {profile?.camp_id && (
+          <p className="text-muted text-[10px] mt-0.5">🏕️ مخيم محدد</p>
+        )}
       </div>
 
-      {/* User */}
-      {profile && (
-        <div className="px-5 py-4 border-b border-border bg-surface2">
-          <div className="font-bold text-white text-sm">{profile.full_name || profile.name || '—'}</div>
-          <div className="text-muted text-xs mt-0.5">{profile.national_id}</div>
-          <span className="inline-block mt-1.5 bg-accent/15 text-accent border border-accent/30 rounded-full px-2.5 py-0.5 text-[10px] font-bold">
-            {roleLabel(role)}
-          </span>
-        </div>
-      )}
-
-      {/* Nav */}
-      <nav className="flex-1 p-3">
-        {NAV_ITEMS.map(({ group, items }) => {
-          const visible = items.filter(item => {
-            if (item.adminOnly && !isOwner && !isSuperAdmin) return false
-          if (item.ownerOnly && !isOwner) return false
-          if (item.ownerOnly && !isOwner) return false
-            return true
-          })
+      {/* الروابط */}
+      <nav className="flex-1 overflow-y-auto p-3">
+        {NAV.map(group => {
+          const visible = group.items.filter(isVisible)
           if (!visible.length) return null
           return (
-            <div key={group} className="mb-1">
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest px-2 py-2">{group}</div>
+            <div key={group.group} className="mb-3">
+              <p className="text-muted text-[10px] font-black px-4 mb-1 uppercase tracking-wider">
+                {group.group}
+              </p>
               {visible.map(item => (
-                <button
-                  key={item.path}
-                  onClick={() => go(item.path)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold mb-0.5 text-right transition-all
-                    ${isActive(item.path)
-                      ? 'bg-accent/12 text-accent'
-                      : 'text-muted hover:bg-surface2 hover:text-white'
-                    }`}
-                >
-                  <span className="text-base">{item.icon}</span>
-                  {item.label}
-                </button>
+                <NavLink key={item.path} to={item.path}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `${LI} ${isActive ? ACT : INP} mb-0.5`
+                  }>
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </NavLink>
               ))}
             </div>
           )
         })}
       </nav>
 
-      {/* Footer */}
+      {/* تسجيل الخروج */}
       <div className="p-4 border-t border-border">
-        <button
-          onClick={() => { signOut(); onClose() }}
-          className="w-full py-2.5 bg-transparent border border-red text-red rounded-xl font-bold text-sm"
-        >
-          تسجيل الخروج
+        <button onClick={handleLogout}
+          className={`w-full py-2.5 rounded-xl text-sm font-black transition-all ${
+            confirmLogout
+              ? 'bg-red text-white'
+              : 'bg-surface2 text-muted hover:text-red hover:bg-red/10'
+          }`}>
+          {confirmLogout ? '⚠️ تأكيد الخروج؟' : '🚪 تسجيل الخروج'}
         </button>
+        {confirmLogout && (
+          <button onClick={() => setConfirmLogout(false)}
+            className="w-full mt-1 py-2 text-xs text-muted">
+            إلغاء
+          </button>
+        )}
       </div>
-    </aside>
+    </div>
   )
 }
