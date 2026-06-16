@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import XLSX from 'xlsx-js-style'
 import { applyBanner, TABLE_STYLES } from '../../lib/excelBanner'
+import CustomExport from './CustomExport'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
