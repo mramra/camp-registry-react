@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
 import { getPowerSync } from '../../lib/powersync'
@@ -174,64 +175,154 @@ function WomenTab({ families, members, camps, filterCamp }) {
 // تبويب الصحة
 // ════════════════════════════════════════════════════════════
 function HealthTab({ families, members, camps, filterCamp }) {
-  const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
-  const famMap  = Object.fromEntries(families.map(f=>[f.id,f]))
-  const [type, setType] = useState('chronic')
+  const navigate  = useNavigate()
+  const campMap   = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+  const famMap    = Object.fromEntries(families.map(f=>[f.id,f]))
+  const [type,   setType]   = useState('all')
   const [search, setSearch] = useState('')
 
   const TYPES = [
-    {key:'chronic',label:'أمراض مزمنة',fField:'head_chronic_diseases',mField:'chronic_diseases'},
-    {key:'disability',label:'إعاقات',fField:'head_disabilities',mField:'disabilities'},
-    {key:'injury',label:'إصابات',fField:'head_injuries',mField:'injuries'},
+    {key:'all',        label:'الكل',        icon:'🏥', fField:null,                    mField:null             },
+    {key:'chronic',    label:'أمراض مزمنة', icon:'💊', fField:'head_chronic_diseases', mField:'chronic_diseases'},
+    {key:'disability', label:'إعاقات',      icon:'♿', fField:'head_disabilities',     mField:'disabilities'   },
+    {key:'injury',     label:'إصابات',      icon:'🩹', fField:'head_injuries',         mField:'injuries'       },
   ]
 
   const records = [
-    ...families.map(f=>{
-      const t=TYPES.find(t=>t.key===type); const val=f[t?.fField]
-      if(!val?.trim()) return null
-      return {id:'f-'+f.id,name:f.head_name,val,role:'رب الأسرة',camp:campMap[f.camp_id]||'—',camp_id:f.camp_id||'',tent:f.tent||'—',fam:f.head_name}
-    }).filter(Boolean),
-    ...members.map(m=>{
-      const t=TYPES.find(t=>t.key===type); const val=m[t?.mField]
-      if(!val?.trim()) return null
-      const f=famMap[m.family_id]||{}
-      return {id:'m-'+m.id,name:m.name||'—',val,role:m.relation||'فرد',camp:campMap[f.camp_id]||'—',camp_id:f.camp_id||'',tent:f.tent||'—',fam:f.head_name||'—'}
-    }).filter(Boolean),
+    // رب الأسرة
+    ...families.flatMap(f => {
+      const rows = []
+      const t = TYPES.find(t=>t.key===type)
+      if (type === 'all') {
+        // كل الحالات الصحية لرب الأسرة
+        if (f.head_chronic_diseases?.trim())
+          rows.push({key:'chronic',    label:'أمراض مزمنة', val:f.head_chronic_diseases})
+        if (f.head_disabilities?.trim())
+          rows.push({key:'disability', label:'إعاقة',        val:f.head_disabilities})
+        if (f.head_injuries?.trim())
+          rows.push({key:'injury',     label:'إصابة',        val:f.head_injuries})
+      } else {
+        const val = f[t?.fField]
+        if (val?.trim()) rows.push({key:type, label:t?.label||'', val})
+      }
+      return rows.map(r=>({
+        uid:       'f-'+f.id+r.key,
+        famId:     f.id,
+        name:      f.head_name,
+        role:      'رب الأسرة',
+        national_id: f.head_id||'—',
+        phone:     f.phone1||'—',
+        healthType:r.label,
+        val:       r.val,
+        camp:      campMap[f.camp_id]||'—',
+        camp_id:   f.camp_id||'',
+        tent:      f.tent||'—',
+        fam:       f.head_name,
+      }))
+    }),
+    // الأفراد
+    ...members.flatMap(m => {
+      const fam = famMap[m.family_id] || {}
+      const rows = []
+      if (type === 'all') {
+        if (m.chronic_diseases?.trim())
+          rows.push({key:'chronic',    label:'أمراض مزمنة', val:m.chronic_diseases})
+        if (m.disabilities?.trim())
+          rows.push({key:'disability', label:'إعاقة',        val:m.disabilities})
+        if (m.injuries?.trim())
+          rows.push({key:'injury',     label:'إصابة',        val:m.injuries})
+      } else {
+        const t = TYPES.find(t=>t.key===type)
+        const val = m[t?.mField]
+        if (val?.trim()) rows.push({key:type, label:t?.label||'', val})
+      }
+      return rows.map(r=>({
+        uid:       'm-'+m.id+r.key,
+        famId:     fam.id,
+        name:      m.name||'—',
+        role:      m.relation||'فرد',
+        national_id: m.national_id||'—',
+        phone:     fam.phone1||'—',
+        healthType:r.label,
+        val:       r.val,
+        camp:      campMap[fam.camp_id]||'—',
+        camp_id:   fam.camp_id||'',
+        tent:      fam.tent||'—',
+        fam:       fam.head_name||'—',
+      }))
+    }),
   ]
-    .filter(r=>{
-      if(filterCamp&&r.camp_id!==filterCamp) return false
-      if(search&&!r.name?.includes(search)&&!r.val?.includes(search)) return false
-      return true
-    })
-    .sort((a,b)=>(a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true}))
+  .filter(r => {
+    if (filterCamp && r.camp_id !== filterCamp) return false
+    if (search && !r.name?.includes(search) && !r.val?.includes(search) && !r.fam?.includes(search)) return false
+    return true
+  })
+  .sort((a,b) => (a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true}))
 
-  const typeInfo = TYPES.find(t=>t.key===type)
-  const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none mb-2"
+  const TYPE_COLORS = {
+    chronic:'text-accent bg-accent/10', disability:'text-blue bg-blue/10', injury:'text-red bg-red/10'
+  }
 
   return (
     <div>
-      <div className="grid grid-cols-3 gap-1 mb-3">
+      {/* فلاتر النوع */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
         {TYPES.map(t=>(
           <button key={t.key} onClick={()=>setType(t.key)}
-            className={`rounded-xl p-2 text-center border text-xs ${type===t.key?'bg-accent/20 border-accent text-accent':'bg-surface border-border text-muted'}`}>
-            {t.label}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition-all ${
+              type===t.key?'bg-accent text-bg border-accent':'bg-surface text-muted border-border'
+            }`}>
+            {t.icon} {t.label}
           </button>
         ))}
       </div>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ابحث..." className={SEL}/>
+
+      <input value={search} onChange={e=>setSearch(e.target.value)}
+        placeholder="🔍 ابحث باسم أو حالة..."
+        className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-accent mb-2"/>
+
       <div className="flex justify-between items-center mb-2">
-        <span className="text-muted text-xs">{records.length} سجل</span>
-        <button onClick={()=>exportXLSX(records.map((r,i)=>({'#':i+1,'الخيمة':r.tent,'الاسم':r.name,'الصلة':r.role,[typeInfo?.label||'الحالة']:r.val,'المخيم':r.camp,'رب الأسرة':r.fam})),typeInfo?.label||'الصحة',`سجل_${typeInfo?.label||'الصحة'}`)} className="text-xs text-accent font-bold">📥 Excel</button>
+        <span className="text-muted text-xs">{records.length} حالة</span>
+        <button onClick={()=>exportXLSX(
+          records.map((r,i)=>({'#':i+1,'الخيمة':r.tent,'الاسم':r.name,'الصلة':r.role,'الهوية':r.national_id,'الجوال':r.phone,'النوع':r.healthType,'الحالة':r.val,'رب الأسرة':r.fam,'المخيم':r.camp})),
+          'سجل الصحة','سجل_الصحة'
+        )} className="text-xs text-accent font-bold">📥 Excel</button>
       </div>
-      <div className="flex flex-col gap-1.5">
+
+      <div className="flex flex-col gap-2">
         {records.map(r=>(
-          <div key={r.id} className="bg-surface border border-border rounded-xl p-3">
-            <div className="font-bold text-white text-sm">{r.name} <span className="text-muted text-xs">({r.role})</span></div>
-            <div className="text-accent text-xs mt-0.5">{r.val}</div>
-            <div className="text-muted text-[10px]">⛺{r.tent} 🏕️{r.camp}</div>
+          <div key={r.uid}
+            onClick={()=>r.famId&&navigate(`/families/edit/${r.famId}`)}
+            className="bg-surface border border-border rounded-xl p-3 cursor-pointer active:scale-[0.99]">
+
+            {/* الاسم والصلة */}
+            <div className="flex justify-between items-start mb-1.5">
+              <div>
+                <span className="font-black text-white text-sm">{r.name}</span>
+                <span className="text-muted text-xs mr-1">({r.role})</span>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${TYPE_COLORS[r.key]||'text-muted'}`}>
+                {r.healthType}
+              </span>
+            </div>
+
+            {/* الحالة الصحية */}
+            <div className="bg-surface2 rounded-lg px-2 py-1.5 text-xs text-white mb-2">
+              {r.val}
+            </div>
+
+            {/* بيانات الأسرة */}
+            <div className="grid grid-cols-2 gap-x-3 text-[10px] text-muted">
+              <span>👨‍👩‍👧 {r.fam}</span>
+              <span>📞 {r.phone}</span>
+              <span>🪪 {r.national_id}</span>
+              <span>⛺{r.tent} 🏕️{r.camp}</span>
+            </div>
+
+            <div className="text-accent text-[10px] mt-1.5">← اضغط للانتقال للأسرة</div>
           </div>
         ))}
-        {records.length===0&&<p className="text-muted text-center py-6">لا توجد سجلات</p>}
+        {records.length===0&&<p className="text-muted text-center py-8">لا توجد حالات صحية مسجّلة</p>}
       </div>
     </div>
   )
