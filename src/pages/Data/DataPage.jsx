@@ -135,7 +135,11 @@ export default function DataPage() {
     }
   }, [psStatus, psSynced])
 
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => {
+    loadStats()
+    // تأخير بسيط لانتظار SQLite init
+    setTimeout(() => loadPsStats(), 1000)
+  }, [])
 
   // تحديث عند تغيير حالة PowerSync
   useEffect(() => {
