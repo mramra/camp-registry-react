@@ -134,8 +134,9 @@ export default function Analysis() {
   const [selFamily,  setSelFamily]  = useState(null)
   const [selMembers, setSelMembers] = useState([])
 
-  const { showToast, online, psReady, psSynced} = useApp()
+  const { showToast, online, psReady, psSynced } = useApp()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { campFilter: roleCampFilter } = useAuth()
   const navigate = useNavigate()
 
   // حفظ الأسر الكاملة للـ drill-down
@@ -143,6 +144,11 @@ export default function Analysis() {
   const [allMembers,  setAllMembers]  = useState([])
 
   const { query } = useRxDB()
+  // ضبط فلتر المخيم تلقائياً حسب الدور
+  useEffect(() => {
+    if (roleCampFilter) setFilterCamp(roleCampFilter)
+  }, [roleCampFilter])
+
   useEffect(() => { loadStats() }, [filterCamp])
   useEffect(() => { loadData() }, [])
   useEffect(() => { if (psReady)  loadStats() }, [psReady])
