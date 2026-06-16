@@ -1,48 +1,38 @@
-/** حماية XSS */
-export function esc(str) {
-  if (!str) return ''
-  return String(str)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#039;')
-}
+/**
+ * utils.js — دوال مساعدة مشتركة
+ */
 
-/** تحويل اسم الدور إلى عربي */
-export function roleLabel(role) {
-  const map = {
-    platform_owner: 'مالك المنصة',
-    super_admin: 'مشرف عام',
-    camp_delegate: 'مندوب مخيم',
-    assistant: 'مساعد',
-  }
-  return map[role] || role
-}
-
-/** تنسيق التاريخ */
-export function formatDate(iso) {
-  if (!iso) return '—'
+export function formatDate(dateStr, locale = 'ar-EG') {
+  if (!dateStr) return '—'
   try {
-    return new Date(iso).toLocaleDateString('ar-SA', {
+    return new Date(dateStr).toLocaleDateString(locale, {
       year: 'numeric', month: 'short', day: 'numeric'
     })
-  } catch { return iso }
+  } catch { return dateStr }
 }
 
-/** كلمة مرور عشوائية */
-export function randomPassword(length = 10) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#'
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
-
-/** نسخ للـ clipboard */
-export async function copyToClipboard(text) {
+export function formatDateTime(dateStr) {
+  if (!dateStr) return '—'
   try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch { return false }
+    return new Date(dateStr).toLocaleString('ar-EG', {
+      dateStyle: 'short', timeStyle: 'short'
+    })
+  } catch { return dateStr }
 }
 
-/** فحص الاتصال */
-export function isOnline() { return navigator.onLine }
+export function calcAge(dob) {
+  if (!dob) return null
+  const b = new Date(dob), t = new Date()
+  let age = t.getFullYear() - b.getFullYear()
+  if (t.getMonth() < b.getMonth() ||
+     (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) age--
+  return age >= 0 && age < 120 ? age : null
+}
+
+export function truncate(str, len = 30) {
+  return str && str.length > len ? str.slice(0, len) + '…' : str
+}
+
+export function generateId() {
+  return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)
+}
