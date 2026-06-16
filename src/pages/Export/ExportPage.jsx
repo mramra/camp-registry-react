@@ -90,14 +90,18 @@ export default function ExportPage() {
     if (!campId) return null
     const camp = camps.find(c=>c.id===campId)
     if (!camp) return null
-    const delegate = orgMembers.find(m=>m.camp_id===campId&&m.role==='camp_delegate')
-                  || orgMembers.find(m=>m.user_id===camp.manager_id)
+    // 1. مندوب المخيم مباشرة
+    let delegate = orgMembers.find(m=>m.camp_id===campId&&m.role==='camp_delegate')
+    // 2. مدير المخيم (manager_id)
+    if (!delegate) delegate = orgMembers.find(m=>m.user_id===camp.manager_id)
+    // 3. أي عضو مرتبط بهذا المخيم
+    if (!delegate) delegate = orgMembers.find(m=>m.camp_id===campId)
     return {
       name: camp.name,
       lat: camp.latitude, lng: camp.longitude,
       address: camp.address,
       delegateName: delegate?.full_name||'',
-      delegatePhone: delegate?.phone||'',
+      delegatePhone: delegate?.phone || delegate?.national_id || '',
     }
   }
 
@@ -146,7 +150,7 @@ export default function ExportPage() {
       const r1 = empty()
       r1[0] = `🏕️  مخيم:  ${campInfo.name}`
       const r2 = empty()
-      r2[0] = `👤 ${campInfo.delegateName||'—'}   |   📞 ${campInfo.delegatePhone||'—'}   |   📍 ${coord}   |   📅 ${new Date().toLocaleDateString('ar-EG')}`
+      r2[0] = `المندوب: ${campInfo.delegateName||'—'}   |   الجوال: ${campInfo.delegatePhone||'—'}   |   ${coord}   |   ${new Date().toLocaleDateString('ar-EG')}`
       aoa.push(r1, r2)   // صفان فقط بلا فاصل
     }
     aoa.push(colHeaders)
