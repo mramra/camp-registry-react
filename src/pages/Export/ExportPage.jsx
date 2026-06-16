@@ -65,6 +65,8 @@ export default function ExportPage() {
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
   const [showBanner,    setShowBanner]    = useState(true)
+  const [allFamilies,   setAllFamilies]   = useState([])
+  const [allMembers,    setAllMembers]    = useState([])
   const importRef = useRef()
 
   const isAdmin = isOwner || isSuperAdmin
