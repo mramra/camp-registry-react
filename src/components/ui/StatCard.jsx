@@ -1,12 +1,22 @@
-export default function StatCard({ icon, value, label, color='accent', onClick }) {
+import { default as SC } from './Spinner'
+
+export default function StatCard({ icon, value, label, sub, color, onClick, loading }) {
+  const c = color || 'text-accent'
   return (
-    <button
+    <div
+      className={`bg-surface border border-border rounded-2xl p-4 flex flex-col items-center gap-1 ${onClick ? 'cursor-pointer active:scale-95 transition-all' : ''}`}
       onClick={onClick}
-      className={`bg-surface border border-border rounded-xl p-4 text-center w-full transition-all ${onClick ? 'active:scale-95 hover:border-accent/50' : ''}`}
     >
-      <div className="text-2xl mb-1">{icon}</div>
-      <div className={`text-2xl font-black text-${color}`}>{value}</div>
-      <div className="text-muted text-[11px] mt-1">{label}</div>
-    </button>
+      <span className="text-3xl mb-1">{icon}</span>
+      {loading ? (
+        <div className="w-12 h-5 bg-surface2 rounded animate-pulse"/>
+      ) : (
+        <span className={`font-black text-2xl ${c}`}>
+          {typeof value === 'number' ? value.toLocaleString('ar') : value ?? '—'}
+        </span>
+      )}
+      <span className="text-muted text-xs text-center">{label}</span>
+      {sub && <span className="text-muted text-[10px]">{sub}</span>}
+    </div>
   )
 }
