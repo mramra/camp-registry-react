@@ -138,10 +138,8 @@ export default function FamiliesList() {
     }
   }, [location?.state])
 
-  // 1) تحميل أولي من Dexie عند فتح الصفحة
-  useEffect(() => {
-    loadLocal().then(() => syncBackground())
-  }, [])
+  // تحميل من Dexie عند الفتح (سريع — بدون sync تلقائي)
+  useEffect(() => { loadLocal() }, [])
   // Delta Sync — يحدّث قائمة الأسر عند وصول تغييرات
   useEffect(() => {
     const handler = () => loadLocal()
