@@ -543,6 +543,14 @@ export default function FamilyForm() {
           }
           syncMembers() // بدون await — لا تعيق الحفظ
         }
+      } else {
+        // ══ أوف لاين: أضف للقائمة لرفعها لاحقاً ════════════
+        await addToQueue('upsert', 'families', familyData)
+        for (const m of memberDocs)
+          await addToQueue('upsert', 'family_members', m)
+        for (const id of removedIds)
+          await addToQueue('delete', 'family_members', { id }, id)
+        showToast('💾 حُفظ محلياً — سيُرفع عند الاتصال')
       }
 
       showToast(isEdit ? '✅ تم تحديث الأسرة' : '✅ تمت إضافة الأسرة')
