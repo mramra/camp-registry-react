@@ -87,12 +87,12 @@ function AppRoutes() {
             <Route path="edit/:id" element={<FamilyForm />} />
           </Route>
           <Route path="camps"         element={<CampsList />} />
-          <Route path="users"         element={<UsersList />} />
+          <Route path="users" element={<ProtectedRoute requireAdmin><UsersList /></ProtectedRoute>} />
           <Route path="distributions" element={<Distributions />} />
-          <Route path="analysis"      element={<Analysis />} />
+          <Route path="analysis" element={<ProtectedRoute requireCan="reports"><Analysis /></ProtectedRoute>} />
           <Route path="camp-compare"  element={<CampCompare />} />
           <Route path="needs-report"  element={<NeedsReport />} />
-          <Route path="data"          element={<DataPage />} />
+          <Route path="data" element={<ProtectedRoute requireOwner><DataPage /></ProtectedRoute>} />
           <Route path="export"        element={<ExportPage />} />
           <Route path="settings"      element={<Settings />} />
           <Route path="audit"         element={<AuditLog />} />
