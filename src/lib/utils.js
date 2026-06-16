@@ -36,3 +36,10 @@ export function truncate(str, len = 30) {
 export function generateId() {
   return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)
 }
+
+export function randomPassword(length = 10) {
+  const chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefghjkmnpqrstwxyz23456789'
+  return Array.from({ length }, () =>
+    chars[Math.floor(Math.random() * chars.length)]
+  ).join('')
+}
