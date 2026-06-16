@@ -425,7 +425,7 @@ export default function FamiliesList() {
         subtitle={
           <span className="flex items-center gap-2">
             <span className="text-muted text-xs">{filtered.length}/{families.length} أسرة</span>
-            {syncing && <span className="text-[10px] text-accent animate-pulse">🔄 تحديث</span>}
+
             {!navigator.onLine && <span className="text-[10px] text-red">📴 أوف لاين</span>}
           </span>
         }
