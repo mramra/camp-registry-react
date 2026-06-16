@@ -346,6 +346,96 @@ function DistTab({ families, camps, psReady }) {
   )
 }
 
+
+// ════════════════════════════════════════════════════════════
+// تبويب الاحتياجات
+// ════════════════════════════════════════════════════════════
+const NEEDS_CATS = {
+  martyr:      { label:'أسر شهداء',        icon:'🕊️', color:'purple' },
+  captive:     { label:'أسر أسرى',         icon:'⛓️', color:'red'    },
+  displaced:   { label:'نازحون',           icon:'🏃', color:'orange' },
+  orphan:      { label:'أيتام',            icon:'👶', color:'blue'   },
+  widow:       { label:'أرامل',            icon:'👩', color:'pink'   },
+  special:     { label:'ذوو الاحتياجات',   icon:'♿', color:'green'  },
+  chronic:     { label:'أمراض مزمنة',      icon:'💊', color:'yellow' },
+  elderly:     { label:'كبار السن',        icon:'👴', color:'gray'   },
+}
+
+function NeedsTab({ families, camps, filterCamp }) {
+  const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+  const [selCat, setSelCat] = useState('')
+
+  const tagged = families
+    .filter(f => filterCamp ? f.camp_id===filterCamp : true)
+    .map(f => {
+      let tags = []
+      try { tags = JSON.parse(f.category_tags||'[]') } catch {}
+      if (!Array.isArray(tags)) tags = []
+      return { ...f, tags, camp: campMap[f.camp_id]||'—' }
+    })
+    .filter(f => selCat ? f.tags.includes(selCat) : f.tags.length>0)
+
+  const counts = Object.fromEntries(
+    Object.keys(NEEDS_CATS).map(k => [k, families.filter(f=>{
+      let t=[]; try{t=JSON.parse(f.category_tags||'[]')}catch{}
+      return Array.isArray(t)&&t.includes(k)
+    }).length])
+  )
+  const total = tagged.length
+
+  return (
+    <div>
+      {/* إحصائيات الفئات */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {Object.entries(NEEDS_CATS).map(([k,v])=>(
+          counts[k]>0 && (
+            <button key={k} onClick={()=>setSelCat(selCat===k?'':k)}
+              className={`flex items-center gap-2 p-2 rounded-xl border text-xs text-right transition-all ${
+                selCat===k?'bg-accent/20 border-accent':'bg-surface border-border'
+              }`}>
+              <span className="text-lg">{v.icon}</span>
+              <div>
+                <div className="font-black text-white">{counts[k]}</div>
+                <div className="text-muted text-[10px]">{v.label}</div>
+              </div>
+            </button>
+          )
+        ))}
+      </div>
+
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-muted text-xs">
+          {selCat ? `${NEEDS_CATS[selCat]?.label}: ${total} أسرة` : `الكل: ${total} أسرة`}
+        </span>
+        {selCat && (
+          <button onClick={()=>setSelCat('')} className="text-accent text-xs">✕ إلغاء الفلتر</button>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        {tagged.map(f=>(
+          <div key={f.id} className="bg-surface border border-border rounded-xl p-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="font-bold text-white text-sm">{f.head_name}</div>
+                <div className="text-muted text-xs">⛺{f.tent||'—'} 🏕️{f.camp}</div>
+              </div>
+              <div className="flex flex-wrap gap-1 justify-end">
+                {f.tags.map(t=>(
+                  <span key={t} className="text-[10px] bg-accent/10 text-accent px-1.5 py-0.5 rounded-lg">
+                    {NEEDS_CATS[t]?.icon} {NEEDS_CATS[t]?.label||t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+        {tagged.length===0&&<p className="text-muted text-center py-8">لا توجد بيانات</p>}
+      </div>
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════
 // الصفحة الرئيسية
 // ════════════════════════════════════════════════════════════
@@ -353,6 +443,7 @@ const TABS = [
   {id:'children', label:'👶 الأطفال'},
   {id:'women',    label:'👩 النساء'},
   {id:'health',   label:'🏥 الصحة'},
+  {id:'needs',    label:'📋 الاحتياجات'},
   {id:'dist',     label:'📦 التوزيعات'},
 ]
 
@@ -409,6 +500,7 @@ export default function RegistersPage() {
           {tab==='children'  && <ChildrenTab families={families} members={members} camps={camps} filterCamp={filterCamp}/>}
           {tab==='women'     && <WomenTab    families={families} members={members} camps={camps} filterCamp={filterCamp}/>}
           {tab==='health'    && <HealthTab   families={families} members={members} camps={camps} filterCamp={filterCamp}/>}
+          {tab==='needs'     && <NeedsTab    families={families} camps={camps} filterCamp={filterCamp}/>}
           {tab==='dist'      && <DistTab     families={families} camps={camps} psReady={psReady}/>}
         </>
       )}
