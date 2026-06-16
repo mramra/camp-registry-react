@@ -436,7 +436,7 @@ export default function FamiliesList() {
               {syncing ? '⏳' : '🔄'}
             </button>
             {canWrite && (
-              <button onClick={() => navigate('/families/add')}
+              <button onClick={() => navigate('/families/add')} style={{display: canWrite ? '' : 'none'}}
                 className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">➕ إضافة</button>
             )}
           </div>
