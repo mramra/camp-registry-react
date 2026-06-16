@@ -514,17 +514,19 @@ export default function ExportPage() {
       </Card>
 
       {/* ═══ تصدير مخصص ═══ */}
-      {canExp && (
-        <Card title="🎯 تصدير مخصص" icon="">
-          <p className="text-muted text-xs mb-3">
-            اختر الأسر + الحقول + البنر ← كشف Excel مخصص
-          </p>
+      {canExp && allFamilies.length > 0 && (
+        <Card title={`🎯 تصدير مخصص (${allFamilies.length} أسرة)`} icon="">
           <CustomExport
             families={allFamilies}
             members={allMembers}
             camps={camps}
             orgMembers={orgMembers}
           />
+        </Card>
+      )}
+      {canExp && allFamilies.length === 0 && (
+        <Card title="🎯 تصدير مخصص" icon="">
+          <p className="text-muted text-xs text-center py-3">⏳ جاري تحميل الأسر...</p>
         </Card>
       )}
 
