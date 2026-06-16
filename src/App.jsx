@@ -28,7 +28,8 @@ const Subscription   = lazy(() => import('./pages/Subscription/Subscription'))
 const HelpPage       = lazy(() => import('./pages/Help/HelpPage'))
 const SMS            = lazy(() => import('./pages/SMS/SMS'))
 const FamilyPortal   = lazy(() => import('./pages/FamilyPortal/FamilyPortal'))
-const RegistriesPage = lazy(() => import('./pages/Registries/RegistriesPage'))
+const RegistriesPage  = lazy(() => import('./pages/Registries/RegistriesPage'))
+const RegistersPage   = lazy(() => import('./pages/Registers/RegistersPage'))
 const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
 const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
 
@@ -102,6 +103,7 @@ function AppRoutes() {
           <Route path="subscription"  element={<Subscription />} />
           <Route path="help"          element={<HelpPage />} />
           <Route path="sms"           element={<SMS />} />
+          <Route path="registers"   element={<RegistersPage />} />
           <Route path="registries"  element={<RegistriesPage />} />
         </Route>
 
