@@ -72,19 +72,19 @@ export default function ExportPage() {
 
   // ── تحميل المخيمات والمستخدمين ──────────────────────
   // useRxDB.query: PowerSync → Dexie → Supabase تلقائياً
+  // جلب مباشر من Supabase — يضمن أحدث بيانات (جوال المندوب)
   const loadCamps = useCallback(async () => {
-    const [campsData, membersData] = await Promise.all([
-      query('camps'),
-      query('org_members'),
-    ])
-    if (campsData?.length)   setCamps(campsData)
-    if (membersData?.length) setOrgMembers(membersData)
-  }, [query])
+    try {
+      const [{ data: c }, { data: m }] = await Promise.all([
+        supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
+        supabase.from('org_members').select('id,user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
+      ])
+      if (c?.length) setCamps(c)
+      if (m?.length) setOrgMembers(m)
+    } catch {}
+  }, [])
 
-  // تحميل عند الفتح + عند psReady + عند psSynced
   useEffect(() => { loadCamps() }, [])
-  useEffect(() => { if (psReady)  loadCamps() }, [psReady])
-  useEffect(() => { if (psSynced) loadCamps() }, [psSynced])
 
   // ── معلومات المخيم (مندوب + إحداثيات) ──────────────
   function getCampInfo(campId) {
