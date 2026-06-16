@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import XLSX from 'xlsx-js-style'
+import { applyBanner, TABLE_STYLES } from '../../lib/excelBanner'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
@@ -150,7 +151,8 @@ export default function ExportPage() {
       const r1 = empty()
       r1[0] = `🏕️  مخيم:  ${campInfo.name}`
       const r2 = empty()
-      r2[0] = `المندوب: ${campInfo.delegateName||'—'}   |   الجوال: ${campInfo.delegatePhone||'—'}   |   ${coord}   |   ${new Date().toLocaleDateString('ar-EG')}`
+      // البانر الآن عبر excelBanner.js
+      r2[0] = `${campInfo.delegateName||'—'}   |   ${campInfo.delegatePhone||'—'}   |   ${coord}   |   ${new Date().toLocaleDateString('ar-EG')}`
       aoa.push(r1, r2)   // صفان فقط بلا فاصل
     }
     aoa.push(colHeaders)
