@@ -501,6 +501,21 @@ export default function ExportPage() {
         ) : <p className="text-red text-xs text-center py-3">🔒 لا تملك صلاحية التصدير</p>}
       </Card>
 
+      {/* ═══ تصدير مخصص ═══ */}
+      {canExp && (
+        <Card title="🎯 تصدير مخصص" icon="">
+          <p className="text-muted text-xs mb-3">
+            اختر الأسر + الحقول + البنر ← كشف Excel مخصص
+          </p>
+          <CustomExport
+            families={allFamilies}
+            members={allMembers}
+            camps={camps}
+            orgMembers={orgMembers}
+          />
+        </Card>
+      )}
+
       {/* ═══ استيراد ═══ */}
       <Card title="📤 استيراد Excel" icon="">
         {canImp ? (
