@@ -34,9 +34,9 @@ export default function Sidebar({ open, onClose }) {
     {
       group: 'التحليل والتقارير',
       items: [
-        { icon:'📊', label:'التحليل',             path:'/analysis',      need:'reports' },
-        { icon:'📋', label:'تقارير الاحتياجات',   path:'/needs-report',  need:'reports' },
-        { icon:'🏕️', label:'مقارنة المخيمات',    path:'/camp-compare',  need:'reports' },
+        { icon:'📊', label:'التحليل',             path:'/analysis',     need:'reports' },
+        { icon:'📋', label:'تقارير الاحتياجات',  path:'/needs-report', always:true },
+        { icon:'🏕️', label:'مقارنة المخيمات',   path:'/camp-compare', need:'reports' },
         { icon:'📤', label:'الاستيراد والتصدير',  path:'/export',        needExport: true },
       ]
     },
