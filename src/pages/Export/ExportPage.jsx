@@ -85,7 +85,17 @@ export default function ExportPage() {
     } catch {}
   }, [])
 
-  useEffect(() => { loadCamps() }, [])
+  useEffect(() => {
+    loadCamps()
+    // تحميل كل الأسر والأفراد للتصدير المخصص
+    Promise.all([
+      supabase.from('families').select('*').eq('org_id', ORG_ID).order('tent'),
+      supabase.from('family_members').select('*'),
+    ]).then(([{data:fams},{data:mems}])=>{
+      if (fams?.length) setAllFamilies(fams)
+      if (mems?.length) setAllMembers(mems)
+    }).catch(()=>{})
+  }, [])
 
   // ── معلومات المخيم (مندوب + إحداثيات) ──────────────
   function getCampInfo(campId) {
