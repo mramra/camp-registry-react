@@ -224,8 +224,18 @@ function calcAgeFromDob(dob) {
 function DateInput({ value, onChange, maxYear, minYear }) {
   const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
                   'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
-  const parts  = value ? value.split('-') : ['','','']
-  const yr = parts[0] || '', mo = parts[1] || '', dy = parts[2] || ''
+
+  // state داخلي — يحفظ الجزء المختار حتى لو لم يكتمل التاريخ
+  const parse = (v) => { const p = (v||'').split('-'); return [p[0]||'', p[1]||'', p[2]||''] }
+  const [yr, setYr] = useState(() => parse(value)[0])
+  const [mo, setMo] = useState(() => parse(value)[1])
+  const [dy, setDy] = useState(() => parse(value)[2])
+
+  // مزامنة مع القيمة الخارجية عند تغييرها برمجياً
+  useEffect(() => {
+    const [y,m,d] = parse(value)
+    setYr(y); setMo(m); setDy(d)
+  }, [value])
 
   const curYear     = new Date().getFullYear()
   const maxYr       = maxYear || curYear
@@ -234,12 +244,16 @@ function DateInput({ value, onChange, maxYear, minYear }) {
   const age         = calcAgeFromDob(value)
 
   function update(newYr, newMo, newDy) {
-    if (!newYr && !newMo && !newDy) { onChange(''); return }
-    const y = String(newYr).padStart(4,'0').slice(-4)
-    const m = String(newMo).padStart(2,'0')
-    const d = String(newDy).padStart(2,'0')
-    if (newYr && newMo && newDy) onChange(`${y}-${m}-${d}`)
-    else onChange('')
+    // فقط عند اكتمال الثلاثة نُخبر الـ parent
+    if (newYr && newMo && newDy) {
+      const y = String(newYr).padStart(4,'0').slice(-4)
+      const m = String(newMo).padStart(2,'0')
+      const d = String(newDy).padStart(2,'0')
+      onChange(`${y}-${m}-${d}`)
+    } else if (!newYr && !newMo && !newDy) {
+      onChange('')
+    }
+    // إذا ناقص واحد → لا نُفرغ، نترك القيمة الحالية
   }
 
   const SEL = "bg-surface2 border border-border rounded-xl text-white text-sm focus:outline-none focus:border-accent py-2.5 px-1 text-center"
