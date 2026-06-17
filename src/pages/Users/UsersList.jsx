@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, ORG_ID, callAdminAPI } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { randomPassword } from '../../lib/utils'
@@ -45,7 +45,7 @@ export default function UsersList() {
   const navigate = useNavigate()
   const { showToast, online } = useApp()
 
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  const { query, upsert, bulkUpsert, remove } = useLocalDB()
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

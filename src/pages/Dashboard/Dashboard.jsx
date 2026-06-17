@@ -5,7 +5,7 @@ import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { processSyncQueue, getSyncStats } from '../../lib/sync'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
@@ -45,7 +45,7 @@ export default function Dashboard() {
   const { showToast, online, psReady, psSynced } = useApp()
   const navigate = useNavigate()
 
-  const { query, bulkUpsert } = useRxDB()
+  const { query, bulkUpsert } = useLocalDB()
   // تحميل فوري عند فتح الصفحة
   useEffect(() => { loadStats() }, [])
   useEffect(() => { loadActivity() }, [])

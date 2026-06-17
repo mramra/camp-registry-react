@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -141,7 +141,7 @@ export default function Analysis() {
   const [allFamilies, setAllFamilies] = useState([])
   const [allMembers,  setAllMembers]  = useState([])
 
-  const { query } = useRxDB()
+  const { query } = useLocalDB()
   useEffect(() => { loadStats() }, [filterCamp])
   useEffect(() => { loadData() }, [])
   useEffect(() => { if (psReady)  loadStats() }, [psReady])

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
@@ -11,7 +11,7 @@ export default function CampCompare() {
   const [sortBy,  setSortBy]  = useState('families')
   const [typeFilter, setType] = useState('all')
   const { showToast } = useApp()
-  const { query } = useRxDB()
+  const { query } = useLocalDB()
 
   useEffect(() => { loadData() }, [])
 

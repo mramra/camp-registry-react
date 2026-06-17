@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -37,7 +37,7 @@ export default function NeedsReport() {
   const [exporting,  setExporting]  = useState(false)
   const { showToast } = useApp()
   const { canExport } = useAuth()
-  const { query } = useRxDB()
+  const { query } = useLocalDB()
 
   useEffect(() => { loadData() }, [])
 

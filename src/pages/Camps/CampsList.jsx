@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -38,7 +38,7 @@ export default function CampsList() {
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
   const { showToast , psReady, psSynced} = useApp()
 
-  const { query, upsert, remove, bulkUpsert } = useRxDB()
+  const { query, upsert, remove, bulkUpsert } = useLocalDB()
   useEffect(() => { loadData() }, [])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {

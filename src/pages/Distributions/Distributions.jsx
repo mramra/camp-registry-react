@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { enqueue } from '../../lib/sync'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
@@ -45,7 +45,7 @@ export default function Distributions() {
   const [saving, setSaving] = useState(false)
   const { showToast, online } = useApp()
   const { isSuperAdmin, isOwner, canWrite } = useAuth()
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  const { query, upsert, bulkUpsert, remove } = useLocalDB()
 
   useEffect(() => { loadData() }, [])
 

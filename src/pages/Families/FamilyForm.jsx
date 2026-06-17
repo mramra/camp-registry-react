@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { logFamilyActivity, diffFamilyFields } from '../../lib/familyActivityLog'
 import { useAuth } from '../../context/AuthContext'
@@ -309,7 +309,7 @@ export default function FamilyForm() {
   const originalDataRef = useRef(null) // نسخة من بيانات الأسرة الأصلية (قبل أي تعديل) — لحساب الفرق عند الحفظ
   const { profile } = useAuth()
   const { showToast } = useApp()
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -511,7 +511,7 @@ export default function FamilyForm() {
       }
 
       // إضافة لطابور المزامنة
-      // RxDB يتولى المزامنة تلقائياً
+      // SQLite (PowerSync) يتولى المزامنة تلقائياً
 
       // ══════════════════════════════════════════
       // ② رفع للسيرفر (إذا متصل)

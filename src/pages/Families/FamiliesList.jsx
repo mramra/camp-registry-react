@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
@@ -106,7 +106,7 @@ export default function FamiliesList() {
 
   const { canWrite, canDelete, profile } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { query, upsert, bulkUpsert, remove } = useRxDB()
+  const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const { showToast, psReady, psSynced} = useApp()
   const navigate = useNavigate()
 
@@ -225,7 +225,7 @@ export default function FamiliesList() {
       const localCamps = camps || await query('camps')
       applyData(fams, localCamps, mems)
       // حفظ وقت آخر مزامنة
-      // RxDB يتتبع آخر sync تلقائياً
+      // SQLite (PowerSync) يتتبع آخر sync تلقائياً
     } catch(e) { console.warn('[sync]', e.message) }
     finally { setSyncing(false) }
   }

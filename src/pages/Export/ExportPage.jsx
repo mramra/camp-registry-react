@@ -3,7 +3,7 @@ import XLSX from 'xlsx-js-style'
 import { applyBanner, TABLE_STYLES } from '../../lib/excelBanner'
 import CustomExport from './CustomExport'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -53,7 +53,7 @@ function calcAge(dob) {
 export default function ExportPage() {
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
   const { showToast, psReady, psSynced } = useApp()
-  const { query } = useRxDB()
+  const { query } = useLocalDB()
 
   const [loading,       setLoading]       = useState(false)
   const [camps,         setCamps]         = useState([])
@@ -74,7 +74,6 @@ export default function ExportPage() {
   const canImp  = canImport || isAdmin
 
   // ── تحميل المخيمات والمستخدمين ──────────────────────
-  // useRxDB.query: PowerSync → Dexie → Supabase تلقائياً
   // جلب مباشر من Supabase — يضمن أحدث بيانات (جوال المندوب)
   const loadCamps = useCallback(async () => {
     try {

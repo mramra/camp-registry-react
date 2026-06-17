@@ -1,9 +1,10 @@
 /**
- * useRxDB.js — Unified Data Hook
+ * useLocalDB.js — Unified Data Hook
  * ════════════════════════════════════════════════════════
  * SQLite (PowerSync) = المصدر المحلي الوحيد للقراءة والكتابة
  * Supabase           = المصدر السحابي (يُجلب منه عند أول تحميل أو فشل SQLite)
- * Dexie تم إلغاؤها بالكامل من الاستخدام (لا تُستدعى من هنا أبداً)
+ * لا يوجد أي مخزن محلي آخر — هذا الـhook هو الواجهة الموحّدة الوحيدة
+ * لكل صفحات التطبيق للتعامل مع البيانات المحلية عبر SQLite/PowerSync فقط.
  * ════════════════════════════════════════════════════════
  */
 import { useCallback, useRef, useEffect } from 'react'
@@ -67,7 +68,7 @@ function prepareForSQLite(data, table) {
   return doc
 }
 
-export function useRxDB() {
+export function useLocalDB() {
   const { psReady } = useSyncStatus()
   const psRef = useRef(psReady)
   useEffect(() => { psRef.current = psReady }, [psReady])
@@ -102,7 +103,7 @@ export function useRxDB() {
             return []
           }
         }
-      } catch(e) { console.warn('[useRxDB] SQLite:', table, e.message) }
+      } catch(e) { console.warn('[useLocalDB] SQLite:', table, e.message) }
     }
 
     // 2. Supabase (SQLite فارغ + اتصال متاح) — لا يُستخدم مع pagination محلية
@@ -116,7 +117,7 @@ export function useRxDB() {
           await bulkUpsertLocal(table, data)
           return data.map(parseRow)
         }
-      } catch(e) { console.warn('[useRxDB] Supabase:', table, e.message) }
+      } catch(e) { console.warn('[useLocalDB] Supabase:', table, e.message) }
     }
 
     return []
@@ -171,7 +172,7 @@ export function useRxDB() {
               `INSERT OR REPLACE INTO ${table} (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
               Object.values(d)
             )
-          } catch(e) { console.warn(`[useRxDB] SQLite row ${table}:`, e.message) }
+          } catch(e) { console.warn(`[useLocalDB] SQLite row ${table}:`, e.message) }
         }
         return
       }
@@ -190,14 +191,14 @@ export function useRxDB() {
       try {
         await db.executeBatch(sql, valueSets)
       } catch(e) {
-        console.warn(`[useRxDB] executeBatch ${table} فشلت، رجوع لصفاً-صفاً:`, e.message)
+        console.warn(`[useLocalDB] executeBatch ${table} فشلت، رجوع لصفاً-صفاً:`, e.message)
         // رجوع آمن: نفّذ صفاً صفاً لتحديد أي صف بالضبط يفشل بدل فقدان كل الدفعة
         for (let i = 0; i < valueSets.length; i++) {
           try { await db.execute(sql, valueSets[i]) }
-          catch(rowErr) { console.warn(`[useRxDB] SQLite row ${table}[${i}]:`, rowErr.message) }
+          catch(rowErr) { console.warn(`[useLocalDB] SQLite row ${table}[${i}]:`, rowErr.message) }
         }
       }
-    } catch(e) { console.warn('[useRxDB] SQLite write:', table, e.message) }
+    } catch(e) { console.warn('[useLocalDB] SQLite write:', table, e.message) }
   }
 
   const bulkUpsert = useCallback(bulkUpsertLocal, [])

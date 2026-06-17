@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { useRxDB } from '../../lib/useRxDB'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -31,7 +31,7 @@ export default function Movements() {
 
   const { canWrite } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { query, upsert, remove, bulkUpsert } = useRxDB()
+  const { query, upsert, remove, bulkUpsert } = useLocalDB()
   const { showToast, psReady, psSynced} = useApp()
 
   useEffect(() => { loadData() }, [filterType, filterCamp])
