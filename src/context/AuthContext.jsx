@@ -58,10 +58,20 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
+        // ربط PowerSync الكامل — غير معيق، بعد تأخير بسيط
+        setTimeout(() => {
+          import('../lib/powersync').then(({ connectPowerSync }) =>
+            connectPowerSync().catch(() => {})
+          )
+        }, 2000)
       } else {
         setUser(null); setProfile(null)
         localStorage.removeItem(PROFILE_KEY)
         setLoading(false)
+        // اقطع PowerSync
+        import('../lib/powersync').then(({ disconnectPowerSync }) =>
+          disconnectPowerSync().catch(() => {})
+        )
       }
     })
   }
