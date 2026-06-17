@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { processSyncQueue, getSyncStats } from '../../lib/sync'
+import { fetchRecentFamilyActivity } from '../../lib/familyActivityLog'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
   const [syncInfo, setSyncInfo] = useState({ pending:0, failed:0, conflicts:0 })
   const [recent,     setRecent]     = useState([])
+  const [activity,   setActivity]   = useState([])
   const [queueModal, setQueueModal] = useState(null)  // 'pending' | 'failed' | 'conflict' | null
   const [queueItems, setQueueItems] = useState([])
   const [syncing,  setSyncing]  = useState(false)
@@ -45,12 +47,19 @@ export default function Dashboard() {
   const { query, bulkUpsert } = useRxDB()
   // تحميل فوري عند فتح الصفحة
   useEffect(() => { loadStats() }, [])
+  useEffect(() => { loadActivity() }, [])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {
-    const handler = () => loadStats()
+    const handler = () => { loadStats(); loadActivity() }
     window.addEventListener('delta-sync', handler)
     return () => window.removeEventListener('delta-sync', handler)
   }, [])
+
+  async function loadActivity() {
+    if (!navigator.onLine) return
+    const rows = await fetchRecentFamilyActivity(8)
+    setActivity(rows)
+  }
 
 
   // تحديث عند تغيّر حالة المزامنة
@@ -282,25 +291,39 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* آخر الأسر المضافة */}
-      {recent.length > 0 && (
+      {/* آخر تعديلات الأسر — إضافة / تعديل / حذف مع اسم المستخدم */}
+      {activity.length > 0 && (
         <div className="bg-surface border border-border rounded-xl p-4 mb-4">
           <div className="text-accent text-sm font-bold mb-3">📋 آخر تعديلات الأسر</div>
           <div className="flex flex-col gap-2">
-            {recent.map(f => (
-              <div key={f.id}
-                onClick={() => navigate('/families', { state: { openFamily: f.id, autoOpen: true } })}
-                className="flex items-center justify-between bg-surface2 rounded-xl px-3 py-2.5 cursor-pointer active:scale-98">
-                <div className="flex-1 min-w-0">
-                  <div className="text-white text-xs font-bold truncate">{f.head_name}</div>
-                  <div className="text-muted text-[10px]">🏕️ {f.campName}</div>
+            {activity.map(a => {
+              const ACTION_STYLE = {
+                insert: { label: 'أضاف',         color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+                update: { label: 'تم التعديل',   color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+                delete: { label: 'حذف الأسرة',   color: '#ef4444', bg: 'rgba(239,68,68,0.1)'  },
+              }
+              const st = ACTION_STYLE[a.action] || ACTION_STYLE.update
+              const clickable = a.action !== 'delete'
+              return (
+                <div key={a.id}
+                  onClick={() => clickable && navigate('/families', { state: { openFamily: a.family_id, autoOpen: true } })}
+                  className="flex items-center justify-between bg-surface2 rounded-xl px-3 py-2.5"
+                  style={{ cursor: clickable ? 'pointer' : 'default' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-xs font-bold truncate">{a.family_name || '—'}</div>
+                    <div className="text-[10px] mt-0.5">
+                      <span className="font-bold" style={{color:st.color}}>{a.actor_name || '—'}</span>
+                      {' · '}
+                      <span style={{color:st.color}}>{st.label}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-accent font-black text-sm">{a.members_count ?? 0}</span>
+                    <span className="text-blue text-sm">👥</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <span className="text-accent font-black text-sm">{(f.members_count||1)}</span>
-                  <span className="text-blue text-sm">👥</span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
