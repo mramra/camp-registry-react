@@ -80,7 +80,7 @@ export default function Movements() {
       }
       const { data } = await q
       if (data) {
-        try { await localDB.family_movements.bulkPut(data.map(m=>({...m, family_name:m.families?.head_name}))) } catch {}
+        try { await bulkUpsert('family_movements', data.map(m=>({...m, family_name:m.families?.head_name}))) } catch {}
         let filtered = data
         if (filterType) filtered = filtered.filter(m => m.type===filterType)
         if (filterCamp) filtered = filtered.filter(m => m.from_camp===filterCamp||m.to_camp===filterCamp)
@@ -91,7 +91,7 @@ export default function Movements() {
   }
 
   async function loadFamilies() {
-    const fams = await localDB.families.toArray().catch(()=>[])
+    const fams = await query('families')
     setFamilies(fams)
   }
 
@@ -113,7 +113,7 @@ export default function Movements() {
         notes:      form.notes     || null,
         created_at: new Date().toISOString(),
       }
-      await localDB.family_movements.put(data)
+      await upsert('family_movements', data)
       await enqueue('insert_movement', data)
       showToast('✅ تم تسجيل الحركة')
       setShowForm(false)

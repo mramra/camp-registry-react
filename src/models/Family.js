@@ -35,13 +35,12 @@ export class Family extends BaseModel {
   // حذف أسرة مع أفرادها
   static async deleteWithMembers(id) {
     await supabase.from('family_members').delete().eq('family_id', id)
-    await this.delete(id)
-    // حذف محلي
+    await this.delete(id) // يحذف الأسرة من Supabase + SQLite (عبر BaseModel._deleteLocal)
+    // حذف أفراد الأسرة من SQLite محلياً أيضاً
     try {
-      const { localDB } = await import('../lib/db')
-      const mems = await localDB.family_members?.where('family_id').equals(id).toArray() || []
-      await localDB.family_members?.bulkDelete?.(mems.map(m => m.id))
-      await localDB.families?.delete?.(id)
+      const { getPowerSync } = await import('../lib/powersync')
+      const db = getPowerSync()
+      if (db) await db.execute(`DELETE FROM family_members WHERE family_id = ?`, [id])
     } catch {}
     return true
   }

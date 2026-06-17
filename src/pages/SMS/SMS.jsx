@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -15,10 +15,11 @@ export default function SMS() {
   const [sending, setSending] = useState(false)
   const { showToast } = useApp()
   const { isOwner, isSuperAdmin } = useAuth()
+  const { query } = useRxDB()
 
   useEffect(() => {
-    localDB.families.toArray().catch(()=>[]).then(setFamilies)
-    localDB.camps.toArray().catch(()=>[]).then(setCamps)
+    query('families').then(setFamilies)
+    query('camps').then(setCamps)
   }, [])
 
   const filtered = families.filter(f => {

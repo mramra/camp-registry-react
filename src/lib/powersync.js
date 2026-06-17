@@ -67,10 +67,23 @@ const camp_dist_families = new Table({
   received:column.integer, received_at:column.text,
   received_by:column.text, notes:column.text,
 })
+// جدول محلي بحت لتخزين العمليات المعلّقة وقت العمل بدون نت (بديل Dexie sync_queue)
+// لا يُزامن مع Supabase أبداً — فقط تخزين مؤقت محلي يُفرّغ عند توفر الاتصال
+const sync_queue = new Table({
+  op:column.text,          // 'upsert' | 'delete'
+  table_name:column.text,  // الجدول الهدف (مثل 'families')
+  data:column.text,        // JSON.stringify للبيانات
+  record_id:column.text,
+  status:column.text,      // 'pending' | 'failed'
+  retries:column.integer,
+  last_error:column.text,
+  created_at:column.text,
+})
 
 const AppSchema = new Schema({
   families, family_members, camps, org_members,
   family_movements, dist_rounds, camp_distributions, camp_dist_families,
+  sync_queue,
 })
 
 export const psDb = new PowerSyncDatabase({

@@ -4,7 +4,6 @@
  * مثل Eloquent في Laravel
  */
 import { supabase, ORG_ID } from '../lib/supabase'
-import { localDB }           from '../lib/db'
 
 async function getSQLite() {
   try {
@@ -113,7 +112,6 @@ export class BaseModel {
         )
       } catch {}
     }
-    try { await localDB[this.table]?.put?.(doc) } catch {}
   }
 
   static async _deleteLocal(id) {
@@ -121,6 +119,5 @@ export class BaseModel {
     if (db) {
       try { await db.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id]) } catch {}
     }
-    try { await localDB[this.table]?.delete?.(id) } catch {}
   }
 }

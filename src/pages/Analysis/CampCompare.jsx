@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
@@ -11,6 +11,7 @@ export default function CampCompare() {
   const [sortBy,  setSortBy]  = useState('families')
   const [typeFilter, setType] = useState('all')
   const { showToast } = useApp()
+  const { query } = useRxDB()
 
   useEffect(() => { loadData() }, [])
 
@@ -18,9 +19,9 @@ export default function CampCompare() {
     setLoading(true)
     try {
       const [families, camps, members] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
+        query('families'),
+        query('camps'),
+        query('family_members'),
       ])
       const campFams = {}
       const campMems = {}

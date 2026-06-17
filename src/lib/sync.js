@@ -1,13 +1,27 @@
 import { supabase, ORG_ID } from './supabase'
-import { localDB } from './db'
 import { logFamilyActivity } from './familyActivityLog'
 
+async function getDb() {
+  try {
+    const { getPowerSync } = await import('./powersync')
+    return getPowerSync()
+  } catch { return null }
+}
+
+function genId() {
+  return (crypto?.randomUUID?.() || `q_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+}
+
 // ─── معالجة طابور المزامنة ───────────────────────────────
+// جدول sync_queue الموحّد (مشترك مع syncQueue.js) — أعمدة: id, op, table_name, data, record_id, status, retries, last_error, created_at
+// هنا op يقابل ما كان يُسمّى action (مثل 'insert_family', 'delete_member'...) و data يقابل payload
 export async function processSyncQueue() {
-  const queue = await localDB.sync_queue
-    .where('status').equals('pending')
-    .and(item => (item.attempts || 0) < 5)
-    .toArray()
+  const db = await getDb()
+  if (!db) return { synced: 0, failed: 0, conflicts: 0 }
+
+  const queue = await db.getAll(
+    `SELECT * FROM sync_queue WHERE status = 'pending' AND retries < 5 ORDER BY created_at ASC`
+  )
 
   if (!queue.length) return { synced: 0, failed: 0, conflicts: 0 }
 
@@ -15,22 +29,21 @@ export async function processSyncQueue() {
 
   for (const item of queue) {
     try {
-      const result = await handleSyncItem(item)
+      const result = await handleSyncItem({ action: item.op, payload: item.data })
       if (result === 'conflict') {
-        await localDB.sync_queue.update(item.id, { status: 'conflict' })
+        await db.execute(`UPDATE sync_queue SET status = 'conflict' WHERE id = ?`, [item.id])
         conflicts++
       } else {
-        await localDB.sync_queue.update(item.id, { status: 'done' })
+        // تمت المعالجة بنجاح — احذف العنصر من الطابور (مطابق لسلوك "تم")
+        await db.execute(`DELETE FROM sync_queue WHERE id = ?`, [item.id])
         synced++
       }
     } catch (err) {
-      const attempts = (item.attempts || 0) + 1
-      await localDB.sync_queue.update(item.id, {
-        status: attempts >= 5 ? 'failed' : 'pending',
-        error: err.message,
-        attempts,
-        last_attempt: new Date().toISOString(),
-      })
+      const attempts = (item.retries || 0) + 1
+      await db.execute(
+        `UPDATE sync_queue SET status = ?, last_error = ?, retries = ? WHERE id = ?`,
+        [attempts >= 5 ? 'failed' : 'pending', err.message, attempts, item.id]
+      )
       failed++
     }
   }
@@ -38,8 +51,7 @@ export async function processSyncQueue() {
   return { synced, failed, conflicts }
 }
 
-async function handleSyncItem(item) {
-  const { action, payload } = item
+async function handleSyncItem({ action, payload }) {
   const data = typeof payload === 'string' ? JSON.parse(payload) : payload
 
   switch (action) {
@@ -188,28 +200,36 @@ async function upsertWithConflict(table, localData) {
 
 // ─── إضافة لطابور المزامنة ─────────────────────────────────
 export async function enqueue(action, payload) {
-  await localDB.sync_queue.add({
-    action,
-    payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
-    status: 'pending',
-    created_at: new Date().toISOString(),
-    attempts: 0,
-  })
+  const db = await getDb()
+  if (!db) return
+  const dataStr = typeof payload === 'string' ? payload : JSON.stringify(payload)
+  let recordId = null
+  try { recordId = (typeof payload === 'string' ? JSON.parse(payload) : payload)?.id || null } catch {}
+  await db.execute(
+    `INSERT INTO sync_queue (id, op, table_name, data, record_id, status, retries, created_at)
+     VALUES (?, ?, '', ?, ?, 'pending', 0, ?)`,
+    [genId(), action, dataStr, recordId, new Date().toISOString()]
+  )
 }
 
 // ─── إحصائيات الطابور ──────────────────────────────────────
 export async function getSyncStats() {
-  const [pending, failed, conflicts] = await Promise.all([
-    localDB.sync_queue.where('status').equals('pending').count(),
-    localDB.sync_queue.where('status').equals('failed').count(),
-    localDB.sync_queue.where('status').equals('conflict').count(),
+  const db = await getDb()
+  if (!db) return { pending: 0, failed: 0, conflicts: 0, total: 0 }
+  const [pendingRows, failedRows, conflictRows] = await Promise.all([
+    db.getAll(`SELECT COUNT(*) as c FROM sync_queue WHERE status = 'pending'`),
+    db.getAll(`SELECT COUNT(*) as c FROM sync_queue WHERE status = 'failed'`),
+    db.getAll(`SELECT COUNT(*) as c FROM sync_queue WHERE status = 'conflict'`),
   ])
+  const pending   = pendingRows?.[0]?.c || 0
+  const failed    = failedRows?.[0]?.c || 0
+  const conflicts = conflictRows?.[0]?.c || 0
   return { pending, failed, conflicts, total: pending + failed + conflicts }
 }
 
 // ─── إعادة المحاولة للعناصر الفاشلة ──────────────────────
 export async function retryFailed() {
-  await localDB.sync_queue
-    .where('status').equals('failed')
-    .modify({ status: 'pending', attempts: 0 })
+  const db = await getDb()
+  if (!db) return
+  await db.execute(`UPDATE sync_queue SET status = 'pending', retries = 0 WHERE status = 'failed'`)
 }

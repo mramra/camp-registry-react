@@ -1,14 +1,12 @@
 /**
  * useRxDB.js — Unified Data Hook
  * ════════════════════════════════════════════════════════
- * SQLite (PowerSync) = المصدر الرئيسي الرسمي للقراءة والكتابة
- * Dexie              = نسخة احتياطية (mirror) للأمان فقط
- * Supabase           = المصدر السحابي (يُجلب منه عند أول تحميل)
+ * SQLite (PowerSync) = المصدر المحلي الوحيد للقراءة والكتابة
+ * Supabase           = المصدر السحابي (يُجلب منه عند أول تحميل أو فشل SQLite)
+ * Dexie تم إلغاؤها بالكامل من الاستخدام (لا تُستدعى من هنا أبداً)
  * ════════════════════════════════════════════════════════
- * المزامنة الفورية تتم عبر PowerSync connect() (real-time)
  */
 import { useCallback, useRef, useEffect } from 'react'
-import { localDB }         from './db'
 import { useSyncStatus }   from '../context/PowerSyncContext'
 import { supabase, ORG_ID } from './supabase'
 
@@ -74,7 +72,7 @@ export function useRxDB() {
   const psRef = useRef(psReady)
   useEffect(() => { psRef.current = psReady }, [psReady])
 
-  // ── قراءة: SQLite → Dexie → Supabase ─────────────────────
+  // ── قراءة: SQLite → Supabase ──────────────────────────────
   const query = useCallback(async (table, filters = {}) => {
     const keys = Object.keys(filters)
 
@@ -96,21 +94,14 @@ export function useRxDB() {
       } catch(e) { console.warn('[useRxDB] SQLite:', table, e.message) }
     }
 
-    // 2. Dexie (fallback)
-    try {
-      let all = await localDB[table]?.toArray?.() || []
-      if (keys.length) all = all.filter(r => keys.every(k => r[k] === filters[k]))
-      if (all.length) return all.map(parseRow)
-    } catch {}
-
-    // 3. Supabase (فارغ محلي + اتصال)
+    // 2. Supabase (SQLite فارغ + اتصال متاح)
     if (navigator.onLine && SUPABASE_TABLES[table]) {
       try {
         let q = SUPABASE_TABLES[table]()
         if (keys.length) keys.forEach(k => { q = q.eq(k, filters[k]) })
         const { data } = await q
         if (data?.length) {
-          // احفظ في SQLite + Dexie
+          // احفظ في SQLite لتكون متاحة محلياً لاحقاً
           await bulkUpsertLocal(table, data)
           return data.map(parseRow)
         }
@@ -120,7 +111,7 @@ export function useRxDB() {
     return []
   }, [])
 
-  // ── كتابة محلية: SQLite + Dexie ──────────────────────────
+  // ── كتابة محلية: SQLite فقط ───────────────────────────────
   async function bulkUpsertLocal(table, docs) {
     if (!docs?.length) return
     const now = new Date().toISOString()
@@ -128,7 +119,6 @@ export function useRxDB() {
       ...d, org_id: d.org_id || ORG_ID, updated_at: d.updated_at || now
     }))
 
-    // SQLite — كتابة صفاً صفاً (فشل صف لا يُسقط الباقي)
     if (psRef.current) {
       try {
         const { getPowerSync } = await import('./powersync')
@@ -153,11 +143,6 @@ export function useRxDB() {
         }
       } catch(e) { console.warn('[useRxDB] SQLite write:', table, e.message) }
     }
-
-    // Dexie (mirror)
-    try {
-      await localDB[table]?.bulkPut?.(prepared).catch(() => {})
-    } catch {}
   }
 
   const bulkUpsert = useCallback(bulkUpsertLocal, [])
@@ -168,7 +153,6 @@ export function useRxDB() {
   }, [])
 
   const remove = useCallback(async (table, id) => {
-    // SQLite
     if (psRef.current) {
       try {
         const { getPowerSync } = await import('./powersync')
@@ -176,8 +160,6 @@ export function useRxDB() {
         if (db) await db.execute(`DELETE FROM ${table} WHERE id = ?`, [id])
       } catch {}
     }
-    // Dexie
-    try { await localDB[table]?.delete?.(id) } catch {}
   }, [])
 
   return { ready: psRef.current, query, upsert, bulkUpsert, remove }

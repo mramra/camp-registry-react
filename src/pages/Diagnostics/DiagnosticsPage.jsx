@@ -4,7 +4,6 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
 import { getPowerSync, isPowerSyncConnected, connectPowerSync } from '../../lib/powersync'
 import { pushLocalChanges } from '../../lib/pushLocalChanges'
 import { quickSync } from '../../lib/syncAll'
@@ -37,7 +36,7 @@ export default function DiagnosticsPage() {
   const [tests,   setTests]   = useState({})
   const [running, setRunning] = useState(false)
   const [logs,    setLogs]    = useState([])
-  const [counts,  setCounts]  = useState({ supabase:{}, dexie:{}, sqlite:{} })
+  const [counts,  setCounts]  = useState({ supabase:{}, sqlite:{} })
   const logTimer = useRef(null)
   const [pushing, setPushing]   = useState(false)
   const [pushMsg, setPushMsg]   = useState('')
@@ -92,7 +91,9 @@ export default function DiagnosticsPage() {
 
     // 6. قائمة الانتظار
     try {
-      const pending = await localDB.sync_queue?.where('status').equals('pending').count() || 0
+      const db = getPowerSync()
+      const rows = await db.getAll(`SELECT COUNT(*) as c FROM sync_queue WHERE status = 'pending'`)
+      const pending = rows?.[0]?.c || 0
       t.queue = { ok: pending===0, label:'عمليات معلقة', val: `${pending} عملية`, warn: pending>0 }
     } catch {
       t.queue = { ok:true, label:'عمليات معلقة', val:'0' }
@@ -101,7 +102,7 @@ export default function DiagnosticsPage() {
     setTests(t)
 
     // ── أعداد السجلات في كل مخزن ──────────────────────────
-    const c = { supabase:{}, dexie:{}, sqlite:{} }
+    const c = { supabase:{}, sqlite:{} }
     await Promise.all(TABLES.map(async tbl => {
       // Supabase
       try {
@@ -111,8 +112,6 @@ export default function DiagnosticsPage() {
         const { count } = await q
         c.supabase[tbl] = count ?? 0
       } catch { c.supabase[tbl] = '—' }
-      // Dexie
-      try { c.dexie[tbl] = await localDB[tbl]?.count() ?? 0 } catch { c.dexie[tbl] = '—' }
       // SQLite
       try {
         const db = getPowerSync()
@@ -170,13 +169,7 @@ export default function DiagnosticsPage() {
     try {
       console.log('[rebuild] بدء إعادة البناء...')
 
-      // 1. امسح Dexie
-      for (const tbl of TABLES) {
-        try { await localDB[tbl]?.clear() } catch {}
-      }
-      console.log('[rebuild] Dexie مُسح')
-
-      // 2. امسح SQLite
+      // 1. امسح SQLite
       try {
         const db = getPowerSync()
         for (const tbl of TABLES) {
@@ -185,7 +178,7 @@ export default function DiagnosticsPage() {
         console.log('[rebuild] SQLite مُسح')
       } catch {}
 
-      // 3. أعد الجلب من Supabase
+      // 2. أعد الجلب من Supabase
       const { quickSync } = await import('../../lib/syncAll')
       await quickSync()
       console.log('[rebuild] ✅ اكتمل — البيانات نظيفة الآن')
@@ -298,19 +291,17 @@ export default function DiagnosticsPage() {
             <tr className="text-muted border-b border-border">
               <th className="text-right py-1.5">الجدول</th>
               <th className="text-center">☁️ سيرفر</th>
-              <th className="text-center">📦 Dexie</th>
               <th className="text-center">🗄️ SQLite</th>
             </tr>
           </thead>
           <tbody>
             {TABLES.map(tbl=>{
-              const s=counts.supabase[tbl], d=counts.dexie[tbl], q=counts.sqlite[tbl]
-              const match = s===d && d===q
+              const s=counts.supabase[tbl], q=counts.sqlite[tbl]
+              const match = s===q
               return (
                 <tr key={tbl} className="border-b border-border/30">
                   <td className="text-right py-1.5 text-white">{TABLE_AR[tbl]}</td>
                   <td className="text-center text-muted">{s}</td>
-                  <td className={`text-center ${d===s?'text-green':'text-accent'}`}>{d}</td>
                   <td className={`text-center ${q===s?'text-green':'text-red'}`}>{q}</td>
                 </tr>
               )
@@ -318,7 +309,7 @@ export default function DiagnosticsPage() {
           </tbody>
         </table>
         <p className="text-muted text-[10px] mt-2">
-          🟢 = مطابق للسيرفر | 🔴 = ناقص. الهدف أن تتطابق الأعمدة الثلاثة
+          🟢 = مطابق للسيرفر | 🔴 = ناقص
         </p>
       </div>
 

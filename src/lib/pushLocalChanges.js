@@ -3,12 +3,23 @@
  *
  * آمن 100%:
  *   - يرفع فقط، لا يحذف شيئاً محلياً
- *   - يقارن Dexie بـ Supabase
+ *   - يقارن SQLite بـ Supabase
  *   - أي سجل محلي غير موجود في السيرفر → يرفعه (upsert)
  *   - يُرجع تقريراً مفصلاً بما رُفع
  */
 import { supabase, ORG_ID } from './supabase'
-import { localDB }          from './db'
+
+async function getDb() {
+  try {
+    const { getPowerSync } = await import('./powersync')
+    return getPowerSync()
+  } catch { return null }
+}
+
+async function sqliteGetAll(db, table) {
+  if (!db) return []
+  try { return await db.getAll(`SELECT * FROM ${table}`) } catch { return [] }
+}
 
 // الحقول المقبولة في Supabase لكل جدول
 const ALLOWED = {
@@ -48,7 +59,8 @@ export async function pushLocalChanges(onProgress = () => {}) {
 
   // ═══ 1. الأسر ═══════════════════════════════════════════
   onProgress('📋 فحص الأسر...')
-  const localFams = await localDB.families.toArray().catch(() => [])
+  const db = await getDb()
+  const localFams = await sqliteGetAll(db, 'families')
   report.families.total = localFams.length
 
   // جلب IDs الموجودة في السيرفر
@@ -74,7 +86,7 @@ export async function pushLocalChanges(onProgress = () => {}) {
 
   // ═══ 2. الأفراد ═════════════════════════════════════════
   onProgress('👤 فحص الأفراد...')
-  const localMems = await localDB.family_members.toArray().catch(() => [])
+  const localMems = await sqliteGetAll(db, 'family_members')
   report.family_members.total = localMems.length
 
   const { data: serverMems } = await supabase.from('family_members').select('id')

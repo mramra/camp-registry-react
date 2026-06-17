@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { localDB } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -34,10 +33,14 @@ export default function Settings() {
     if (!window.confirm('حذف كل البيانات المحلية؟ ستحتاج إلى اتصال إنترنت لاسترجاعها.')) return
     setClearingDB(true)
     try {
-      await Promise.all([
-        localDB.families.clear(), localDB.camps.clear(), localDB.family_members.clear(),
-        localDB.dist_rounds.clear(), localDB.family_movements.clear(),
-      ])
+      const { getPowerSync } = await import('../../lib/powersync')
+      const db = getPowerSync()
+      if (db) {
+        const TABLES = ['families','camps','family_members','dist_rounds','family_movements','org_members','camp_distributions','camp_dist_families']
+        for (const tbl of TABLES) {
+          await db.execute(`DELETE FROM ${tbl}`).catch(() => {})
+        }
+      }
       showToast('✅ تم حذف البيانات المحلية')
     } catch(err) { showToast('خطأ: ' + err.message, true) }
     finally { setClearingDB(false) }

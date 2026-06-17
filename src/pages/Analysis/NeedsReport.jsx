@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { localDB } from '../../lib/db'
+import { useRxDB } from '../../lib/useRxDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -37,6 +37,7 @@ export default function NeedsReport() {
   const [exporting,  setExporting]  = useState(false)
   const { showToast } = useApp()
   const { canExport } = useAuth()
+  const { query } = useRxDB()
 
   useEffect(() => { loadData() }, [])
 
@@ -44,9 +45,9 @@ export default function NeedsReport() {
     setLoading(true)
     try {
       const [f,c,m] = await Promise.all([
-        localDB.families.toArray().catch(()=>[]),
-        localDB.camps.toArray().catch(()=>[]),
-        localDB.family_members.toArray().catch(()=>[]),
+        query('families'),
+        query('camps'),
+        query('family_members'),
       ])
       setFamilies(f); setCamps(c); setMembers(m)
     } catch(err) { showToast('خطأ: '+err.message,true) }

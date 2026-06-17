@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
-import { localDB } from '../lib/db'
 import { hasPermission, hasPagePermission, getCampFilter } from '../lib/permissions'
 import { loadPagePermissions, canAccessPageSync } from '../lib/pagePermissions'
 
@@ -93,15 +92,20 @@ export function AuthProvider({ children }) {
   }
 
   async function fetchProfile(userId) {
-    // ① Dexie أولاً (فوري)
+    // ① SQLite أولاً (فوري)
     try {
-      const local = await localDB.org_members
-        .filter(m => m.user_id === userId && m.org_id === ORG_ID)
-        .toArray().catch(() => [])
-      if (local.length) {
-        setProfile(local[0])
-        localStorage.setItem(PROFILE_KEY, JSON.stringify(local[0]))
-        setLoading(false)
+      const { getPowerSync } = await import('../lib/powersync')
+      const db = getPowerSync()
+      if (db) {
+        const rows = await db.getAll(
+          `SELECT * FROM org_members WHERE user_id = ? AND org_id = ?`,
+          [userId, ORG_ID]
+        )
+        if (rows?.length) {
+          setProfile(rows[0])
+          localStorage.setItem(PROFILE_KEY, JSON.stringify(rows[0]))
+          setLoading(false)
+        }
       }
     } catch {}
 
@@ -117,7 +121,23 @@ export function AuthProvider({ children }) {
       if (!error && p) {
         setProfile(p)
         localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
-        try { await localDB.org_members.put(p) } catch {}
+        try {
+          const { getPowerSync } = await import('../lib/powersync')
+          const db = getPowerSync()
+          if (db) {
+            const ALLOWED = ['id','org_id','user_id','full_name','role','phone','camp_id',
+              'can_add','can_edit','can_delete','can_export','can_import','is_active',
+              'created_at','updated_at']
+            const cols = Object.keys(p).filter(k => ALLOWED.includes(k) && p[k] !== undefined)
+            const vals = cols.map(k => (p[k] !== null && typeof p[k] === 'object') ? JSON.stringify(p[k]) : p[k])
+            if (cols.length) {
+              await db.execute(
+                `INSERT OR REPLACE INTO org_members (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
+                vals
+              )
+            }
+          }
+        } catch {}
         const { data: meta } = await supabase.auth.getUser()
         setMustChange(!!(meta?.user?.user_metadata?.must_change_pass))
         // حمّل صلاحيات الصفحات (دور + استثناءات فردية) — لا تعيق تحميل الصفحة

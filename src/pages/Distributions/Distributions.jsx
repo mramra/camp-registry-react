@@ -45,6 +45,7 @@ export default function Distributions() {
   const [saving, setSaving] = useState(false)
   const { showToast, online } = useApp()
   const { isSuperAdmin, isOwner, canWrite } = useAuth()
+  const { query, upsert, bulkUpsert, remove } = useRxDB()
 
   useEffect(() => { loadData() }, [])
 
@@ -52,11 +53,11 @@ export default function Distributions() {
   async function loadData() {
     setLoading(true)
     try {
-      const campsData = await localDB.camps.toArray().catch(() => [])
+      const campsData = await query('camps')
       setCamps(Object.fromEntries(campsData.map(c => [c.id, c.name])))
 
-      // offline-first: Dexie أولاً
-      const local = await localDB.dist_rounds.toArray().catch(() => [])
+      // offline-first: SQLite أولاً
+      const local = await query('dist_rounds')
       setRounds(local.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)))
 
       if (online) {
@@ -79,8 +80,7 @@ export default function Distributions() {
     setView('batches')
     setBatchLoad(true)
     try {
-      const local = await localDB.camp_distributions
-        .where('round_id').equals(round.id).toArray().catch(() => [])
+      const local = await query('camp_distributions', { round_id: round.id })
       setBatches(local.sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0)))
 
       if (online) {
@@ -89,7 +89,7 @@ export default function Distributions() {
           .eq('round_id', round.id)
           .order('created_at', { ascending: false })
         if (!error && data) {
-          await localDB.camp_distributions.bulkPut(data).catch(() => {})
+          await bulkUpsert('camp_distributions', data).catch(() => {})
           setBatches(data)
         }
       }
@@ -105,14 +105,14 @@ export default function Distributions() {
     try {
       // أسر المخيم
       const campId = batch.camp_id || selected?.camp_id
-      const allFams = await localDB.families
-        .filter(f => f.org_id === ORG_ID && (!campId || f.camp_id === campId) && f.status === 'active')
-        .toArray().catch(() => [])
+      const allFamsRaw = await query('families')
+      const allFams = allFamsRaw.filter(f =>
+        f.org_id === ORG_ID && (!campId || f.camp_id === campId) && f.status === 'active'
+      )
       setFamilies(allFams)
 
       // من استلم بالفعل
-      const distFams = await localDB.camp_dist_families
-        .where('distribution_id').equals(batch.id).toArray().catch(() => [])
+      const distFams = await query('camp_dist_families', { distribution_id: batch.id })
 
       let recvSet = {}
       if (online) {
@@ -168,7 +168,7 @@ export default function Distributions() {
         status: 'pending',
         created_at: new Date().toISOString()
       }
-      await localDB.camp_distributions.put(data)
+      await upsert('camp_distributions', data)
       await enqueue('insert_batch', data)
       showToast('✅ تمت إضافة الدفعة')
       setShowAddBatch(false)
@@ -184,9 +184,10 @@ export default function Distributions() {
     try {
       if (already) {
         // إلغاء الاستلام
-        await localDB.camp_dist_families
-          .where({ distribution_id: selBatch.id, family_id: family.id })
-          .delete().catch(() => {})
+        const existing = await query('camp_dist_families', { distribution_id: selBatch.id, family_id: family.id })
+        for (const rec of existing) {
+          await remove('camp_dist_families', rec.id).catch(() => {})
+        }
         if (online) {
           await supabase.from('camp_dist_families')
             .delete()
@@ -215,7 +216,8 @@ export default function Distributions() {
   // ─── تغيير حالة الجولة ───────────────────────────────
   async function updateRoundStatus(id, status) {
     try {
-      await localDB.dist_rounds.update(id, { status })
+      const current = rounds.find(r => r.id === id)
+      await upsert('dist_rounds', { ...current, id, status })
       if (online) await supabase.from('dist_rounds').update({ status }).eq('id', id)
       setRounds(r => r.map(x => x.id === id ? { ...x, status } : x))
       if (selected?.id === id) setSelected(s => ({ ...s, status }))

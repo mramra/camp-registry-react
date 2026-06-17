@@ -316,7 +316,7 @@ export default function FamilyForm() {
     query('camps').then(setCamps)
 
     if (isEdit) {
-      // ① جلب من localDB فوراً
+      // ① جلب من SQLite فوراً
       query('families').then(fs => fs.find(f=>f.id===id) || null).then(f => {
         if (f) {
           setForm({ ...EMPTY_FORM, ...f,

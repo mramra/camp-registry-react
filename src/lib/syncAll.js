@@ -1,8 +1,7 @@
 /**
- * syncAll.js — Supabase → SQLite + Dexie
+ * syncAll.js — Supabase → SQLite
  */
 import { supabase, ORG_ID } from './supabase'
-import { localDB }           from './db'
 
 const TABLES = [
   { name:'families',           orgId:true  },
@@ -99,13 +98,13 @@ export async function quickSync() {
       if (!data?.length) continue
 
       await writeToSQLite(db, name, data)
-      await localDB[name]?.bulkPut?.(data).catch(() => {})
       console.log(`[sync] ${name}: ${data.length}`)
     } catch(e) { console.warn('[sync]', name, e.message) }
   }
 
   // أفراد الأسر
-  const famIds = (await localDB.families?.toArray?.() || []).map(f=>f.id)
+  let famIds = []
+  try { famIds = (await db?.getAll?.(`SELECT id FROM families`) || []).map(f=>f.id) } catch {}
   if (famIds.length) {
     const BATCH = 500
     let allMems = []
@@ -115,7 +114,6 @@ export async function quickSync() {
     }
     if (allMems.length) {
       await writeToSQLite(db, 'family_members', allMems)
-      await localDB.family_members?.bulkPut?.(allMems).catch(() => {})
       console.log(`[sync] family_members: ${allMems.length}`)
     }
   }
