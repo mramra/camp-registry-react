@@ -1,5 +1,6 @@
 import { supabase, ORG_ID } from './supabase'
 import { localDB } from './db'
+import { logFamilyActivity } from './familyActivityLog'
 
 // ─── معالجة طابور المزامنة ───────────────────────────────
 export async function processSyncQueue() {
@@ -48,7 +49,7 @@ async function handleSyncItem(item) {
       // إزالة الحقول غير المدعومة
       const ALLOWED = ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
         'head_marital','phone1','phone2','tent','original_address','address_details',
-        'notes','category_tags','economic_level','version','created_at','updated_at','created_by']
+        'notes','category_tags','economic_level','version','created_at','updated_at','created_by','updated_by']
       const cleanFam = {}
       ALLOWED.forEach(k => { if (data[k] !== undefined) cleanFam[k] = data[k] })
       // تصحيح categories → category_tags
@@ -62,6 +63,17 @@ async function handleSyncItem(item) {
     case 'delete_family': {
       const { error } = await supabase.from('families').delete().eq('id', data.id)
       if (error) throw error
+      // سجّل عملية الحذف المتأخرة (كانت أوف لاين وقت الحذف الفعلي)
+      if (data._activity) {
+        await logFamilyActivity({
+          familyId:     data.id,
+          familyName:   data._activity.familyName,
+          membersCount: data._activity.membersCount,
+          action:       'delete',
+          actorId:      data._activity.actorId,
+          actorName:    data._activity.actorName,
+        })
+      }
       break
     }
 
