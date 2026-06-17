@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { logFamilyActivity } from '../../lib/familyActivityLog'
+import { logFamilyActivity, diffFamilyFields } from '../../lib/familyActivityLog'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -306,6 +306,7 @@ export default function FamilyForm() {
   const [dupAlert,  setDupAlert]  = useState('')
   const [saving,    setSaving]    = useState(false)
   const submittingRef = useRef(false)  // حارس فوري — يمنع الضغط المزدوج قبل re-render
+  const originalDataRef = useRef(null) // نسخة من بيانات الأسرة الأصلية (قبل أي تعديل) — لحساب الفرق عند الحفظ
   const { profile } = useAuth()
   const { showToast } = useApp()
   const { query, upsert, bulkUpsert, remove } = useRxDB()
@@ -317,11 +318,14 @@ export default function FamilyForm() {
     if (isEdit) {
       // ① جلب من localDB فوراً
       query('families').then(fs => fs.find(f=>f.id===id) || null).then(f => {
-        if (f) setForm({ ...EMPTY_FORM, ...f,
-          categories:    f.categories    || [],
-          economic_level:f.economic_level || '',
-          num_orphans:   f.num_orphans   || 0,
-        })
+        if (f) {
+          setForm({ ...EMPTY_FORM, ...f,
+            categories:    f.categories    || [],
+            economic_level:f.economic_level || '',
+            num_orphans:   f.num_orphans   || 0,
+          })
+          originalDataRef.current = f
+        }
       })
       query('family_members', {family_id: id}).then(d => setMembers(sortMembers(d)))
 
@@ -335,6 +339,7 @@ export default function FamilyForm() {
                 economic_level:data.economic_level || '',
                 num_orphans:   data.num_orphans   || 0,
               })
+              originalDataRef.current = data
               // حفظ محلي محدّث
               upsert('families', data)
             }
@@ -523,6 +528,9 @@ export default function FamilyForm() {
         if (!fErr && savedFamily) {
           await upsert('families', { ...familyData, ...savedFamily })
           // سجّل العملية في سجل النشاط (لا يعيق الحفظ، لا يرمي خطأ)
+          const fieldChanges = isEdit ? diffFamilyFields(originalDataRef.current, familyData, {
+            camp_id: (id) => camps.find(c => c.id === id)?.name || id,
+          }) : null
           logFamilyActivity({
             familyId:     familyId,
             familyName:   familyData.head_name,
@@ -530,6 +538,7 @@ export default function FamilyForm() {
             action:       isEdit ? 'update' : 'insert',
             actorId,
             actorName,
+            changes:      fieldChanges,
           })
         } else if (fErr) {
           console.warn('[save family]', fErr.message)
