@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
+import { logFamilyActivity } from '../../lib/familyActivityLog'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -445,8 +446,10 @@ export default function FamilyForm() {
         'id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
         'head_marital','phone1','phone2','tent','original_address','address_details',
         'status','notes','category_tags','economic_level','version',
-        'created_at','updated_at','created_by',
+        'created_at','updated_at','created_by','updated_by',
       ]
+      const actorId   = profile?.user_id || profile?.id || null
+      const actorName = profile?.full_name || profile?.name || '—'
       const familyData = {
         id:             familyId,
         org_id:         ORG_ID,
@@ -467,7 +470,10 @@ export default function FamilyForm() {
         version:        newVersion,
         created_at:     isEdit ? (form.created_at || now) : now,
         updated_at:     now,
-        created_by:     profile?.user_id || profile?.id || null,
+        // عند الإضافة: created_by = المستخدم الحالي، updated_by فاضي
+        // عند التعديل: created_by يبقى كما هو (لا يُكتب فوقه)، updated_by = المستخدم الحالي
+        created_by:     isEdit ? (form.created_by || null) : actorId,
+        updated_by:     isEdit ? actorId : null,
       }
 
       // ═══ بيانات الأفراد ═══
@@ -516,6 +522,15 @@ export default function FamilyForm() {
 
         if (!fErr && savedFamily) {
           await upsert('families', { ...familyData, ...savedFamily })
+          // سجّل العملية في سجل النشاط (لا يعيق الحفظ، لا يرمي خطأ)
+          logFamilyActivity({
+            familyId:     familyId,
+            familyName:   familyData.head_name,
+            membersCount: memberDocs.length,
+            action:       isEdit ? 'update' : 'insert',
+            actorId,
+            actorName,
+          })
         } else if (fErr) {
           console.warn('[save family]', fErr.message)
           showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
