@@ -17,7 +17,7 @@ const families = new Table({
   head_orphan_cause:column.text, phone1:column.text, phone2:column.text,
   tent:column.text, original_address:column.text, address_details:column.text,
   notes:column.text, status:column.text, economic_level:column.text,
-  version:column.integer, created_by:column.text,
+  version:column.integer, created_by:column.text, updated_by:column.text,
   category_tags:column.text, registration_date:column.text,
   created_at:column.text, updated_at:column.text,
 })
