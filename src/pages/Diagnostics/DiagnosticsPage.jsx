@@ -7,6 +7,7 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
 import { getPowerSync, isPowerSyncConnected, connectPowerSync } from '../../lib/powersync'
 import { pushLocalChanges } from '../../lib/pushLocalChanges'
+import { quickSync } from '../../lib/syncAll'
 import PageHeader from '../../components/ui/PageHeader'
 
 // ── التقاط console.log في الذاكرة ────────────────────────
@@ -130,6 +131,22 @@ export default function DiagnosticsPage() {
     await runAll()
   }
 
+  // إعادة بناء المخازن المحلية من السيرفر — آمن (السيرفر هو المصدر)
+  async function rebuildLocal() {
+    setPushing(true)
+    setPushMsg('🔄 إعادة جلب كل البيانات من السيرفر...')
+    try {
+      await quickSync()
+      setPushMsg('✅ اكتملت إعادة البناء')
+      await new Promise(r=>setTimeout(r,800))
+      await runAll()
+    } catch(e) {
+      setPushMsg('خطأ: ' + e.message)
+    } finally {
+      setPushing(false)
+    }
+  }
+
   // رفع البيانات المحلية غير المرفوعة — آمن
   async function doPush() {
     setPushing(true)
@@ -206,8 +223,14 @@ export default function DiagnosticsPage() {
 
       {/* زر الرفع الآمن */}
       <button onClick={doPush} disabled={pushing}
-        className="w-full mb-3 py-3 rounded-xl text-sm font-black bg-green text-white disabled:opacity-50">
+        className="w-full mb-2 py-3 rounded-xl text-sm font-black bg-green text-white disabled:opacity-50">
         {pushing ? '⏳ جاري الرفع...' : '⬆️ رفع البيانات المحلية الجديدة (آمن — لا يحذف)'}
+      </button>
+
+      {/* زر إعادة بناء SQLite من السيرفر */}
+      <button onClick={rebuildLocal} disabled={pushing}
+        className="w-full mb-3 py-3 rounded-xl text-sm font-black bg-surface2 text-accent border border-accent/30 disabled:opacity-50">
+        🔄 إعادة بناء المخازن من السيرفر (يصلح SQLite الناقص)
       </button>
 
       {/* رسالة التقدم */}
