@@ -1,7 +1,11 @@
 /**
  * useRxDB.js — Unified Data Hook
- * الأولوية: SQLite (PowerSync) → Dexie → Supabase
- * الكتابة: SQLite أولاً + Dexie كـ mirror
+ * ════════════════════════════════════════════════════════
+ * SQLite (PowerSync) = المصدر الرئيسي الرسمي للقراءة والكتابة
+ * Dexie              = نسخة احتياطية (mirror) للأمان فقط
+ * Supabase           = المصدر السحابي (يُجلب منه عند أول تحميل)
+ * ════════════════════════════════════════════════════════
+ * المزامنة الفورية تتم عبر PowerSync connect() (real-time)
  */
 import { useCallback, useRef, useEffect } from 'react'
 import { localDB }         from './db'
@@ -124,22 +128,28 @@ export function useRxDB() {
       ...d, org_id: d.org_id || ORG_ID, updated_at: d.updated_at || now
     }))
 
-    // SQLite
+    // SQLite — كتابة صفاً صفاً (فشل صف لا يُسقط الباقي)
     if (psRef.current) {
       try {
         const { getPowerSync } = await import('./powersync')
         const db = getPowerSync()
         if (db) {
-          await db.writeTransaction(async tx => {
-            for (const doc of prepared) {
+          for (const doc of prepared) {
+            try {
               const d = prepareForSQLite(doc, table)
+              // حوّل القيم المعقدة لنصوص
+              Object.keys(d).forEach(k => {
+                if (d[k] !== null && typeof d[k] === 'object') d[k] = JSON.stringify(d[k])
+                if (d[k] === undefined) d[k] = null
+              })
               const cols = Object.keys(d)
-              await tx.execute(
+              if (!cols.length) continue
+              await db.execute(
                 `INSERT OR REPLACE INTO ${table} (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
                 Object.values(d)
               )
-            }
-          })
+            } catch(e) { console.warn(`[useRxDB] SQLite row ${table}:`, e.message) }
+          }
         }
       } catch(e) { console.warn('[useRxDB] SQLite write:', table, e.message) }
     }
