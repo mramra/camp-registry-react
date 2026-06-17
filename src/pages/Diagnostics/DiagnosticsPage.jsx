@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { localDB } from '../../lib/db'
 import { getPowerSync, isPowerSyncConnected, connectPowerSync } from '../../lib/powersync'
+import { pushLocalChanges } from '../../lib/pushLocalChanges'
 import PageHeader from '../../components/ui/PageHeader'
 
 // ── التقاط console.log في الذاكرة ────────────────────────
@@ -37,6 +38,9 @@ export default function DiagnosticsPage() {
   const [logs,    setLogs]    = useState([])
   const [counts,  setCounts]  = useState({ supabase:{}, dexie:{}, sqlite:{} })
   const logTimer = useRef(null)
+  const [pushing, setPushing]   = useState(false)
+  const [pushMsg, setPushMsg]   = useState('')
+  const [pushReport, setPushReport] = useState(null)
 
   // تحديث السجل كل ثانية
   useEffect(() => {
@@ -126,6 +130,22 @@ export default function DiagnosticsPage() {
     await runAll()
   }
 
+  // رفع البيانات المحلية غير المرفوعة — آمن
+  async function doPush() {
+    setPushing(true)
+    setPushReport(null)
+    setPushMsg('بدء الرفع...')
+    try {
+      const report = await pushLocalChanges(setPushMsg)
+      setPushReport(report)
+      await runAll()  // أعد الفحص لرؤية التطابق
+    } catch(e) {
+      setPushMsg('خطأ: ' + e.message)
+    } finally {
+      setPushing(false)
+    }
+  }
+
   // إعادة بناء المخازن المحلية من Supabase (المصدر الموثوق)
   async function rebuildStores() {
     if (!confirm('سيُعاد جلب كل البيانات من السيرفر وتنظيف التكرارات المحلية. متابعة؟')) return
@@ -183,6 +203,47 @@ export default function DiagnosticsPage() {
           🔌 ربط PowerSync
         </button>
       </div>
+
+      {/* زر الرفع الآمن */}
+      <button onClick={doPush} disabled={pushing}
+        className="w-full mb-3 py-3 rounded-xl text-sm font-black bg-green text-white disabled:opacity-50">
+        {pushing ? '⏳ جاري الرفع...' : '⬆️ رفع البيانات المحلية الجديدة (آمن — لا يحذف)'}
+      </button>
+
+      {/* رسالة التقدم */}
+      {pushMsg && pushing && (
+        <div className="mb-3 px-3 py-2 rounded-xl bg-surface2 border border-accent/30 text-accent text-xs">
+          {pushMsg}
+        </div>
+      )}
+
+      {/* تقرير الرفع */}
+      {pushReport && (
+        <div className="mb-3 bg-surface border border-green/30 rounded-2xl p-3">
+          <p className="text-green text-xs font-black mb-2">✅ تقرير الرفع</p>
+          <div className="flex flex-col gap-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted">أسر رُفعت:</span>
+              <span className="text-green font-bold">{pushReport.families.uploaded} من {pushReport.families.total}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">أفراد رُفعوا:</span>
+              <span className="text-green font-bold">{pushReport.family_members.uploaded} من {pushReport.family_members.total}</span>
+            </div>
+            {pushReport.errors.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <p className="text-red text-[11px] font-bold mb-1">أخطاء ({pushReport.errors.length}):</p>
+                {pushReport.errors.slice(0,5).map((e,i)=>(
+                  <p key={i} className="text-red text-[10px]">• {e}</p>
+                ))}
+              </div>
+            )}
+            {pushReport.families.uploaded === 0 && pushReport.family_members.uploaded === 0 && pushReport.errors.length === 0 && (
+              <p className="text-muted text-[11px] mt-1">كل البيانات المحلية موجودة بالفعل في السيرفر ✅</p>
+            )}
+          </div>
+        </div>
+      )}
       <button onClick={rebuildStores} disabled={running}
         className="w-full mb-3 py-2.5 rounded-xl text-sm font-black bg-red/10 text-red border border-red/30 disabled:opacity-50">
         🔧 إعادة بناء المخازن المحلية (تنظيف التكرارات)
