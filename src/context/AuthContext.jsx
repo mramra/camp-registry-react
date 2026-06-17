@@ -128,6 +128,10 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
+    // اقطع PowerSync أولاً
+    import('../lib/powersync').then(({ disconnectPowerSync }) =>
+      disconnectPowerSync().catch(() => {})
+    )
     localStorage.removeItem(PROFILE_KEY)
     try { await supabase.auth.signOut() } catch {}
   }
