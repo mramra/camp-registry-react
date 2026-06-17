@@ -46,7 +46,8 @@ export default function Sidebar({ open, onClose }) {
         { icon:'👥', label:'المستخدمون',    path:'/users',  needAdmin: true },
         { icon:'📝', label:'سجل التغييرات', path:'/audit',  needAdmin: true },
         { icon:'🔔', label:'التنبيهات',     path:'/alerts', needAdmin: true },
-        { icon:'🛠️', label:'إدارة البيانات', path:'/data',  needOwner: true },
+        { icon:'🛠️', label:'إدارة البيانات', path:'/data',        needOwner: true },
+        { icon:'🩺', label:'تشخيص النظام',   path:'/diagnostics', needAdmin: true },
       ]
     },
   ]
