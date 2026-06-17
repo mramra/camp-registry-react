@@ -126,6 +126,42 @@ export default function DiagnosticsPage() {
     await runAll()
   }
 
+  // إعادة بناء المخازن المحلية من Supabase (المصدر الموثوق)
+  async function rebuildStores() {
+    if (!confirm('سيُعاد جلب كل البيانات من السيرفر وتنظيف التكرارات المحلية. متابعة؟')) return
+    setRunning(true)
+    try {
+      console.log('[rebuild] بدء إعادة البناء...')
+
+      // 1. امسح Dexie
+      for (const tbl of TABLES) {
+        try { await localDB[tbl]?.clear() } catch {}
+      }
+      console.log('[rebuild] Dexie مُسح')
+
+      // 2. امسح SQLite
+      try {
+        const db = getPowerSync()
+        for (const tbl of TABLES) {
+          await db.execute(`DELETE FROM ${tbl}`).catch(()=>{})
+        }
+        console.log('[rebuild] SQLite مُسح')
+      } catch {}
+
+      // 3. أعد الجلب من Supabase
+      const { quickSync } = await import('../../lib/syncAll')
+      await quickSync()
+      console.log('[rebuild] ✅ اكتمل — البيانات نظيفة الآن')
+
+      await new Promise(r=>setTimeout(r,1000))
+      await runAll()
+    } catch(e) {
+      console.error('[rebuild] فشل:', e.message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
   const TABLE_AR = {
     families:'الأسر', family_members:'الأفراد', camps:'المخيمات',
     org_members:'المستخدمون', family_movements:'الحركات', dist_rounds:'التوزيعات',
@@ -137,7 +173,7 @@ export default function DiagnosticsPage() {
       <PageHeader icon="🩺" title="تشخيص النظام" subtitle="حالة الاتصال والمزامنة"/>
 
       {/* أزرار */}
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-2 mb-2">
         <button onClick={runAll} disabled={running}
           className="flex-1 py-2.5 rounded-xl text-sm font-black bg-accent text-bg disabled:opacity-50">
           {running ? '⏳ جاري الفحص...' : '🔄 إعادة الفحص'}
@@ -147,6 +183,10 @@ export default function DiagnosticsPage() {
           🔌 ربط PowerSync
         </button>
       </div>
+      <button onClick={rebuildStores} disabled={running}
+        className="w-full mb-3 py-2.5 rounded-xl text-sm font-black bg-red/10 text-red border border-red/30 disabled:opacity-50">
+        🔧 إعادة بناء المخازن المحلية (تنظيف التكرارات)
+      </button>
 
       {/* الفحوصات */}
       <div className="bg-surface border border-border rounded-2xl p-3 mb-3">
