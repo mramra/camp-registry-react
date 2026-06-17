@@ -4,61 +4,69 @@ import { useAuth } from '../../context/AuthContext'
 import { ROLE_LABELS, ROLE_COLORS } from '../../lib/permissions'
 
 export default function Sidebar({ open, onClose }) {
-  const { profile, role, isOwner, isSuperAdmin, isCampDelegate,
-          canWrite, canExport, canImport, canPage, can, signOut } = useAuth()
+  const { profile, role, canAccessPageNow, signOut } = useAuth()
   const navigate = useNavigate()
   const [confirmLogout, setConfirmLogout] = useState(false)
 
+  // كل عنصر هنا يحمل نفس pageKey المستخدم في App.jsx وpagePermissions.js
+  // — هذا يضمن تطابقاً تاماً بين ما يظهر بالقائمة وما هو مسموح فعلياً عند فتح الصفحة
   const NAV = [
     {
       group: 'الرئيسية',
       items: [
-        { icon:'🏠', label:'الرئيسية',   path:'/' },
+        { icon:'🏠', label:'الرئيسية',   path:'/', pageKey:'dashboard' },
       ]
     },
     {
       group: 'الأسر',
       items: [
-        { icon:'👨‍👩‍👧', label:'قائمة الأسر',  path:'/families',  pageKey:'page-families' },
-        { icon:'🏕️', label:'المخيمات',    path:'/camps' },
+        { icon:'👨‍👩‍👧', label:'قائمة الأسر',  path:'/families',  pageKey:'families' },
+        { icon:'🏕️', label:'المخيمات',    path:'/camps', pageKey:'camps' },
       ]
     },
     {
       group: 'العمليات',
       items: [
-        { icon:'🔄', label:'حركات الأسر',      path:'/movements',     pageKey:'page-movements' },
-        { icon:'📦', label:'التوزيعات',         path:'/distributions', pageKey:'page-dist' },
-        { icon:'📋', label:'السجلات',           path:'/registers',     pageKey:'page-children' },
+        { icon:'🔄', label:'حركات الأسر',      path:'/movements',     pageKey:'movements' },
+        { icon:'📦', label:'التوزيعات',         path:'/distributions', pageKey:'distributions' },
+        { icon:'📋', label:'السجلات',           path:'/registers',     pageKey:'registers' },
+        { icon:'📚', label:'قوائم البيانات',    path:'/registries',    pageKey:'registries' },
       ]
     },
     {
       group: 'التحليل والتقارير',
       items: [
-        { icon:'📊', label:'التحليل',             path:'/analysis',     need:'reports' },
-        { icon:'📋', label:'تقارير الاحتياجات',  path:'/needs-report', always:true },
-        { icon:'🏕️', label:'مقارنة المخيمات',   path:'/camp-compare', need:'reports' },
-        { icon:'📤', label:'الاستيراد والتصدير',  path:'/export',        needExport: true },
+        { icon:'📊', label:'التحليل',             path:'/analysis',     pageKey:'analysis' },
+        { icon:'📋', label:'تقارير الاحتياجات',  path:'/needs-report', pageKey:'needs_report' },
+        { icon:'🏕️', label:'مقارنة المخيمات',   path:'/camp-compare', pageKey:'camp_compare' },
+        { icon:'📤', label:'الاستيراد والتصدير',  path:'/export',        pageKey:'export' },
       ]
     },
     {
       group: 'الإدارة',
       items: [
-        { icon:'👥', label:'المستخدمون',    path:'/users',  needAdmin: true },
-        { icon:'📝', label:'سجل التغييرات', path:'/audit',  needAdmin: true },
-        { icon:'🔔', label:'التنبيهات',     path:'/alerts', needAdmin: true },
-        { icon:'🛠️', label:'إدارة البيانات', path:'/data',        needOwner: true },
-        { icon:'🩺', label:'تشخيص النظام',   path:'/diagnostics', needAdmin: true },
+        { icon:'👥', label:'المستخدمون',    path:'/users',  pageKey:'users' },
+        { icon:'📝', label:'سجل التغييرات', path:'/audit',  pageKey:'audit' },
+        { icon:'🔔', label:'التنبيهات',     path:'/alerts', pageKey:'alerts' },
+        { icon:'🛠️', label:'إدارة البيانات', path:'/data',        pageKey:'data' },
+        { icon:'🩺', label:'تشخيص النظام',   path:'/diagnostics', pageKey:'diagnostics' },
+        { icon:'🔐', label:'إدارة الصلاحيات', path:'/permissions-admin', pageKey:'page_permissions' },
+      ]
+    },
+    {
+      group: 'أخرى',
+      items: [
+        { icon:'📱', label:'الأجهزة',        path:'/devices',      pageKey:'devices' },
+        { icon:'✉️', label:'الرسائل',         path:'/sms',          pageKey:'sms' },
+        { icon:'⚙️', label:'الإعدادات',      path:'/settings',     pageKey:'settings' },
+        { icon:'💳', label:'الاشتراكات',     path:'/subscription', pageKey:'subscription' },
+        { icon:'❓', label:'المساعدة',        path:'/help',         pageKey:'help' },
       ]
     },
   ]
 
   function isVisible(item) {
-    if (item.needOwner)  return isOwner
-    if (item.needAdmin)  return isSuperAdmin || isOwner || isCampDelegate
-    if (item.need)       return can(item.need)
-    if (item.needExport) return canExport || canImport
-    if (item.pageKey && role === 'assistant') return canPage(item.pageKey, 'view')
-    return true
+    return canAccessPageNow(item.pageKey)
   }
 
   async function handleLogout() {
