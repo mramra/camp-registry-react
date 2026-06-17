@@ -49,34 +49,53 @@ async function getDb() {
 async function sqliteUpsert(db, table, docs) {
   if (!db || !docs?.length) return
   const allowed = TABLE_COLUMNS[table]
-  for (const doc of docs) {
-    try {
-      const d = { ...doc }
-      if (Array.isArray(d.category_tags)) d.category_tags = JSON.stringify(d.category_tags)
-      if (allowed) Object.keys(d).forEach(k => { if (!allowed.includes(k)) delete d[k] })
-      Object.keys(d).forEach(k => {
-        if (d[k] !== null && typeof d[k] === 'object') d[k] = JSON.stringify(d[k])
-        if (d[k] === undefined) d[k] = null
-      })
-      const cols = Object.keys(d)
-      if (!cols.length) continue
-      await db.execute(
-        `INSERT OR REPLACE INTO ${table} (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
-        Object.values(d)
-      )
-    } catch(e) { console.warn(`[δSync] SQLite row ${table}:`, e.message) }
+  if (!allowed) return
+
+  const valueSets = docs.map(doc => {
+    const d = { ...doc }
+    if (Array.isArray(d.category_tags)) d.category_tags = JSON.stringify(d.category_tags)
+    return allowed.map(col => {
+      let v = d[col]
+      if (v !== undefined && v !== null && typeof v === 'object') v = JSON.stringify(v)
+      return v === undefined ? null : v
+    })
+  })
+
+  const sql = `INSERT OR REPLACE INTO ${table} (${allowed.join(',')}) VALUES (${allowed.map(()=>'?').join(',')})`
+  try {
+    await db.executeBatch(sql, valueSets)
+  } catch(e) {
+    console.warn(`[δSync] executeBatch ${table} فشلت، رجوع لصفاً-صفاً:`, e.message)
+    for (let i = 0; i < valueSets.length; i++) {
+      try { await db.execute(sql, valueSets[i]) }
+      catch(rowErr) { console.warn(`[δSync] SQLite row ${table}[${i}]:`, rowErr.message) }
+    }
   }
 }
 
-async function sqliteGetAll(db, table) {
+async function sqliteGetIds(db, table) {
   if (!db) return []
-  try { return await db.getAll(`SELECT * FROM ${table}`) } catch { return [] }
+  try {
+    const rows = await db.getAll(`SELECT id FROM ${table}`)
+    return rows.map(r => r.id)
+  } catch { return [] }
 }
 
 async function sqliteDeleteMany(db, table, ids) {
   if (!db || !ids?.length) return
-  for (const id of ids) {
-    try { await db.execute(`DELETE FROM ${table} WHERE id = ?`, [id]) } catch {}
+  // حذف جماعي بدفعات (تجنّب تجاوز حد عدد المعاملات بجملة SQL واحدة)
+  const BATCH = 500
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const chunk = ids.slice(i, i + BATCH)
+    const placeholders = chunk.map(() => '?').join(',')
+    try {
+      await db.execute(`DELETE FROM ${table} WHERE id IN (${placeholders})`, chunk)
+    } catch(e) {
+      console.warn(`[δSync] حذف جماعي ${table} فشل، رجوع لواحد-واحد:`, e.message)
+      for (const id of chunk) {
+        try { await db.execute(`DELETE FROM ${table} WHERE id = ?`, [id]) } catch {}
+      }
+    }
   }
 }
 
@@ -124,8 +143,8 @@ export async function deltaSync() {
 
           if (serverRecs) {
             const serverIds = new Set(serverRecs.map(r => r.id))
-            const localRecs = await sqliteGetAll(db, name)
-            const toDelete  = localRecs.filter(r => !serverIds.has(r.id)).map(r => r.id)
+            const localIds  = await sqliteGetIds(db, name)
+            const toDelete  = localIds.filter(id => !serverIds.has(id))
 
             if (toDelete.length) {
               await sqliteDeleteMany(db, name, toDelete)
@@ -146,16 +165,18 @@ export async function deltaSync() {
     }
   }
 
-  // ── 3. حذف أفراد الأسر المحذوفة ─────────────────────────
+  // ── 3. حذف أفراد الأسر المحذوفة (استعلام جماعي واحد) ────
   if (deletedFamilyIds.length) {
     try {
-      for (const famId of deletedFamilyIds) {
-        const mems = await db.getAll(`SELECT id FROM family_members WHERE family_id = ?`, [famId]).catch(() => [])
-        if (mems.length) {
-          await sqliteDeleteMany(db, 'family_members', mems.map(m => m.id))
-          console.log(`[δSync] family_members: -${mems.length} لأسرة ${famId}`)
-          totalChanges += mems.length
-        }
+      const placeholders = deletedFamilyIds.map(() => '?').join(',')
+      const mems = await db.getAll(
+        `SELECT id FROM family_members WHERE family_id IN (${placeholders})`,
+        deletedFamilyIds
+      ).catch(() => [])
+      if (mems.length) {
+        await sqliteDeleteMany(db, 'family_members', mems.map(m => m.id))
+        console.log(`[δSync] family_members: -${mems.length} لأسر محذوفة`)
+        totalChanges += mems.length
       }
     } catch(e) {
       console.warn('[δSync] family_members cleanup:', e.message)

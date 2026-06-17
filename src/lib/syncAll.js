@@ -48,40 +48,38 @@ const TABLE_COLUMNS = {
 async function writeToSQLite(db, table, docs) {
   if (!db || !docs?.length) return
   const allowed = TABLE_COLUMNS[table]
-  let ok = 0, fail = 0
-  const failReasons = {}
+  if (!allowed) return
 
-  // كل صف في معاملة مستقلة — فشل صف لا يُسقط الباقي
-  for (const doc of docs) {
-    try {
-      const d = { ...doc }
-      if (Array.isArray(d.category_tags)) d.category_tags = JSON.stringify(d.category_tags)
-      // حوّل القيم غير المدعومة (objects/arrays) لنصوص
-      Object.keys(d).forEach(k => {
-        if (d[k] !== null && typeof d[k] === 'object') d[k] = JSON.stringify(d[k])
-        if (d[k] === undefined) d[k] = null
-      })
-      // فلترة الحقول غير المعروفة
-      if (allowed) Object.keys(d).forEach(k => { if (!allowed.includes(k)) delete d[k] })
-      const cols = Object.keys(d)
-      if (!cols.length) { fail++; continue }
+  const valueSets = docs.map(doc => {
+    const d = { ...doc }
+    if (Array.isArray(d.category_tags)) d.category_tags = JSON.stringify(d.category_tags)
+    return allowed.map(col => {
+      let v = d[col]
+      if (v !== undefined && v !== null && typeof v === 'object') v = JSON.stringify(v)
+      return v === undefined ? null : v
+    })
+  })
 
-      await db.execute(
-        `INSERT OR REPLACE INTO ${table} (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
-        Object.values(d)
-      )
-      ok++
-    } catch(e) {
-      fail++
-      const reason = e.message?.slice(0, 60) || 'unknown'
-      failReasons[reason] = (failReasons[reason] || 0) + 1
+  const sql = `INSERT OR REPLACE INTO ${table} (${allowed.join(',')}) VALUES (${allowed.map(()=>'?').join(',')})`
+
+  try {
+    await db.executeBatch(sql, valueSets)
+    console.log(`[syncAll] ${table}: كتب ${valueSets.length} صف في SQLite (batch)`)
+  } catch(e) {
+    console.warn(`[syncAll] executeBatch ${table} فشلت، رجوع لصفاً-صفاً:`, e.message)
+    let ok = 0, fail = 0
+    const failReasons = {}
+    for (let i = 0; i < valueSets.length; i++) {
+      try {
+        await db.execute(sql, valueSets[i])
+        ok++
+      } catch(rowErr) {
+        fail++
+        const reason = rowErr.message?.slice(0, 60) || 'unknown'
+        failReasons[reason] = (failReasons[reason] || 0) + 1
+      }
     }
-  }
-
-  if (fail > 0) {
-    console.warn(`[syncAll] ${table}: ✅${ok} ❌${fail} — الأسباب:`, JSON.stringify(failReasons))
-  } else {
-    console.log(`[syncAll] ${table}: كتب ${ok} صف في SQLite`)
+    if (fail > 0) console.warn(`[syncAll] ${table}: ✅${ok} ❌${fail} — الأسباب:`, JSON.stringify(failReasons))
   }
 }
 

@@ -20,6 +20,13 @@ const families = new Table({
   version:column.integer, created_by:column.text, updated_by:column.text,
   category_tags:column.text, registration_date:column.text,
   created_at:column.text, updated_at:column.text,
+}, {
+  indexes: {
+    idx_org:        ['org_id'],
+    idx_camp:       ['camp_id'],
+    idx_status:     ['status'],
+    idx_updated_at: ['updated_at'],
+  },
 })
 const family_members = new Table({
   family_id:column.text, name:column.text, national_id:column.text,
@@ -28,6 +35,8 @@ const family_members = new Table({
   disabilities:column.text, injuries:column.text,
   orphan_status:column.integer, notes:column.text,
   created_at:column.text, updated_at:column.text,
+}, {
+  indexes: { idx_family: ['family_id'] },
 })
 const camps = new Table({
   org_id:column.text, name:column.text, camp_type:column.text,
@@ -36,6 +45,8 @@ const camps = new Table({
   address:column.text, capacity:column.integer,
   status:column.text, notes:column.text,
   created_at:column.text, updated_at:column.text,
+}, {
+  indexes: { idx_org: ['org_id'] },
 })
 const org_members = new Table({
   org_id:column.text, user_id:column.text, full_name:column.text,
@@ -44,6 +55,12 @@ const org_members = new Table({
   can_delete:column.integer, can_export:column.integer,
   can_import:column.integer, is_active:column.integer,
   created_at:column.text, updated_at:column.text,
+}, {
+  indexes: {
+    idx_org:  ['org_id'],
+    idx_user: ['user_id'],
+    idx_role: ['role'],
+  },
 })
 const family_movements = new Table({
   org_id:column.text, family_id:column.text,
@@ -51,21 +68,38 @@ const family_movements = new Table({
   to_camp_id:column.text, reason:column.text,
   moved_by:column.text, moved_at:column.text, notes:column.text,
   created_at:column.text,
+}, {
+  indexes: {
+    idx_org:    ['org_id'],
+    idx_family: ['family_id'],
+  },
 })
 const dist_rounds = new Table({
   org_id:column.text, name:column.text, description:column.text,
   status:column.text, start_date:column.text, end_date:column.text,
   created_by:column.text, created_at:column.text, updated_at:column.text,
+}, {
+  indexes: { idx_org: ['org_id'] },
 })
 const camp_distributions = new Table({
   org_id:column.text, round_id:column.text, camp_id:column.text,
   assigned_to:column.text, status:column.text, notes:column.text,
   created_at:column.text, updated_at:column.text,
+}, {
+  indexes: {
+    idx_round: ['round_id'],
+    idx_camp:  ['camp_id'],
+  },
 })
 const camp_dist_families = new Table({
   distribution_id:column.text, family_id:column.text,
   received:column.integer, received_at:column.text,
   received_by:column.text, notes:column.text,
+}, {
+  indexes: {
+    idx_distribution: ['distribution_id'],
+    idx_family:        ['family_id'],
+  },
 })
 // جدول محلي بحت لتخزين العمليات المعلّقة وقت العمل بدون نت (بديل Dexie sync_queue)
 // لا يُزامن مع Supabase أبداً — فقط تخزين مؤقت محلي يُفرّغ عند توفر الاتصال
@@ -78,6 +112,8 @@ const sync_queue = new Table({
   retries:column.integer,
   last_error:column.text,
   created_at:column.text,
+}, {
+  indexes: { idx_status: ['status'] },
 })
 
 const AppSchema = new Schema({
