@@ -605,7 +605,8 @@ export default function FamilyForm() {
 
       // تأخير بسيط ليرى المستخدم رسالة التأكيد قبل مغادرة الصفحة
       await new Promise(r => setTimeout(r, 700))
-      navigate('/families')
+      // الرجوع لصفحة تفاصيل الأسرة نفسها (تُفتح كمودال داخل قائمة الأسر)
+      navigate('/families', { state: { openFamily: familyId, autoOpen: true } })
     } catch (err) {
       console.error('[handleSubmit]', err)
       showToast('خطأ: ' + err.message, true)
