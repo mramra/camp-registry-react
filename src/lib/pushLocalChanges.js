@@ -14,7 +14,7 @@ import { localDB }          from './db'
 const ALLOWED = {
   families: ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
     'head_marital','phone1','phone2','tent','original_address','address_details',
-    'status','notes','category_tags','economic_level','version','created_at','updated_at','created_by'],
+    'status','notes','category_tags','economic_level','version','created_at','updated_at','created_by','updated_by'],
   family_members: ['id','family_id','name','national_id','relation','dob','gender',
     'health','chronic_diseases','disabilities','injuries','orphan_status','notes','created_at','updated_at'],
 }
