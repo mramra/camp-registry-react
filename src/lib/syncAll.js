@@ -27,7 +27,7 @@ const TABLE_COLUMNS = {
     'head_marital','head_chronic_diseases','head_disabilities','head_injuries',
     'head_female_status','head_orphan_status','head_orphan_cause','phone1','phone2',
     'tent','original_address','address_details','notes','status','economic_level',
-    'version','created_by','category_tags','registration_date','created_at','updated_at'],
+    'version','created_by','updated_by','category_tags','registration_date','created_at','updated_at'],
   family_members: ['id','family_id','name','national_id','relation','dob','gender',
     'health','chronic_diseases','disabilities','injuries','orphan_status','notes',
     'created_at','updated_at'],
