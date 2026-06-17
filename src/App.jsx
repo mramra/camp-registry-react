@@ -33,6 +33,7 @@ const RegistriesPage  = lazy(() => import('./pages/Registries/RegistriesPage'))
 const RegistersPage   = lazy(() => import('./pages/Registers/RegistersPage'))
 const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
 const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
+const PermissionsAdmin = lazy(() => import('./pages/PermissionsAdmin/PermissionsAdmin'))
 
 // ── شاشة تحميل موحّدة ────────────────────────────────
 function PageLoader() {
@@ -44,9 +45,27 @@ function PageLoader() {
   )
 }
 
-function ProtectedRoute({ children }) {
-  const { user, loading, mustChange } = useAuth()
-  if (loading) return (
+// ── شاشة "غير مصرح" واضحة بدل التحويل الصامت ─────────
+function AccessDenied({ pageLabel }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+      <div className="text-5xl mb-4">🔒</div>
+      <h2 className="text-white font-black text-lg mb-2">غير مصرح لك بالوصول</h2>
+      <p className="text-muted text-sm mb-6 max-w-xs">
+        لا تملك صلاحية الدخول إلى {pageLabel ? `«${pageLabel}»` : 'هذه الصفحة'}.
+        تواصل مع مسؤول النظام إذا كنت تحتاج هذه الصلاحية.
+      </p>
+      <a href="#/" className="px-5 py-2.5 rounded-xl text-sm font-black"
+        style={{ background: '#f59e0b', color: '#000' }}>
+        🏠 الرجوع للرئيسية
+      </a>
+    </div>
+  )
+}
+
+function ProtectedRoute({ children, pageKey, pageLabel }) {
+  const { user, loading, mustChange, pagePermLoaded, canAccessPageNow } = useAuth()
+  if (loading || (pageKey && !pagePermLoaded)) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-bg gap-4">
       <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-3xl">🏕️</div>
       <p className="text-accent font-bold text-lg">نبض المخيم</p>
@@ -55,6 +74,7 @@ function ProtectedRoute({ children }) {
   )
   if (!user)      return <Navigate to="/login" replace />
   if (mustChange) return <Navigate to="/change-password" replace />
+  if (pageKey && !canAccessPageNow(pageKey)) return <AccessDenied pageLabel={pageLabel} />
   return children
 }
 
@@ -82,31 +102,32 @@ function AppRoutes() {
 
         {/* الصفحات المحمية */}
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<ProtectedRoute pageKey="dashboard" pageLabel="الرئيسية"><Dashboard /></ProtectedRoute>} />
           <Route path="families">
-            <Route index        element={<FamiliesList />} />
-            <Route path="add"   element={<FamilyForm />} />
-            <Route path="edit/:id" element={<FamilyForm />} />
+            <Route index        element={<ProtectedRoute pageKey="families" pageLabel="قائمة الأسر"><FamiliesList /></ProtectedRoute>} />
+            <Route path="add"   element={<ProtectedRoute pageKey="families" pageLabel="قائمة الأسر"><FamilyForm /></ProtectedRoute>} />
+            <Route path="edit/:id" element={<ProtectedRoute pageKey="families" pageLabel="قائمة الأسر"><FamilyForm /></ProtectedRoute>} />
           </Route>
-          <Route path="camps"         element={<CampsList />} />
-          <Route path="users" element={<ProtectedRoute requireAdmin><UsersList /></ProtectedRoute>} />
-          <Route path="distributions" element={<Distributions />} />
-          <Route path="analysis" element={<ProtectedRoute requireCan="reports"><Analysis /></ProtectedRoute>} />
-          <Route path="camp-compare"  element={<CampCompare />} />
-          <Route path="needs-report"  element={<NeedsReport />} />
-          <Route path="data" element={<ProtectedRoute requireOwner><DataPage /></ProtectedRoute>} />
-          <Route path="diagnostics" element={<DiagnosticsPage />} />
-          <Route path="export"        element={<ExportPage />} />
-          <Route path="settings"      element={<Settings />} />
-          <Route path="audit"         element={<AuditLog />} />
-          <Route path="alerts"        element={<Alerts />} />
-          <Route path="movements"     element={<Movements />} />
-          <Route path="devices"       element={<Devices />} />
-          <Route path="subscription"  element={<Subscription />} />
-          <Route path="help"          element={<HelpPage />} />
-          <Route path="sms"           element={<SMS />} />
-          <Route path="registers"   element={<RegistersPage />} />
-          <Route path="registries"  element={<RegistriesPage />} />
+          <Route path="camps"         element={<ProtectedRoute pageKey="camps" pageLabel="المخيمات"><CampsList /></ProtectedRoute>} />
+          <Route path="users" element={<ProtectedRoute pageKey="users" pageLabel="المستخدمون"><UsersList /></ProtectedRoute>} />
+          <Route path="distributions" element={<ProtectedRoute pageKey="distributions" pageLabel="التوزيعات"><Distributions /></ProtectedRoute>} />
+          <Route path="analysis" element={<ProtectedRoute pageKey="analysis" pageLabel="التحليل"><Analysis /></ProtectedRoute>} />
+          <Route path="camp-compare"  element={<ProtectedRoute pageKey="camp_compare" pageLabel="مقارنة المخيمات"><CampCompare /></ProtectedRoute>} />
+          <Route path="needs-report"  element={<ProtectedRoute pageKey="needs_report" pageLabel="تقارير الاحتياجات"><NeedsReport /></ProtectedRoute>} />
+          <Route path="data" element={<ProtectedRoute pageKey="data" pageLabel="إدارة البيانات"><DataPage /></ProtectedRoute>} />
+          <Route path="diagnostics" element={<ProtectedRoute pageKey="diagnostics" pageLabel="تشخيص النظام"><DiagnosticsPage /></ProtectedRoute>} />
+          <Route path="export"        element={<ProtectedRoute pageKey="export" pageLabel="الاستيراد والتصدير"><ExportPage /></ProtectedRoute>} />
+          <Route path="settings"      element={<ProtectedRoute pageKey="settings" pageLabel="الإعدادات"><Settings /></ProtectedRoute>} />
+          <Route path="audit"         element={<ProtectedRoute pageKey="audit" pageLabel="سجل التغييرات"><AuditLog /></ProtectedRoute>} />
+          <Route path="alerts"        element={<ProtectedRoute pageKey="alerts" pageLabel="التنبيهات"><Alerts /></ProtectedRoute>} />
+          <Route path="movements"     element={<ProtectedRoute pageKey="movements" pageLabel="حركات الأسر"><Movements /></ProtectedRoute>} />
+          <Route path="devices"       element={<ProtectedRoute pageKey="devices" pageLabel="الأجهزة"><Devices /></ProtectedRoute>} />
+          <Route path="subscription"  element={<ProtectedRoute pageKey="subscription" pageLabel="الاشتراكات"><Subscription /></ProtectedRoute>} />
+          <Route path="help"          element={<ProtectedRoute pageKey="help" pageLabel="المساعدة"><HelpPage /></ProtectedRoute>} />
+          <Route path="sms"           element={<ProtectedRoute pageKey="sms" pageLabel="الرسائل"><SMS /></ProtectedRoute>} />
+          <Route path="registers"   element={<ProtectedRoute pageKey="registers" pageLabel="السجلات"><RegistersPage /></ProtectedRoute>} />
+          <Route path="registries"  element={<ProtectedRoute pageKey="registries" pageLabel="قوائم البيانات"><RegistriesPage /></ProtectedRoute>} />
+          <Route path="permissions-admin" element={<ProtectedRoute pageKey="page_permissions" pageLabel="إدارة الصلاحيات"><PermissionsAdmin /></ProtectedRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
