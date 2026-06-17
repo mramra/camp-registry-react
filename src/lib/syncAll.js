@@ -22,18 +22,46 @@ async function getDb() {
   } catch { return null }
 }
 
+const TABLE_COLUMNS = {
+  families: ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
+    'head_marital','head_chronic_diseases','head_disabilities','head_injuries',
+    'head_female_status','head_orphan_status','head_orphan_cause','phone1','phone2',
+    'tent','original_address','address_details','notes','status','economic_level',
+    'version','created_by','category_tags','registration_date','created_at','updated_at'],
+  family_members: ['id','family_id','name','national_id','relation','dob','gender',
+    'health','chronic_diseases','disabilities','injuries','orphan_status','notes',
+    'created_at','updated_at'],
+  camps: ['id','org_id','name','camp_type','parent_camp_id','manager_id','latitude',
+    'longitude','address','capacity','status','notes','created_at','updated_at'],
+  org_members: ['id','org_id','user_id','full_name','role','phone','camp_id',
+    'can_add','can_edit','can_delete','can_export','can_import','is_active',
+    'created_at','updated_at'],
+  family_movements: ['id','org_id','family_id','movement_type','from_camp_id',
+    'to_camp_id','reason','moved_by','moved_at','notes','created_at'],
+  dist_rounds: ['id','org_id','name','description','status','start_date','end_date',
+    'created_by','created_at','updated_at'],
+  camp_distributions: ['id','org_id','round_id','camp_id','assigned_to','status',
+    'notes','created_at','updated_at'],
+  camp_dist_families: ['id','distribution_id','family_id','received','received_at',
+    'received_by','notes'],
+}
+
 async function writeToSQLite(db, table, docs) {
   if (!db || !docs?.length) return
+  const allowed = TABLE_COLUMNS[table]
   try {
     await db.writeTransaction(async tx => {
       for (const doc of docs) {
         const d = { ...doc }
         if (Array.isArray(d.category_tags)) d.category_tags = JSON.stringify(d.category_tags)
+        // فلترة الحقول غير المعروفة لمنع "no such column"
+        if (allowed) Object.keys(d).forEach(k => { if (!allowed.includes(k)) delete d[k] })
         const cols = Object.keys(d)
+        if (!cols.length) continue
         await tx.execute(
           `INSERT OR REPLACE INTO ${table} (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
           Object.values(d)
-        ).catch(() => {})
+        ).catch(e => console.warn(`[syncAll] ${table} insert:`, e.message))
       }
     })
   } catch(e) { console.warn('[syncAll] SQLite write:', table, e.message) }
