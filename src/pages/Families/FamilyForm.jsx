@@ -304,6 +304,7 @@ export default function FamilyForm() {
   const [errors,    setErrors]    = useState({})
   const [dupAlert,  setDupAlert]  = useState('')
   const [saving,    setSaving]    = useState(false)
+  const submittingRef = useRef(false)  // حارس فوري — يمنع الضغط المزدوج قبل re-render
   const { profile } = useAuth()
   const { showToast } = useApp()
   const { query, upsert, bulkUpsert, remove } = useRxDB()
@@ -427,8 +428,11 @@ export default function FamilyForm() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // حارس فوري — يمنع نقرات متعددة سريعة قبل أن يُحدّث React الزر
+    if (submittingRef.current) return
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
+    submittingRef.current = true
     setSaving(true)
     try {
       const now       = new Date().toISOString()
@@ -562,6 +566,7 @@ export default function FamilyForm() {
           }
           syncMembers() // بدون await — لا تعيق الحفظ
         }
+        showToast(isEdit ? '✅ تم تحديث الأسرة وستتم مزامنتها' : '✅ تمت إضافة الأسرة وستتم مزامنتها')
       } else {
         // ══ أوف لاين: أضف للقائمة لرفعها لاحقاً ════════════
         await addToQueue('upsert', 'families', familyData)
@@ -569,16 +574,20 @@ export default function FamilyForm() {
           await addToQueue('upsert', 'family_members', m)
         for (const id of removedIds)
           await addToQueue('delete', 'family_members', { id }, id)
-        showToast('💾 حُفظ محلياً — سيُرفع عند الاتصال')
+        showToast(isEdit
+          ? '💾 تم تحديث الأسرة محلياً — سيُرفع عند الاتصال'
+          : '💾 تمت إضافة الأسرة محلياً — ستُرفع عند الاتصال')
       }
 
-      showToast(isEdit ? '✅ تم تحديث الأسرة' : '✅ تمت إضافة الأسرة')
+      // تأخير بسيط ليرى المستخدم رسالة التأكيد قبل مغادرة الصفحة
+      await new Promise(r => setTimeout(r, 700))
       navigate('/families')
     } catch (err) {
       console.error('[handleSubmit]', err)
       showToast('خطأ: ' + err.message, true)
     } finally {
       setSaving(false)
+      submittingRef.current = false
     }
   }
 
