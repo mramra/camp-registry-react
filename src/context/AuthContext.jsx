@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
 import { localDB } from '../lib/db'
 import { hasPermission, hasPagePermission, getCampFilter } from '../lib/permissions'
+import { loadPagePermissions, canAccessPageSync } from '../lib/pagePermissions'
 
 const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
@@ -21,6 +22,8 @@ export function AuthProvider({ children }) {
   const [loading,   setLoading]   = useState(true)
   const [mustChange,setMustChange]= useState(false)
   const [previewAs, setPreviewAs] = useState(null)
+  const [pagePermRows, setPagePermRows] = useState([])
+  const [pagePermLoaded, setPagePermLoaded] = useState(false)
 
   useEffect(() => { initAuth() }, [])
 
@@ -90,7 +93,7 @@ export function AuthProvider({ children }) {
     } catch {}
 
     // ② Supabase في الخلفية مع timeout
-    if (!navigator.onLine) { setLoading(false); return }
+    if (!navigator.onLine) { setLoading(false); setPagePermLoaded(true); return }
     try {
       const { data: members, error } = await withTimeout(
         supabase.from('org_members').select('*')
@@ -104,8 +107,14 @@ export function AuthProvider({ children }) {
         try { await localDB.org_members.put(p) } catch {}
         const { data: meta } = await supabase.auth.getUser()
         setMustChange(!!(meta?.user?.user_metadata?.must_change_pass))
+        // حمّل صلاحيات الصفحات (دور + استثناءات فردية) — لا تعيق تحميل الصفحة
+        loadPagePermissions().then(rows => { setPagePermRows(rows); setPagePermLoaded(true) }).catch(() => setPagePermLoaded(true))
+      } else {
+        setPagePermLoaded(true) // لا بروفايل — لا حاجة لانتظار صلاحيات
       }
-    } catch {}
+    } catch {
+      setPagePermLoaded(true) // فشل/timeout — لا تُبقِ الحماية بانتظار أبدي
+    }
     setLoading(false)
   }
 
@@ -162,6 +171,8 @@ export function AuthProvider({ children }) {
   const canExport = can('export')
   const canImport = can('import')
   const campFilter = getCampFilter(effectiveProfile)
+  // فحص صلاحية صفحة معيّنة بمنطق الأولوية (استثناء مستخدم > دور > افتراضي)
+  const canAccessPageNow = (pageKey) => canAccessPageSync(effectiveProfile, pageKey, pagePermRows)
 
   const value = {
     user, profile: effectiveProfile, effectiveProfile, realProfile: profile,
@@ -170,6 +181,8 @@ export function AuthProvider({ children }) {
     role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
     canWrite, canEdit, canDelete, canExport, canImport,
     can, canPage, campFilter,
+    pagePermRows, pagePermLoaded, canAccessPageNow,
+    refetchPagePermissions: () => loadPagePermissions().then(setPagePermRows),
     signIn, signOut,
     refetchProfile: () => user && fetchProfile(user.id),
   }
