@@ -5,6 +5,8 @@ import { useRxDB } from '../../lib/useRxDB'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
+import { logFamilyActivity } from '../../lib/familyActivityLog'
+import { enqueue } from '../../lib/sync'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
@@ -102,7 +104,7 @@ export default function FamiliesList() {
   const [selected,    setSelected]    = useState(null)
   const [selMembers,  setSelMembers]  = useState([])
 
-  const { canWrite, canDelete } = useAuth()
+  const { canWrite, canDelete, profile } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useRxDB()
   const { showToast, psReady, psSynced} = useApp()
@@ -282,12 +284,38 @@ export default function FamiliesList() {
   async function deleteFamily(id) {
     if (!window.confirm('حذف هذه الأسرة؟')) return
     try {
+      // اجلب بيانات الأسرة قبل حذفها (الاسم وعدد الأفراد) لتسجيلها في سجل النشاط
+      const famBeforeDelete  = families.find(f => f.id === id)
+      const membersBeforeDel = allMembers.filter(m => m.family_id === id)
+      const actorId   = profile?.user_id || profile?.id || null
+      const actorName = profile?.full_name || profile?.name || '—'
+
       await remove('families', id)
       await Promise.all((await query('family_members', {family_id:id})).map(m => remove('family_members', m.id)))
       if (navigator.onLine) {
         await supabase.from('family_members').delete().eq('family_id', id)
         await supabase.from('families').delete().eq('id', id)
-      } else { await enqueue('delete_family', { id }) }
+        // سجّل عملية الحذف في سجل النشاط
+        logFamilyActivity({
+          familyId:     id,
+          familyName:   famBeforeDelete?.head_name,
+          membersCount: membersBeforeDel.length,
+          action:       'delete',
+          actorId,
+          actorName,
+        })
+      } else {
+        // أوف لاين: أرفق بيانات السجل مع طلب الحذف لتسجيلها عند المزامنة لاحقاً
+        await enqueue('delete_family', {
+          id,
+          _activity: {
+            familyName:   famBeforeDelete?.head_name,
+            membersCount: membersBeforeDel.length,
+            actorId,
+            actorName,
+          },
+        })
+      }
       setFamilies(f => f.filter(x => x.id !== id))
       setAllMembers(m => m.filter(x => x.family_id !== id))
       setSelected(null)
