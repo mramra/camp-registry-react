@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { processSyncQueue, getSyncStats } from '../../lib/sync'
-import { fetchRecentFamilyActivity } from '../../lib/familyActivityLog'
+import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
 import { useRxDB } from '../../lib/useRxDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 
@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [syncInfo, setSyncInfo] = useState({ pending:0, failed:0, conflicts:0 })
   const [recent,     setRecent]     = useState([])
   const [activity,   setActivity]   = useState([])
+  const [activityDetail, setActivityDetail] = useState(null) // عنصر النشاط المختار لعرض تفاصيله
   const [queueModal, setQueueModal] = useState(null)  // 'pending' | 'failed' | 'conflict' | null
   const [queueItems, setQueueItems] = useState([])
   const [syncing,  setSyncing]  = useState(false)
@@ -303,18 +304,22 @@ export default function Dashboard() {
                 delete: { label: 'حذف الأسرة',   color: '#ef4444', bg: 'rgba(239,68,68,0.1)'  },
               }
               const st = ACTION_STYLE[a.action] || ACTION_STYLE.update
-              const clickable = a.action !== 'delete'
+              const hasChanges = a.action === 'update' && a.changes && Object.keys(a.changes).length > 0
               return (
                 <div key={a.id}
-                  onClick={() => clickable && navigate('/families', { state: { openFamily: a.family_id, autoOpen: true } })}
+                  onClick={() => {
+                    if (hasChanges) setActivityDetail(a)
+                    else if (a.action !== 'delete') navigate('/families', { state: { openFamily: a.family_id, autoOpen: true } })
+                  }}
                   className="flex items-center justify-between bg-surface2 rounded-xl px-3 py-2.5"
-                  style={{ cursor: clickable ? 'pointer' : 'default' }}>
+                  style={{ cursor: (hasChanges || a.action !== 'delete') ? 'pointer' : 'default' }}>
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-xs font-bold truncate">{a.family_name || '—'}</div>
                     <div className="text-[10px] mt-0.5">
                       <span className="font-bold" style={{color:st.color}}>{a.actor_name || '—'}</span>
                       {' · '}
                       <span style={{color:st.color}}>{st.label}</span>
+                      {hasChanges && <span className="text-muted"> · اضغط للتفاصيل</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -327,6 +332,40 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal تفاصيل التعديل — القيمة القديمة والجديدة لكل حقل */}
+      {activityDetail && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'16px'}}
+          onClick={e => e.target===e.currentTarget && setActivityDetail(null)}>
+          <div style={{background:'#1a1a2e',border:'1px solid #374151',borderRadius:'20px 20px 0 0',width:'100%',maxWidth:'500px',padding:'20px',maxHeight:'80vh',overflow:'auto'}}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-white font-black text-sm">✏️ تفاصيل التعديل — {activityDetail.family_name}</div>
+              <button onClick={() => setActivityDetail(null)}
+                className="text-muted text-xs px-3 py-1.5 rounded-xl bg-surface2 border border-border">✕ إغلاق</button>
+            </div>
+            <div className="text-muted text-[10px] mb-3">
+              عدّل <span className="font-bold text-accent">{activityDetail.actor_name}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {Object.entries(activityDetail.changes || {}).map(([field, val]) => (
+                <div key={field} className="bg-surface2 border border-border rounded-xl p-3">
+                  <div className="text-white text-xs font-bold mb-1.5">{FIELD_LABELS[field] || field}</div>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="px-2 py-1 rounded-lg flex-1 truncate" style={{background:'rgba(239,68,68,0.1)', color:'#ef4444'}}>
+                      {val.old || '(فاضي)'}
+                    </span>
+                    <span className="text-muted">←</span>
+                    <span className="px-2 py-1 rounded-lg flex-1 truncate" style={{background:'rgba(16,185,129,0.1)', color:'#10b981'}}>
+                      {val.new || '(فاضي)'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* إجراءات سريعة */}
       <div className="bg-surface border border-border rounded-xl p-3 mb-4">
