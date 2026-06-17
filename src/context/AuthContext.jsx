@@ -8,6 +8,17 @@ const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
 const SUPA_URL    = 'https://ojclpkenecicujkqhhlu.supabase.co'
 
+// يمنع تكرار quickSync لو أُطلق initAuth وonAuthStateChange بنفس اللحظة لنفس فتحة التطبيق
+let appSyncTriggered = false
+function triggerAppSync() {
+  if (appSyncTriggered) return
+  if (!navigator.onLine) return
+  appSyncTriggered = true
+  import('../lib/syncAll').then(({ quickSync }) =>
+    quickSync().catch(e => console.warn('[app-open] sync:', e.message))
+  )
+}
+
 // وظيفة مساعدة: أي promise مع timeout
 function withTimeout(promise, ms, msg) {
   return Promise.race([
@@ -46,6 +57,7 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
+        triggerAppSync() // سحب كل الجداول محلياً عند فتح التطبيق وهو موصول بالنت
       } else {
         localStorage.removeItem(PROFILE_KEY)
         setProfile(null)
@@ -61,6 +73,7 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
+        triggerAppSync() // محمي بحارس appSyncTriggered — لن يتكرر لو نُفّذ في initAuth أعلاه
         // ربط PowerSync الكامل — غير معيق، بعد تأخير بسيط
         setTimeout(() => {
           import('../lib/powersync').then(({ connectPowerSync }) =>
@@ -138,6 +151,7 @@ export function AuthProvider({ children }) {
     if (error) throw error
 
     // ── مزامنة فورية + إعادة ضبط Delta Sync ─────────────────
+    appSyncTriggered = true // سنسحب الآن مباشرة — لا حاجة لتكرار من onAuthStateChange
     import('../lib/syncAll').then(({ quickSync }) =>
       quickSync().catch(e => console.warn('[login] sync:', e.message))
     )
@@ -152,6 +166,7 @@ export function AuthProvider({ children }) {
       disconnectPowerSync().catch(() => {})
     )
     localStorage.removeItem(PROFILE_KEY)
+    appSyncTriggered = false // يسمح بسحب كامل جديد عند دخول مستخدم آخر بنفس الجلسة
     try { await supabase.auth.signOut() } catch {}
   }
 
