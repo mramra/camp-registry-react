@@ -77,7 +77,59 @@ export const psDb = new PowerSyncDatabase({
   schema: AppSchema,
   database: { dbFilename: 'camp_registry.db' },
   flags: { enableMultiTabs: false },
-  // ⛔ لا connect() → صفر اتصال بـ Supabase
 })
 
 export function getPowerSync() { return psDb }
+
+// ── حالة الاتصال ──────────────────────────────────────────
+let _connected = false
+let _connecting = false
+
+export function isPowerSyncConnected() { return _connected }
+
+/**
+ * ربط PowerSync بـ Supabase — يُستدعى بعد تسجيل الدخول فقط
+ * آمن: لا يُعطّل أي شيء إذا فشل، فقط يبقى local-only
+ */
+export async function connectPowerSync() {
+  if (_connected || _connecting) return _connected
+  _connecting = true
+  try {
+    // تأكد من وجود جلسة Supabase صالحة أولاً
+    const { supabase } = await import('./supabase')
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      console.warn('[PowerSync] لا توجد جلسة — يبقى local-only')
+      _connecting = false
+      return false
+    }
+
+    const { SupabaseConnector } = await import('./SupabaseConnector')
+    const connector = new SupabaseConnector()
+
+    await psDb.connect(connector)
+    _connected = true
+    console.log('[PowerSync] ✅ متصل — مزامنة فورية نشطة')
+    return true
+  } catch(e) {
+    console.warn('[PowerSync] فشل الاتصال — يبقى local-only:', e.message)
+    _connected = false
+    return false
+  } finally {
+    _connecting = false
+  }
+}
+
+/**
+ * قطع الاتصال — عند تسجيل الخروج
+ */
+export async function disconnectPowerSync() {
+  if (!_connected) return
+  try {
+    await psDb.disconnect()
+    _connected = false
+    console.log('[PowerSync] انقطع الاتصال')
+  } catch(e) {
+    console.warn('[PowerSync] disconnect:', e.message)
+  }
+}
