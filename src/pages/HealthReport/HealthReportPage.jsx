@@ -205,9 +205,12 @@ export default function HealthReportPage() {
         title="كشف الحالات الصحية"
         icon="⚕️"
         subtitle={`${filtered.length} حالة من ${allCases.length}`}
-        action={canExport && filtered.length > 0
-          ? { label: '📤 كشف شامل', onClick: () => exportExcel(null) }
-          : undefined}
+        action={canExport && filtered.length > 0 && (
+          <button onClick={() => exportExcel(null)}
+            className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">
+            📤 كشف شامل
+          </button>
+        )}
       />
 
       {/* بطاقات الإحصاء */}

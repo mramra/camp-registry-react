@@ -210,9 +210,12 @@ export default function WomenPage() {
         title="إحصاءات النساء"
         icon="👩"
         subtitle={`${filtered.length} من ${allWomen.length} سجل`}
-        action={canExport && filtered.length > 0
-          ? { label: '📤 تصدير', onClick: exportExcel }
-          : undefined}
+        action={canExport && filtered.length > 0 && (
+          <button onClick={exportExcel}
+            className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">
+            📤 تصدير
+          </button>
+        )}
       />
 
       {/* إحصاءات سريعة */}
