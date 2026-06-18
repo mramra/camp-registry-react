@@ -34,6 +34,9 @@ const RegistersPage   = lazy(() => import('./pages/Registers/RegistersPage'))
 const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
 const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
 const PermissionsAdmin = lazy(() => import('./pages/PermissionsAdmin/PermissionsAdmin'))
+const WomenPage        = lazy(() => import('./pages/Women/WomenPage'))
+const ChildrenPage     = lazy(() => import('./pages/Children/ChildrenPage'))
+const HealthReportPage = lazy(() => import('./pages/HealthReport/HealthReportPage'))
 
 // ── شاشة تحميل موحّدة ────────────────────────────────
 function PageLoader() {
@@ -128,6 +131,9 @@ function AppRoutes() {
           <Route path="registers"   element={<ProtectedRoute pageKey="registers" pageLabel="السجلات"><RegistersPage /></ProtectedRoute>} />
           <Route path="registries"  element={<ProtectedRoute pageKey="registries" pageLabel="قوائم البيانات"><RegistriesPage /></ProtectedRoute>} />
           <Route path="permissions-admin" element={<ProtectedRoute pageKey="page_permissions" pageLabel="إدارة الصلاحيات"><PermissionsAdmin /></ProtectedRoute>} />
+          <Route path="women"        element={<ProtectedRoute pageKey="women"        pageLabel="النساء"><WomenPage /></ProtectedRoute>} />
+          <Route path="children"     element={<ProtectedRoute pageKey="children"     pageLabel="سجل الأطفال"><ChildrenPage /></ProtectedRoute>} />
+          <Route path="health-report" element={<ProtectedRoute pageKey="health_report" pageLabel="الحالات الصحية"><HealthReportPage /></ProtectedRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

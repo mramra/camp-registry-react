@@ -24,6 +24,9 @@ export const PAGE_REGISTRY = {
   analysis:      { label: '📊 التحليل',              path: '/analysis' },
   needs_report:  { label: '📋 تقارير الاحتياجات',     path: '/needs-report' },
   camp_compare:  { label: '🏕️ مقارنة المخيمات',      path: '/camp-compare' },
+  women:         { label: '👩 النساء',                path: '/women' },
+  children:      { label: '🧒 سجل الأطفال',           path: '/children' },
+  health_report: { label: '⚕️ الحالات الصحية',        path: '/health-report' },
   export:        { label: '📤 الاستيراد والتصدير',    path: '/export' },
   users:         { label: '👥 المستخدمون',           path: '/users' },
   audit:         { label: '📝 سجل التغييرات',         path: '/audit' },
@@ -53,12 +56,15 @@ const DEFAULT_ROLE_ACCESS = {
   super_admin: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
     registers:true, registries:true, analysis:true, needs_report:true, camp_compare:true,
+    women:true, children:true, health_report:true,
     export:true, users:true, audit:true, alerts:true, data:false, diagnostics:true,
     devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false,
   },
   camp_delegate: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
     registers:true, registries:true, analysis:true, needs_report:true, camp_compare:true,
+    women:true, children:true, health_report:true,
+    women:true, children:true, health_report:true,
     export:true, users:true, audit:true, alerts:true, data:false, diagnostics:true,
     devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false,
   },
@@ -68,6 +74,7 @@ const DEFAULT_ROLE_ACCESS = {
   assistant: {
     dashboard:true, camps:false, registries:false,
     analysis:false, needs_report:false, camp_compare:false,
+    women:false, children:false, health_report:false,
     export:false, users:false, audit:false, alerts:false, data:false, diagnostics:false,
     devices:false, sms:false, settings:true, subscription:false, help:true, page_permissions:false,
   },
