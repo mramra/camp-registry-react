@@ -130,6 +130,10 @@ export default function UsersList() {
   async function handleEdit(e) {
     e.preventDefault()
     if (!editUser) return
+    if (!isOwner && !isSuperAdmin) {
+      showToast('⛔ لا تملك صلاحية تعديل المستخدمين', true)
+      return
+    }
     setSaving(true)
     try {
       const updates = {
@@ -556,7 +560,7 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
       </div>
       {user.role !== 'platform_owner' && (
         <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
-          <button onClick={()=>onEdit(user)} className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>
+          {(isOwner||isSuperAdmin) && <button onClick={()=>onEdit(user)} className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>}
           <button onClick={()=>onPreview(user)} className="bg-green/10 border border-green/30 text-green px-2.5 py-1 rounded-lg text-[11px] font-bold">👁️</button>
           {!isMe && <button onClick={()=>onToggle(user)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${user.is_active!==false?'bg-red/10 border-red/30 text-red':'bg-green/10 border-green/30 text-green'}`}>{user.is_active!==false?'🚫':'✅'}</button>}
           <button onClick={()=>onReset(user)} className="bg-accent/10 border border-accent/30 text-accent px-2.5 py-1 rounded-lg text-[11px] font-bold">🔑</button>

@@ -307,7 +307,7 @@ export default function FamilyForm() {
   const [saving,    setSaving]    = useState(false)
   const submittingRef = useRef(false)  // حارس فوري — يمنع الضغط المزدوج قبل re-render
   const originalDataRef = useRef(null) // نسخة من بيانات الأسرة الأصلية (قبل أي تعديل) — لحساب الفرق عند الحفظ
-  const { profile } = useAuth()
+  const { profile, canWrite, canEdit } = useAuth()
   const { showToast } = useApp()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const navigate = useNavigate()
@@ -434,6 +434,12 @@ export default function FamilyForm() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // فحص الصلاحية الفعلي — منع الحفظ تماماً لمن لا يملك صلاحية الإضافة/التعديل
+    // (لا يكفي الاعتماد على إخفاء الزر بصرياً، فالحفظ نفسه يجب أن يُمنع برمجياً)
+    if (isEdit ? !canEdit : !canWrite) {
+      showToast(isEdit ? '⛔ لا تملك صلاحية تعديل الأسر' : '⛔ لا تملك صلاحية إضافة أسر جديدة', true)
+      return
+    }
     // حارس فوري — يمنع نقرات متعددة سريعة قبل أن يُحدّث React الزر
     if (submittingRef.current) return
     const errs = validate()
@@ -627,6 +633,13 @@ export default function FamilyForm() {
     <div>
       <PageHeader icon={isEdit?'✏️':'➕'}
         title={isEdit?'تعديل أسرة':'إضافة أسرة جديدة'} back />
+
+      {/* تنبيه عدم الصلاحية */}
+      {(isEdit ? !canEdit : !canWrite) && (
+        <div className="bg-red/10 border border-red/30 text-red text-xs rounded-xl px-4 py-3 mb-3 font-bold">
+          ⛔ لا تملك صلاحية {isEdit ? 'تعديل' : 'إضافة'} الأسر. يمكنك التصفح فقط، تواصل مع مسؤول النظام لتفعيل الصلاحية.
+        </div>
+      )}
 
       {/* تنبيه التكرار */}
       {dupAlert && (
@@ -827,7 +840,7 @@ export default function FamilyForm() {
         </Card>
 
         <div className="flex gap-3 pb-8">
-          <button type="submit" disabled={saving}
+          <button type="submit" disabled={saving || (isEdit ? !canEdit : !canWrite)}
             className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
             {saving ? 'جاري الحفظ...' : isEdit ? '💾 حفظ التعديلات' : '✅ إضافة الأسرة'}
           </button>

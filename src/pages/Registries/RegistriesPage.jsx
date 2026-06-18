@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, ORG_ID } from '../../lib/supabase'
+import { useLocalDB } from '../../lib/useLocalDB'
+import { ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
-import { getPowerSync } from '../../lib/powersync'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import XLSX from 'xlsx-js-style'
@@ -278,15 +278,15 @@ function DistTab({camps,onlineData,showToast}) {
   const [details,setDetails]=useState([])
   const [filterCamp,setFilterCamp]=useState('')
   const [loading,setLoading]=useState(false)
-  const {psReady}=useApp()
+  const {query}=useLocalDB()
 
   useEffect(()=>{
     if(!onlineData) return
     const load=async()=>{
-      let r2
-      if(navigator.onLine){const{data}=await supabase.from('dist_rounds').select('*').eq('org_id',ORG_ID).order('created_at',{ascending:false});r2=data||[]}
-      else{const db=getPowerSync();r2=await db.getAll('SELECT * FROM dist_rounds WHERE org_id=? ORDER BY created_at DESC',[ORG_ID])}
-      setRounds(r2)
+      try{
+        const r2=await query('dist_rounds',{org_id:ORG_ID})
+        setRounds(r2.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)))
+      }catch(e){ showToast('خطأ بتحميل الجولات: '+e.message,true) }
     }
     load()
   },[onlineData])
@@ -295,9 +295,7 @@ function DistTab({camps,onlineData,showToast}) {
     setSelected(round);setLoading(true)
     try{
       const {families,members,campMap}=onlineData||{}
-      let received
-      if(navigator.onLine){const{data}=await supabase.from('camp_dist_families').select('*');received=data||[]}
-      else{const db=getPowerSync();received=await db.getAll('SELECT * FROM camp_dist_families')}
+      const received=await query('camp_dist_families',{distribution_id:round.id})
       const memCount={}
       members?.forEach(m=>{memCount[m.family_id]=(memCount[m.family_id]||0)+1})
       const receivedIds=new Set(received.map(r=>r.family_id))
@@ -305,7 +303,8 @@ function DistTab({camps,onlineData,showToast}) {
       if(filterCamp) fams=fams.filter(f=>f.camp_id===filterCamp)
       setDetails(fams.map(f=>({...f,camp:campMap?.[f.camp_id]||'—',members:(memCount[f.id]||0)+1,received:receivedIds.has(f.id),receivedAt:received.find(r=>r.family_id===f.id)?.received_at||''}))
         .sort((a,b)=>(a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true})))
-    }finally{setLoading(false)}
+    }catch(e){ showToast('خطأ بتحميل التفاصيل: '+e.message,true) }
+    finally{setLoading(false)}
   }
 
   const recv=details.filter(d=>d.received).length
@@ -354,6 +353,7 @@ const TABS=[{id:'children',icon:'👶',label:'الأطفال'},{id:'women',icon:
 
 export default function RegistriesPage() {
   const {showToast,psReady,psSynced}=useApp()
+  const {query}=useLocalDB()
   const [tab,setTab]=useState('children')
   const [loading,setLoading]=useState(true)
   const [camps,setCamps]=useState([])
@@ -362,20 +362,11 @@ export default function RegistriesPage() {
   const loadAll=useCallback(async()=>{
     setLoading(true)
     try{
-      let families,members,campsData
-      if(navigator.onLine){
-        const[fRes,mRes,cRes]=await Promise.all([
-          supabase.from('families').select('*').eq('org_id',ORG_ID),
-          supabase.from('family_members').select('*'),
-          supabase.from('camps').select('id,name').eq('org_id',ORG_ID),
-        ])
-        families=fRes.data||[];members=mRes.data||[];campsData=cRes.data||[]
-      }else{
-        const db=getPowerSync()
-        families=await db.getAll('SELECT * FROM families WHERE org_id=?',[ORG_ID])
-        members=await db.getAll('SELECT * FROM family_members')
-        campsData=await db.getAll('SELECT id,name FROM camps WHERE org_id=?',[ORG_ID])
-      }
+      const [families,members,campsData]=await Promise.all([
+        query('families',{org_id:ORG_ID}),
+        query('family_members'),
+        query('camps',{org_id:ORG_ID}),
+      ])
       setCamps(campsData)
       const campMap=Object.fromEntries(campsData.map(c=>[c.id,c.name]))
       setOnlineData({families,members,campMap})

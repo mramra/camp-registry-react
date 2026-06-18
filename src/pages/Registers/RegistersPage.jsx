@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, ORG_ID } from '../../lib/supabase'
+import { useLocalDB } from '../../lib/useLocalDB'
+import { ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
-import { getPowerSync } from '../../lib/powersync'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import XLSX from 'xlsx-js-style'
@@ -14,25 +14,6 @@ function calcAge(dob) {
   let a=t.getFullYear()-b.getFullYear()
   if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--
   return a>=0&&a<120?a:null
-}
-
-// ── جلب البيانات (Supabase أو PowerSync) ─────────────────────
-async function fetchData() {
-  if (navigator.onLine) {
-    const [fRes,mRes,cRes] = await Promise.all([
-      supabase.from('families').select('*').eq('org_id',ORG_ID),
-      supabase.from('family_members').select('*'),
-      supabase.from('camps').select('id,name').eq('org_id',ORG_ID),
-    ])
-    return { families:fRes.data||[], members:mRes.data||[], camps:cRes.data||[] }
-  }
-  const db = getPowerSync()
-  const [families,members,camps] = await Promise.all([
-    db.getAll('SELECT * FROM families WHERE org_id=?',[ORG_ID]),
-    db.getAll('SELECT * FROM family_members'),
-    db.getAll('SELECT id,name FROM camps WHERE org_id=?',[ORG_ID]),
-  ])
-  return { families, members, camps }
 }
 
 // ── تصدير Excel عام ──────────────────────────────────────────
@@ -331,50 +312,37 @@ function HealthTab({ families, members, camps, filterCamp }) {
 // ════════════════════════════════════════════════════════════
 // تبويب التوزيعات
 // ════════════════════════════════════════════════════════════
-function DistTab({ families, camps, psReady }) {
+function DistTab({ families, camps, showToast }) {
   const [rounds, setRounds] = useState([])
   const [selected, setSelected] = useState(null)
   const [details, setDetails] = useState([])
   const [loading, setLoading] = useState(true)
   const campMap = Object.fromEntries(camps.map(c=>[c.id,c.name]))
+  const { query } = useLocalDB()
 
   useEffect(()=>{
     async function load() {
       setLoading(true)
       try {
-        let rounds2
-        if (navigator.onLine) {
-          const {data} = await supabase.from('dist_rounds').select('*').eq('org_id',ORG_ID).order('created_at',{ascending:false})
-          rounds2 = data||[]
-        } else {
-          const db=getPowerSync()
-          rounds2 = await db.getAll('SELECT * FROM dist_rounds WHERE org_id=? ORDER BY created_at DESC',[ORG_ID])
-        }
-        setRounds(rounds2)
-      } catch{}
+        const rounds2 = await query('dist_rounds',{org_id:ORG_ID})
+        setRounds(rounds2.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)))
+      } catch(e){ showToast('خطأ بتحميل الجولات: '+e.message,true) }
       finally{setLoading(false)}
     }
     load()
-  },[psReady])
+  },[])
 
   async function loadDetails(round) {
     setSelected(round); setLoading(true)
     try {
-      let received
-      if (navigator.onLine) {
-        const {data} = await supabase.from('camp_dist_families').select('*')
-        received = data||[]
-      } else {
-        const db=getPowerSync()
-        received = await db.getAll('SELECT * FROM camp_dist_families')
-      }
+      const received = await query('camp_dist_families',{distribution_id:round.id})
       const recIds = new Set(received.map(r=>r.family_id))
       const rows = families.map(f=>({
         ...f, camp:campMap[f.camp_id]||'—', received:recIds.has(f.id),
         receivedAt:received.find(r=>r.family_id===f.id)?.received_at||''
       })).sort((a,b)=>(a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true}))
       setDetails(rows)
-    } catch{}
+    } catch(e){ showToast('خطأ بتحميل التفاصيل: '+e.message,true) }
     finally{setLoading(false)}
   }
 
@@ -540,6 +508,7 @@ const TABS = [
 
 export default function RegistersPage() {
   const { showToast, psReady, psSynced } = useApp()
+  const { query } = useLocalDB()
   const [tab,        setTab]        = useState('children')
   const [loading,    setLoading]    = useState(true)
   const [families,   setFamilies]   = useState([])
@@ -550,7 +519,11 @@ export default function RegistersPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const { families: f, members: m, camps: c } = await fetchData()
+      const [f,m,c] = await Promise.all([
+        query('families',{org_id:ORG_ID}),
+        query('family_members'),
+        query('camps',{org_id:ORG_ID}),
+      ])
       setFamilies(f); setMembers(m); setCamps(c)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
@@ -592,7 +565,7 @@ export default function RegistersPage() {
           {tab==='women'     && <WomenTab    families={families} members={members} camps={camps} filterCamp={filterCamp}/>}
           {tab==='health'    && <HealthTab   families={families} members={members} camps={camps} filterCamp={filterCamp}/>}
           {tab==='needs'     && <NeedsTab    families={families} camps={camps} filterCamp={filterCamp}/>}
-          {tab==='dist'      && <DistTab     families={families} camps={camps} psReady={psReady}/>}
+          {tab==='dist'      && <DistTab     families={families} camps={camps} showToast={showToast}/>}
         </>
       )}
     </div>

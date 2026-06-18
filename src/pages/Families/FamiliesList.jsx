@@ -104,7 +104,7 @@ export default function FamiliesList() {
   const [selected,    setSelected]    = useState(null)
   const [selMembers,  setSelMembers]  = useState([])
 
-  const { canWrite, canDelete, profile } = useAuth()
+  const { canWrite, canEdit, canDelete, profile } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const { showToast, psReady, psSynced} = useApp()
@@ -680,8 +680,10 @@ export default function FamiliesList() {
               </div>
             )}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => { navigate(`/families/edit/${selected.id}`); setSelected(null) }}
-                className="flex-1 bg-accent text-bg font-black py-2.5 rounded-xl text-sm">✏️ تعديل</button>
+              {canEdit && (
+                <button onClick={() => { navigate(`/families/edit/${selected.id}`); setSelected(null) }}
+                  className="flex-1 bg-accent text-bg font-black py-2.5 rounded-xl text-sm">✏️ تعديل</button>
+              )}
               {canDelete && (
                 <button onClick={() => deleteFamily(selected.id)}
                   className="flex-1 bg-red/15 border border-red/40 text-red font-bold py-2.5 rounded-xl text-sm">🗑️ حذف</button>
