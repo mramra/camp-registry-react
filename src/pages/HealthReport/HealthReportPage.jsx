@@ -96,6 +96,24 @@ export default function HealthReportPage() {
   }, [camps])
 
   // رصد الأسر التي فيها رضيع (عمر < 2) لحساب المرضعات تلقائياً
+  // الأنثى الأكبر سناً في كل أسرة (family_id → أكبر عمر أنثى)
+  const famOldestFemaleAge = useMemo(() => {
+    const map = {}
+    // أفراد الأسرة الإناث
+    members.filter(m => m.gender === 'أنثى' || m.gender === 'female').forEach(m => {
+      const a = calcAge(m.dob)
+      if (a === null) return
+      if (map[m.family_id] === undefined || a > map[m.family_id]) map[m.family_id] = a
+    })
+    // رب الأسرة الأنثى
+    families.filter(f => f.head_gender === 'أنثى').forEach(f => {
+      const a = calcAge(f.head_dob)
+      if (a === null) return
+      if (map[f.id] === undefined || a > map[f.id]) map[f.id] = a
+    })
+    return map
+  }, [members, families])
+
   const famWithInfant = useMemo(() => {
     const s = new Set()
     members.forEach(m => { const a = calcAge(m.dob); if (a !== null && a < 2) s.add(m.family_id) })
@@ -135,7 +153,10 @@ export default function HealthReportPage() {
         || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother'].includes(relation)
       const explicitNursing = health === 'مرضع' || fs.includes('مرضع')
       // تلقائي: أنثى في دور أمومة + رضيع (< 2 سنة) في نفس الأسرة + عمرها 13+
-      const autoNursing = isMotherRole && famWithInfant.has(famId) && (age === null || age >= 13)
+      // الشرط الثالث: عمرها أكبر من باقي الإناث في الأسرة (هي الأم الأرجح)
+      const oldestAge = famOldestFemaleAge[famId]
+      const isOldest  = age === null || oldestAge === undefined || age >= oldestAge
+      const autoNursing = isMotherRole && famWithInfant.has(famId) && isOldest
       if (explicitNursing || autoNursing)
         types.push('nursing')
     }
@@ -193,7 +214,7 @@ export default function HealthReportPage() {
     })
 
     return list
-  }, [families, members, campMap, famWithInfant])
+  }, [families, members, campMap, famWithInfant, famOldestFemaleAge])
 
   const filtered = useMemo(() => allCases.filter(c => {
     if (campFilter && c.camp_id !== campFilter) return false

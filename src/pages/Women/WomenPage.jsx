@@ -139,6 +139,22 @@ export default function WomenPage() {
     return list
   }, [families, members, campMap])
 
+  // الأنثى الأكبر سناً في كل أسرة
+  const famOldestFemaleAge = useMemo(() => {
+    const map = {}
+    members.filter(m => m.gender === 'أنثى' || m.gender === 'female').forEach(m => {
+      const a = calcAge(m.dob)
+      if (a === null) return
+      if (map[m.family_id] === undefined || a > map[m.family_id]) map[m.family_id] = a
+    })
+    families.filter(f => f.head_gender === 'أنثى').forEach(f => {
+      const a = calcAge(f.head_dob)
+      if (a === null) return
+      if (map[f.id] === undefined || a > map[f.id]) map[f.id] = a
+    })
+    return map
+  }, [members, families])
+
   // الأسر التي فيها رضيع (عمر < 2 سنة) — لحساب المرضعات تلقائياً
   const famWithInfant = useMemo(() => {
     const s = new Set()
@@ -168,7 +184,9 @@ export default function WomenPage() {
           const rel = (w.relation || '').trim()
           const isMotherRole = w.isHead || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(rel)
           const explicit = fs.includes('مرضع') || w.marital === 'مرضع'
-          const auto = isMotherRole && famWithInfant.has(famId) && (age === null || age >= 13)
+          const oldestAge = famOldestFemaleAge[famId]
+          const isOldest  = age === null || oldestAge === undefined || age >= oldestAge
+          const auto = isMotherRole && famWithInfant.has(famId) && isOldest
           if (!explicit && !auto) return false
         }
         if (statusFilter === 'أرملة'  && !['أرملة','أرمل'].includes(mar) && !['أرملة','أرمل'].includes(rel)) return false
@@ -195,12 +213,14 @@ export default function WomenPage() {
         if (fs2.includes('مرضع')) return true
         const rel = (w.relation || '').trim()
         const isMotherRole = w.isHead || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(rel)
-        return isMotherRole && famWithInfant.has(w.family_id) && (w.age === null || w.age >= 13)
+        const oldestAge = famOldestFemaleAge[w.family_id]
+        const isOldest  = w.age === null || oldestAge === undefined || w.age >= oldestAge
+        return isMotherRole && famWithInfant.has(w.family_id) && isOldest
       }).length,
       widows:   base.filter(w => ['أرملة','أرمل'].includes(w.marital) || ['أرملة','أرمل'].includes(w.relation)).length,
       divorced: base.filter(w => ['مطلقة','مطلق'].includes(w.marital) || ['مطلقة','مطلق'].includes(w.relation)).length,
     }
-  }, [allWomen, campFilter, families, famWithInfant])
+  }, [allWomen, campFilter, families, famWithInfant, famOldestFemaleAge])
 
   function exportExcel() {
     try {
