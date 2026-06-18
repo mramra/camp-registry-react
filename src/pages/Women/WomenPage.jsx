@@ -9,6 +9,18 @@ import Spinner            from '../../components/ui/Spinner'
 import EmptyState         from '../../components/ui/EmptyState'
 
 // حساب العمر من تاريخ الميلاد
+function parseArr(val) {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  if (typeof val === 'string') {
+    const s = val.trim().replace(/^"+|"+$/g, '')
+    if (!s || s === '[]' || s === 'null') return []
+    try { const p = JSON.parse(s); return Array.isArray(p) ? p : [] }
+    catch { return [] }
+  }
+  return []
+}
+
 function calcAge(dob) {
   if (!dob) return null
   const d = new Date(dob)
@@ -138,7 +150,7 @@ export default function WomenPage() {
       if (ageTo   && (w.age === null || w.age > parseInt(ageTo)))   return false
 
       if (statusFilter) {
-        const fs = Array.isArray(w.female_status) ? w.female_status : []
+        const fs = parseArr(w.female_status)
         const mar = w.marital || ''
         const rel = w.relation || ''
         if (statusFilter === 'حامل'   && !fs.includes('حامل'))  return false
@@ -278,7 +290,7 @@ export default function WomenPage() {
         <div className="space-y-2">
           {filtered.map(w => {
             const tags = []
-            const fs = Array.isArray(w.female_status) ? w.female_status : []
+            const fs = parseArr(w.female_status)
             fs.forEach(s => { if (STATUS_TAG[s]) tags.push(STATUS_TAG[s]) })
             if (['أرملة','أرمل'].includes(w.marital)) tags.push(STATUS_TAG['أرملة'])
             if (['مطلقة','مطلق'].includes(w.marital)) tags.push(STATUS_TAG['مطلقة'])

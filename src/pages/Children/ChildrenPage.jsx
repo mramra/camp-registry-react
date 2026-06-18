@@ -8,6 +8,18 @@ import Card             from '../../components/ui/Card'
 import Spinner          from '../../components/ui/Spinner'
 import EmptyState       from '../../components/ui/EmptyState'
 
+function parseArr(val) {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  if (typeof val === 'string') {
+    const s = val.trim().replace(/^"+|"+$/g, '')
+    if (!s || s === '[]' || s === 'null') return []
+    try { const p = JSON.parse(s); return Array.isArray(p) ? p : [] }
+    catch { return [] }
+  }
+  return []
+}
+
 function calcAge(dob) {
   if (!dob) return null
   const d = new Date(dob)
@@ -161,8 +173,8 @@ export default function ChildrenPage() {
       total:   base.length,
       male:    base.filter(c => c.gender === 'ذكر').length,
       female:  base.filter(c => c.gender === 'أنثى').length,
-      orphan:  base.filter(c => c.orphan && (Array.isArray(c.orphan) ? c.orphan.length : c.orphan)).length,
-      disabled:base.filter(c => c.disabilities && (Array.isArray(c.disabilities) ? c.disabilities.length : c.disabilities)).length,
+      orphan:  base.filter(c => parseArr(c.orphan).length > 0 || c.orphan === true).length,
+      disabled:base.filter(c => parseArr(c.disabilities).length > 0).length,
     }
   }, [allChildren, campFilter])
 
@@ -282,8 +294,8 @@ export default function ChildrenPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map(child => {
-            const hasDisab = child.disabilities && (Array.isArray(child.disabilities) ? child.disabilities.length : child.disabilities)
-            const hasOrphan = child.orphan && (Array.isArray(child.orphan) ? child.orphan.length : child.orphan)
+            const hasDisab = parseArr(child.disabilities).length > 0
+            const hasOrphan = parseArr(child.orphan).length > 0 || child.orphan === true
             return (
               <Card key={child.id} className="p-3">
                 <div className="flex items-start gap-3">
