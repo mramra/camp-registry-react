@@ -139,6 +139,14 @@ export default function WomenPage() {
     return list
   }, [families, members, campMap])
 
+  // الأسر التي فيها رضيع (عمر < 2 سنة) — لحساب المرضعات تلقائياً
+  const famWithInfant = useMemo(() => {
+    const s = new Set()
+    members.forEach(m => { const a = calcAge(m.dob); if (a !== null && a < 2) s.add(m.family_id) })
+    families.forEach(f => { const a = calcAge(f.head_dob); if (a !== null && a < 2) s.add(f.id) })
+    return s
+  }, [members, families])
+
   // النتائج المفلترة
   const filtered = useMemo(() => {
     return allWomen.filter(w => {
@@ -154,7 +162,15 @@ export default function WomenPage() {
         const mar = w.marital || ''
         const rel = w.relation || ''
         if (statusFilter === 'حامل'   && !fs.includes('حامل'))  return false
-        if (statusFilter === 'مرضع'   && !fs.includes('مرضع'))  return false
+        if (statusFilter === 'مرضع') {
+          const famId = w.family_id
+          const age = w.age
+          const rel = (w.relation || '').trim()
+          const isMotherRole = w.isHead || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(rel)
+          const explicit = fs.includes('مرضع') || w.marital === 'مرضع'
+          const auto = isMotherRole && famWithInfant.has(famId) && (age === null || age >= 13)
+          if (!explicit && !auto) return false
+        }
         if (statusFilter === 'أرملة'  && !['أرملة','أرمل'].includes(mar) && !['أرملة','أرمل'].includes(rel)) return false
         if (statusFilter === 'مطلقة'  && !['مطلقة','مطلق'].includes(mar) && !['مطلقة','مطلق'].includes(rel)) return false
         if (statusFilter === 'معاق') {
@@ -174,11 +190,17 @@ export default function WomenPage() {
     return {
       total:    base.length,
       pregnant: base.filter(w => (Array.isArray(w.female_status) ? w.female_status : []).includes('حامل')).length,
-      nursing:  base.filter(w => (Array.isArray(w.female_status) ? w.female_status : []).includes('مرضع')).length,
+      nursing: base.filter(w => {
+        const fs2 = parseArr(w.female_status)
+        if (fs2.includes('مرضع')) return true
+        const rel = (w.relation || '').trim()
+        const isMotherRole = w.isHead || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(rel)
+        return isMotherRole && famWithInfant.has(w.family_id) && (w.age === null || w.age >= 13)
+      }).length,
       widows:   base.filter(w => ['أرملة','أرمل'].includes(w.marital) || ['أرملة','أرمل'].includes(w.relation)).length,
       divorced: base.filter(w => ['مطلقة','مطلق'].includes(w.marital) || ['مطلقة','مطلق'].includes(w.relation)).length,
     }
-  }, [allWomen, campFilter, families])
+  }, [allWomen, campFilter, families, famWithInfant])
 
   function exportExcel() {
     try {

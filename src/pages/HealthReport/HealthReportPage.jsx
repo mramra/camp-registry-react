@@ -129,10 +129,14 @@ export default function HealthReportPage() {
       // مرضع — صريح أو تلقائي
       const relation = (person.relation || '').trim()
       const age = calcAge(isFamilyHead ? person.head_dob : person.dob)
-      const isWife = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(relation)
+      const famId = isFamilyHead ? person.id : person.family_id
+      // الأدوار التي قد تكون مرضعة تلقائياً (رب الأسرة الأنثى + زوجة + أم)
+      const isMotherRole = isFamilyHead
+        || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother'].includes(relation)
       const explicitNursing = health === 'مرضع' || fs.includes('مرضع')
-      const autoNursing = isWife && famWithInfant.has(isFamilyHead ? person.id : person.family_id)
-      if ((explicitNursing || autoNursing) && (age === null || age >= 13))
+      // تلقائي: أنثى في دور أمومة + رضيع (< 2 سنة) في نفس الأسرة + عمرها 13+
+      const autoNursing = isMotherRole && famWithInfant.has(famId) && (age === null || age >= 13)
+      if (explicitNursing || autoNursing)
         types.push('nursing')
     }
 
