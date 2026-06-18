@@ -4,6 +4,7 @@ import { useLocalDB } from '../../lib/useLocalDB'
 import { enqueue } from '../../lib/sync'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
+import { useDataScope } from '../../lib/useDataScope'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -29,6 +30,7 @@ const DIST_STATUS_MAP = {
 export default function Distributions() {
   const [rounds,    setRounds]    = useState([])
   const [camps,     setCamps]     = useState({})
+  const [campsRaw,  setCampsRaw]  = useState([])
   const [search,    setSearch]    = useState('')
   const [loading,   setLoading]   = useState(true)
   const [selected,  setSelected]  = useState(null)  // الجولة المختارة
@@ -45,6 +47,7 @@ export default function Distributions() {
   const [saving, setSaving] = useState(false)
   const { showToast, online } = useApp()
   const { isSuperAdmin, isOwner, canWrite } = useAuth()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
 
   useEffect(() => { loadData() }, [])
@@ -55,6 +58,7 @@ export default function Distributions() {
     try {
       const campsData = await query('camps')
       setCamps(Object.fromEntries(campsData.map(c => [c.id, c.name])))
+      setCampsRaw(campsData)
 
       // offline-first: SQLite أولاً
       const local = await query('dist_rounds')
@@ -80,8 +84,9 @@ export default function Distributions() {
     setView('batches')
     setBatchLoad(true)
     try {
+      const campIds = getAllowedCampIds(campsRaw)
       const local = await query('camp_distributions', { round_id: round.id })
-      setBatches(local.sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0)))
+      setBatches(filterLocal(local, campIds).sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0)))
 
       if (online) {
         const { data, error } = await supabase
@@ -90,7 +95,7 @@ export default function Distributions() {
           .order('created_at', { ascending: false })
         if (!error && data) {
           await bulkUpsert('camp_distributions', data).catch(() => {})
-          setBatches(data)
+          setBatches(filterLocal(data, campIds))
         }
       }
     } catch(err) { showToast('خطأ: ' + err.message, true) }
@@ -105,10 +110,13 @@ export default function Distributions() {
     try {
       // أسر المخيم
       const campId = batch.camp_id || selected?.camp_id
+      const campIds = getAllowedCampIds(campsRaw)
       const allFamsRaw = await query('families')
-      const allFams = allFamsRaw.filter(f =>
+      let allFams = allFamsRaw.filter(f =>
         f.org_id === ORG_ID && (!campId || f.camp_id === campId) && f.status === 'active'
       )
+      // حماية مضاعفة: حتى لو الدفعة بلا camp_id محدد، لا تتجاوز نطاق صلاحية المستخدم
+      allFams = filterLocal(allFams, campIds)
       setFamilies(allFams)
 
       // من استلم بالفعل

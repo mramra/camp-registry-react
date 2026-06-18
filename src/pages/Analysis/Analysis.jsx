@@ -244,10 +244,14 @@ export default function Analysis() {
       const REQUIRED = ['head_name', 'head_id', 'phone1', 'camp_id']
       const incomplete = fams.filter(f => REQUIRED.some(k => !f[k]?.toString().trim())).length
 
-      const activeRounds = rounds.filter(r => r.status === 'active').length
-      const distFamIds   = new Set(distFams.map(d => d.family_id))
+      // فلترة التوزيع بنطاق الأسر المسموحة فقط (اتساق كامل مع عزل المخيم)
+      const distFamIds    = new Set(distFams.filter(d => famIds.has(d.family_id)).map(d => d.family_id))
       const receivedCount = fams.filter(f => distFamIds.has(f.id)).length
       const notReceived   = fams.filter(f => f.status === 'active' && !distFamIds.has(f.id)).length
+      // عدد الجولات: فقط الجولات التي لها دفعات استفادت منها أسر المخيم المرئية
+      const visibleRoundIds = new Set(distFams.filter(d => famIds.has(d.family_id)).map(d => d.distribution_id))
+      const scopedRounds    = campIds === null ? rounds : rounds.filter(r => visibleRoundIds.has(r.id))
+      const activeRounds    = scopedRounds.filter(r => r.status === 'active').length
 
       setStats({
         total: fams.length, totalPersons: fams.length + mems.length,
@@ -256,7 +260,7 @@ export default function Analysis() {
         healthData, women: women.length, womenGroups,
         children: children.length, orphans, incomplete,
         camps, campMap, allFams: fams,
-        rounds: rounds.length, activeRounds, receivedCount, notReceived,
+        rounds: scopedRounds.length, activeRounds, receivedCount, notReceived,
         // famIds للـ drill-down
         malePersons:    males,
         femalePersons:  females,

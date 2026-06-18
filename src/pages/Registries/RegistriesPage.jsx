@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import XLSX from 'xlsx-js-style'
@@ -354,6 +355,7 @@ const TABS=[{id:'children',icon:'👶',label:'الأطفال'},{id:'women',icon:
 export default function RegistriesPage() {
   const {showToast,psReady,psSynced}=useApp()
   const {query}=useLocalDB()
+  const {getAllowedCampIds,filterLocal}=useDataScope()
   const [tab,setTab]=useState('children')
   const [loading,setLoading]=useState(true)
   const [camps,setCamps]=useState([])
@@ -362,13 +364,18 @@ export default function RegistriesPage() {
   const loadAll=useCallback(async()=>{
     setLoading(true)
     try{
-      const [families,members,campsData]=await Promise.all([
+      const [famRaw,membersRaw,campsData]=await Promise.all([
         query('families',{org_id:ORG_ID}),
         query('family_members'),
         query('camps',{org_id:ORG_ID}),
       ])
       setCamps(campsData)
       const campMap=Object.fromEntries(campsData.map(c=>[c.id,c.name]))
+      // عزل المخيم
+      const campIds=getAllowedCampIds(campsData)
+      const families=filterLocal(famRaw,campIds)
+      const famIdSet=new Set(families.map(f=>f.id))
+      const members=campIds===null?membersRaw:membersRaw.filter(m=>famIdSet.has(m.family_id))
       setOnlineData({families,members,campMap})
     }catch(e){showToast('خطأ: '+e.message,true)}
     finally{setLoading(false)}

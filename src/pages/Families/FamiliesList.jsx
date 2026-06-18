@@ -122,14 +122,24 @@ export default function FamiliesList() {
       const tryOpen = async () => {
         let fams = await query('families')
         let fam = fams.find(f => f.id === st.openFamily)
+        // عزل المخيم: لا تفتح أسرة خارج نطاق صلاحية المستخدم
+        const campIds = getAllowedCampIds(campsList)
+        if (fam && campIds !== null && !campIds.includes(fam.camp_id)) {
+          showToast('⛔ لا تملك صلاحية الوصول لهذه الأسرة', true)
+          return
+        }
         if (fam) {
           openFamily(fam)
           return
         }
-        // إذا لم تجد في Dexie، اجلب من Supabase
+        // إذا لم تجد محلياً، اجلب من Supabase (محمي أيضاً بـ RLS على مستوى القاعدة)
         if (navigator.onLine) {
           const { data } = await supabase.from('families').select('*').eq('id', st.openFamily).single()
           if (data) {
+            if (campIds !== null && !campIds.includes(data.camp_id)) {
+              showToast('⛔ لا تملك صلاحية الوصول لهذه الأسرة', true)
+              return
+            }
             try { await upsert('families', data) } catch {}
             openFamily(data)
           }
@@ -140,7 +150,7 @@ export default function FamiliesList() {
     }
   }, [location?.state])
 
-  // تحميل من Dexie عند الفتح (سريع — بدون sync تلقائي)
+  // تحميل من SQLite عند الفتح (سريع — بدون sync تلقائي)
   useEffect(() => { loadLocal() }, [])
   // Delta Sync — يحدّث قائمة الأسر عند وصول تغييرات
   useEffect(() => {
@@ -160,7 +170,7 @@ export default function FamiliesList() {
     if (psSynced) loadLocal()
   }, [psSynced])
 
-  // ── 1. تحميل من Dexie فوراً ─────────────────────────
+  // ── 1. تحميل من SQLite فوراً ─────────────────────────
   async function loadLocal() {
     try {
       const [fams, camps, mems] = await Promise.all([
@@ -179,9 +189,15 @@ export default function FamiliesList() {
     if (!navigator.onLine) return
     setSyncing(true)
     try {
+      const campIds = getAllowedCampIds(campsList)
+      let famsQuery = supabase.from('families').select('*').eq('org_id', ORG_ID)
+      if (campIds !== null) {
+        if (campIds.length === 0) famsQuery = famsQuery.eq('camp_id', 'NONE')
+        else if (campIds.length === 1) famsQuery = famsQuery.eq('camp_id', campIds[0])
+        else famsQuery = famsQuery.in('camp_id', campIds)
+      }
       const [fRes, cRes] = await Promise.all([
-        supabase.from('families').select('*').eq('org_id', ORG_ID)
-          .order('updated_at', { ascending: false }).limit(1000),
+        famsQuery.order('updated_at', { ascending: false }).limit(1000),
         supabase.from('camps').select('*').eq('org_id', ORG_ID),
       ])
       const fams  = (!fRes.error  && fRes.data?.length)  ? fRes.data  : null
@@ -204,11 +220,11 @@ export default function FamiliesList() {
       res.forEach(r => { if (!r.error && r.data) sm.push(...r.data) })
       mems = sm
 
-      // حفظ في Dexie — نتجاهل أخطاء الـ schema بأمان
+      // حفظ في SQLite — نتجاهل أخطاء الـ schema بأمان
       if (fams.length) {
         try { await bulkUpsert("families", fams) }
         catch(e) {
-          console.warn('[dexie] families bulkPut:', e.message)
+          console.warn('[sqlite] families bulkPut:', e.message)
           // محاولة بديلة — حفظ واحد واحد
           for (const f of fams) { try { await upsert("families", f) } catch {} }
         }
@@ -242,21 +258,26 @@ export default function FamiliesList() {
     camps.forEach(c => { cm[c.id] = c.name })
     setCampMap(cm)
     setCampsList(camps)
-    setFamilies(fams)
-    setAllMembers(mems)
+    // عزل بيانات المخيم: camp_delegate/assistant/مدير إيواء يرون فقط مخيماتهم المسموحة
+    const campIds = getAllowedCampIds(camps)
+    const scopedFams = filterLocal(fams, campIds)
+    const scopedFamIds = new Set(scopedFams.map(f => f.id))
+    const scopedMems = campIds === null ? mems : mems.filter(m => scopedFamIds.has(m.family_id))
+    setFamilies(scopedFams)
+    setAllMembers(scopedMems)
   }
 
   // ── فتح تفاصيل أسرة ──────────────────────────────────
   async function openFamily(family) {
     setSelected(family)
-    // ① اقرأ من Dexie مباشرة (أحدث من allMembers في الذاكرة)
+    // ① اقرأ من SQLite مباشرة (أحدث من allMembers في الذاكرة)
     try {
-      const dexieMems = await query('family_members', {family_id: family.id})
-      setSelMembers(getMembers(dexieMems, family))
+      const localMems = await query('family_members', {family_id: family.id})
+      setSelMembers(getMembers(localMems, family))
       // حدّث allMembers أيضاً
       setAllMembers(prev => {
         const others = prev.filter(m => m.family_id !== family.id)
-        return [...others, ...dexieMems]
+        return [...others, ...localMems]
       })
     } catch {
       setSelMembers(getMembers(allMembers, family))

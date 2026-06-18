@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import XLSX from 'xlsx-js-style'
@@ -509,6 +510,7 @@ const TABS = [
 export default function RegistersPage() {
   const { showToast, psReady, psSynced } = useApp()
   const { query } = useLocalDB()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
   const [tab,        setTab]        = useState('children')
   const [loading,    setLoading]    = useState(true)
   const [families,   setFamilies]   = useState([])
@@ -519,11 +521,15 @@ export default function RegistersPage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [f,m,c] = await Promise.all([
+      const [famRaw,membersRaw,c] = await Promise.all([
         query('families',{org_id:ORG_ID}),
         query('family_members'),
         query('camps',{org_id:ORG_ID}),
       ])
+      const campIds = getAllowedCampIds(c)
+      const f = filterLocal(famRaw, campIds)
+      const famIdSet = new Set(f.map(x => x.id))
+      const m = campIds === null ? membersRaw : membersRaw.filter(x => famIdSet.has(x.family_id))
       setFamilies(f); setMembers(m); setCamps(c)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }

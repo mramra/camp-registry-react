@@ -6,6 +6,7 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -52,6 +53,7 @@ function calcAge(dob) {
 
 export default function ExportPage() {
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
+  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { showToast, psReady, psSynced } = useApp()
   const { query } = useLocalDB()
 
@@ -88,13 +90,22 @@ export default function ExportPage() {
 
   useEffect(() => {
     loadCamps()
-    // تحميل كل الأسر والأفراد للتصدير المخصص
+    // تحميل أسر وأفراد المستخدم المسموح له فقط للتصدير المخصص
     Promise.all([
-      supabase.from('families').select('*').eq('org_id', ORG_ID).order('tent'),
-      supabase.from('family_members').select('*'),
-    ]).then(([{data:fams},{data:mems}])=>{
+      supabase.from('camps').select('*').eq('org_id', ORG_ID),
+    ]).then(async ([{data:campsData}]) => {
+      const campIds = getAllowedCampIds(campsData || [])
+      let famsQ = supabase.from('families').select('*').eq('org_id', ORG_ID).order('tent')
+      famsQ = applyScope(famsQ, campIds)
+      const [{data:fams},{data:mems}] = await Promise.all([
+        famsQ,
+        supabase.from('family_members').select('*'),
+      ])
       if (fams?.length) setAllFamilies(fams)
-      if (mems?.length) setAllMembers(mems)
+      if (mems?.length) {
+        const famIdSet = new Set((fams||[]).map(f=>f.id))
+        setAllMembers(campIds === null ? mems : mems.filter(m=>famIdSet.has(m.family_id)))
+      }
     }).catch(()=>{})
   }, [])
 
@@ -121,11 +132,14 @@ export default function ExportPage() {
   // ── جلب البيانات (Supabase أون لاين | PowerSync أوف لاين) ──
   async function getFullData() {
     if (navigator.onLine) {
-      // أون لاين: Supabase مباشرة — أحدث بيانات
+      // أون لاين: Supabase مباشرة — أحدث بيانات، مع تطبيق نطاق مخيم المستخدم
+      const {data:campsData} = await supabase.from('camps').select('*').eq('org_id', ORG_ID)
+      const campIds = getAllowedCampIds(campsData || [])
       let q = supabase.from('families').select(`
         *, camps!camp_id(id,name,latitude,longitude,address,manager_id), family_members(*)
       `).eq('org_id',ORG_ID)
       if (filterCamp) q = q.eq('camp_id',filterCamp)
+      else q = applyScope(q, campIds)
       const { data, error } = await q
       if (error) throw error
       return data || []

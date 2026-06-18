@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -12,17 +13,23 @@ export default function CampCompare() {
   const [typeFilter, setType] = useState('all')
   const { showToast } = useApp()
   const { query } = useLocalDB()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
 
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
     try {
-      const [families, camps, members] = await Promise.all([
+      const [famRaw, camps, membersRaw] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
+      // عزل المخيم: كل شخص يرى فقط البيانات المسموحة لدوره
+      const campIds = getAllowedCampIds(camps)
+      const families = filterLocal(famRaw, campIds)
+      const famIdSet = new Set(families.map(f => f.id))
+      const members = campIds === null ? membersRaw : membersRaw.filter(m => famIdSet.has(m.family_id))
       const campFams = {}
       const campMems = {}
       families.forEach(f => {

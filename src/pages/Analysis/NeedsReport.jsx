@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -38,6 +39,7 @@ export default function NeedsReport() {
   const { showToast } = useApp()
   const { canExport } = useAuth()
   const { query } = useLocalDB()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
 
   useEffect(() => { loadData() }, [])
 
@@ -49,7 +51,11 @@ export default function NeedsReport() {
         query('camps'),
         query('family_members'),
       ])
-      setFamilies(f); setCamps(c); setMembers(m)
+      const campIds = getAllowedCampIds(c)
+      const scopedFams = filterLocal(f, campIds)
+      const scopedFamIds = new Set(scopedFams.map(x => x.id))
+      const scopedMems = campIds === null ? m : m.filter(x => scopedFamIds.has(x.family_id))
+      setFamilies(scopedFams); setCamps(c); setMembers(scopedMems)
     } catch(err) { showToast('خطأ: '+err.message,true) }
     finally { setLoading(false) }
   }

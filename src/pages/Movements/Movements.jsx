@@ -92,7 +92,8 @@ export default function Movements() {
 
   async function loadFamilies() {
     const fams = await query('families')
-    setFamilies(fams)
+    const campIds = getAllowedCampIds(camps)
+    setFamilies(filterLocal(fams, campIds))
   }
 
   async function handleSave(e) {
