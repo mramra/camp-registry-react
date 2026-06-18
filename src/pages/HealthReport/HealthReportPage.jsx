@@ -149,14 +149,14 @@ export default function HealthReportPage() {
       const age = calcAge(isFamilyHead ? person.head_dob : person.dob)
       const famId = isFamilyHead ? person.id : person.family_id
       // الأدوار التي قد تكون مرضعة تلقائياً (رب الأسرة الأنثى + زوجة + أم)
-      const isMotherRole = isFamilyHead
-        || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother'].includes(relation)
       const explicitNursing = health === 'مرضع' || fs.includes('مرضع')
       // تلقائي: أنثى في دور أمومة + رضيع (< 2 سنة) في نفس الأسرة + عمرها 13+
-      // الشرط الثالث: عمرها أكبر من باقي الإناث في الأسرة (هي الأم الأرجح)
+      // الشرط الثالث: أكبر سناً من باقي إناث الأسرة + 18 سنة على الأقل
       const oldestAge = famOldestFemaleAge[famId]
       const isOldest  = age === null || oldestAge === undefined || age >= oldestAge
-      const autoNursing = isMotherRole && famWithInfant.has(famId) && isOldest
+      // أي أنثى 18+ في أسرة فيها رضيع → مرضعة تلقائية (بغض النظر عن الصلة)
+      const isAdultFemale = gender !== 'ذكر' && (age === null || age >= 18)
+      const autoNursing = isAdultFemale && famWithInfant.has(famId) && isOldest
       if (explicitNursing || autoNursing)
         types.push('nursing')
     }

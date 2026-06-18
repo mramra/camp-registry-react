@@ -181,12 +181,11 @@ export default function WomenPage() {
         if (statusFilter === 'مرضع') {
           const famId = w.family_id
           const age = w.age
-          const rel = (w.relation || '').trim()
-          const isMotherRole = w.isHead || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(rel)
           const explicit = fs.includes('مرضع') || w.marital === 'مرضع'
           const oldestAge = famOldestFemaleAge[famId]
           const isOldest  = age === null || oldestAge === undefined || age >= oldestAge
-          const auto = isMotherRole && famWithInfant.has(famId) && isOldest
+          const isAdultFemale = (age === null || age >= 18)
+          const auto = isAdultFemale && famWithInfant.has(famId) && isOldest
           if (!explicit && !auto) return false
         }
         if (statusFilter === 'أرملة'  && !['أرملة','أرمل'].includes(mar) && !['أرملة','أرمل'].includes(rel)) return false
@@ -211,11 +210,10 @@ export default function WomenPage() {
       nursing: base.filter(w => {
         const fs2 = parseArr(w.female_status)
         if (fs2.includes('مرضع')) return true
-        const rel = (w.relation || '').trim()
-        const isMotherRole = w.isHead || ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم'].includes(rel)
         const oldestAge = famOldestFemaleAge[w.family_id]
         const isOldest  = w.age === null || oldestAge === undefined || w.age >= oldestAge
-        return isMotherRole && famWithInfant.has(w.family_id) && isOldest
+        const isAdultFemale = w.age === null || w.age >= 18
+        return isAdultFemale && famWithInfant.has(w.family_id) && isOldest
       }).length,
       widows:   base.filter(w => ['أرملة','أرمل'].includes(w.marital) || ['أرملة','أرمل'].includes(w.relation)).length,
       divorced: base.filter(w => ['مطلقة','مطلق'].includes(w.marital) || ['مطلقة','مطلق'].includes(w.relation)).length,
