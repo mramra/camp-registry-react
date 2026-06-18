@@ -97,6 +97,7 @@ export default function Movements() {
 
   async function handleSave(e) {
     e.preventDefault()
+    if (!canWrite) { showToast('⛔ لا تملك صلاحية تسجيل حركات الأسر', true); return }
     if (!form.family_id) return showToast('اختر أسرة', true)
     if (!form.date)       return showToast('التاريخ مطلوب', true)
     setSaving(true)

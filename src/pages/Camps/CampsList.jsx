@@ -113,6 +113,12 @@ export default function CampsList() {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.name.trim()) return showToast('اسم المخيم مطلوب', true)
+    // فحص الصلاحية الفعلي — نفس منطق canEdit المعروض بصرياً، يطبَّق هنا برمجياً أيضاً
+    const allowedToEdit = isOwner || isSuperAdmin || (isCampDelegate && editCamp && profile?.camp_id === editCamp.id)
+    if (editCamp ? !allowedToEdit : !canWrite) {
+      showToast('⛔ لا تملك صلاحية ' + (editCamp ? 'تعديل' : 'إضافة') + ' المخيمات', true)
+      return
+    }
     setSaving(true)
     try {
       const data = {
@@ -158,6 +164,10 @@ export default function CampsList() {
   }
 
   async function handleDelete(camp) {
+    if (!isOwner) {
+      showToast('⛔ حذف المخيمات للمالك فقط', true)
+      return
+    }
     if (!window.confirm(`حذف "${camp.name}"؟`)) return
     try {
       await remove('camps', camp.id)

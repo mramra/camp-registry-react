@@ -47,6 +47,7 @@ export default function Devices() {
   }
 
   async function removeDevice(id) {
+    if (!isOwner && !isSuperAdmin) { showToast('⛔ لا تملك صلاحية إزالة الأجهزة', true); return }
     if (!window.confirm('إزالة هذا الجهاز؟')) return
     try {
       await supabase.from('devices').delete().eq('id', id)

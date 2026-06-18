@@ -537,6 +537,7 @@ export default function DataPage() {
 
   // ── حذف كل البيانات ─────────────────────────────────
   async function clearAllData() {
+    if (!isOwner) { showToast('⛔ حذف كل البيانات لمالك المنصة فقط', true); return }
     if (!window.confirm('⚠️⚠️ حذف كل بيانات المنظمة نهائياً؟\nهذا الإجراء لا يمكن التراجع عنه!')) return
     if (!window.confirm('تأكيد أخير — هل أنت متأكد 100%؟')) return
     setLoading(true)

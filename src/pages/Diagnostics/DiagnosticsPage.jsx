@@ -7,6 +7,7 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { getPowerSync, isPowerSyncConnected, connectPowerSync } from '../../lib/powersync'
 import { pushLocalChanges } from '../../lib/pushLocalChanges'
 import { quickSync } from '../../lib/syncAll'
+import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/ui/PageHeader'
 
 // ── التقاط console.log في الذاكرة ────────────────────────
@@ -33,6 +34,7 @@ if (typeof window !== 'undefined' && !window.__diagHooked) {
 const TABLES = ['families','family_members','camps','org_members','family_movements','dist_rounds','camp_distributions','camp_dist_families']
 
 export default function DiagnosticsPage() {
+  const { isOwner, isSuperAdmin } = useAuth()
   const [tests,   setTests]   = useState({})
   const [running, setRunning] = useState(false)
   const [logs,    setLogs]    = useState([])
@@ -164,6 +166,10 @@ export default function DiagnosticsPage() {
 
   // إعادة بناء المخازن المحلية من Supabase (المصدر الموثوق)
   async function rebuildStores() {
+    if (!isOwner && !isSuperAdmin) {
+      alert('⛔ إعادة بناء البيانات المحلية لمدير النظام فقط')
+      return
+    }
     if (!confirm('سيُعاد جلب كل البيانات من السيرفر وتنظيف التكرارات المحلية. متابعة؟')) return
     setRunning(true)
     try {

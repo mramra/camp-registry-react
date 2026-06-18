@@ -134,6 +134,7 @@ export default function Distributions() {
   // ─── إضافة جولة ──────────────────────────────────────
   async function handleAddRound(e) {
     e.preventDefault()
+    if (!canWrite) { showToast('⛔ لا تملك صلاحية إضافة جولات توزيع', true); return }
     if (!form.name.trim()) return showToast('اسم الجولة مطلوب', true)
     setSaving(true)
     try {
@@ -156,6 +157,7 @@ export default function Distributions() {
   // ─── إضافة دفعة ──────────────────────────────────────
   async function handleAddBatch(e) {
     e.preventDefault()
+    if (!canWrite) { showToast('⛔ لا تملك صلاحية إضافة دفعات توزيع', true); return }
     if (!bForm.name.trim()) return showToast('اسم الدفعة مطلوب', true)
     setSaving(true)
     try {
@@ -180,6 +182,7 @@ export default function Distributions() {
 
   // ─── تسجيل الاستلام ──────────────────────────────────
   async function toggleReceive(family) {
+    if (!canWrite) { showToast('⛔ لا تملك صلاحية تسجيل الاستلام', true); return }
     const already = received[family.id]
     try {
       if (already) {
@@ -215,6 +218,7 @@ export default function Distributions() {
 
   // ─── تغيير حالة الجولة ───────────────────────────────
   async function updateRoundStatus(id, status) {
+    if (!isOwner && !isSuperAdmin) { showToast('⛔ لا تملك صلاحية تغيير حالة الجولة', true); return }
     try {
       const current = rounds.find(r => r.id === id)
       await upsert('dist_rounds', { ...current, id, status })
