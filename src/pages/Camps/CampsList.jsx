@@ -214,6 +214,21 @@ export default function CampsList() {
         )}
       />
 
+      {(isOwner || isSuperAdmin) && (() => {
+        const unmanaged = visible.filter(c => !memberMap[c.id])
+        if (!unmanaged.length) return null
+        return (
+          <div className="mb-3 p-3 rounded-xl border" style={{background:'rgba(239,68,68,0.08)', borderColor:'rgba(239,68,68,0.3)'}}>
+            <p className="text-red-400 text-xs font-bold">
+              ⚠️ {unmanaged.length} مخيم بلا مندوب معيّن
+            </p>
+            <p className="text-muted text-[11px] mt-1">
+              {unmanaged.map(c => c.name).join('، ')}
+            </p>
+          </div>
+        )
+      })()}
+
       {loading ? <div className="flex justify-center py-16"><Spinner /></div>
       : visible.length === 0 ? <EmptyState icon="⛺" title="لا توجد مخيمات" />
       : (
@@ -345,8 +360,10 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="font-black text-white text-sm">⛺ {camp.name}</div>
-            {memberMap[camp.id] && (
+            {memberMap[camp.id] ? (
               <div className="text-[11px] mt-0.5" style={{color:'#f59e0b'}}>🟠 مندوب: {memberMap[camp.id]}</div>
+            ) : (
+              <div className="text-[11px] mt-0.5 font-bold" style={{color:'#ef4444'}}>⚠️ بلا مندوب معيّن</div>
             )}
             {camp.address && <div className="text-muted text-[10px] mt-0.5">📍 {camp.address}</div>}
             <div className="text-muted text-[10px] mt-0.5">
@@ -402,7 +419,11 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
           <div className="flex items-start justify-between">
             <div>
               <div className="font-bold text-white text-xs">🏕️ {s.name}</div>
-              {memberMap[s.id] && <div className="text-[10px] mt-0.5" style={{color:'#f59e0b'}}>🟠 {memberMap[s.id]}</div>}
+              {memberMap[s.id] ? (
+                <div className="text-[10px] mt-0.5" style={{color:'#f59e0b'}}>🟠 {memberMap[s.id]}</div>
+              ) : (
+                <div className="text-[10px] mt-0.5 font-bold" style={{color:'#ef4444'}}>⚠️ بلا مندوب</div>
+              )}
               {s.address && <div className="text-muted text-[10px]">📍 {s.address}</div>}
               <div className="text-muted text-[10px]">👥 {famCount[s.id]||0} أسرة</div>
             </div>
