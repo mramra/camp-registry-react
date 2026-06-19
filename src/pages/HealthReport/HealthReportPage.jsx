@@ -63,6 +63,7 @@ export default function HealthReportPage() {
   const [loading,  setLoading]  = useState(true)
   const [campFilter, setCampFilter] = useState('')
   const [catFilter,  setCatFilter]  = useState('')
+  const [showDiagnosis, setShowDiagnosis] = useState(false)
 
   const { showToast } = useApp()
   const { canExport }  = useAuth()
@@ -141,6 +142,58 @@ export default function HealthReportPage() {
     if (isFemale) {
       const fs = parseArr(isFamilyHead ? person.head_female_status : person.female_status)
       if (health === 'حامل' || fs.includes('حامل')) types.push('pregnant')
+
+
+  // ── تشخيص: تحليل كل أسرة فيها رضيع — لماذا قُبلت/رُفضت كمرضعة ──
+  const nursingDiagnosis = useMemo(() => {
+    const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
+    const rows = []
+
+    families.forEach(f => {
+      const famMembers = members.filter(m => m.family_id === f.id)
+      const infants = famMembers.filter(m => {
+        const a = calcAge(m.dob); const rel = (m.relation || '').trim()
+        return a !== null && a < 2 && CHILD_RELATIONS.includes(rel)
+      })
+      const nearInfants = famMembers.filter(m => {
+        const a = calcAge(m.dob); const rel = (m.relation || '').trim()
+        return a !== null && a < 2 && !CHILD_RELATIONS.includes(rel)
+      })
+      const headIsInfant = calcAge(f.head_dob) !== null && calcAge(f.head_dob) < 2
+
+      if (!infants.length && !nearInfants.length && !headIsInfant) return
+
+      const females = []
+      if (f.head_gender === 'أنثى') {
+        females.push({ name: f.head_name, relation: 'رب الأسرة (بلا صلة)', age: calcAge(f.head_dob), isHead: true })
+      }
+      famMembers.filter(m => m.gender === 'أنثى').forEach(m => {
+        females.push({ name: m.name, relation: m.relation || '(فارغة)', age: calcAge(m.dob), isHead: false })
+      })
+
+      rows.push({
+        family: f.head_name,
+        camp: campMap[f.camp_id] || '—',
+        infantsOk: infants.map(m => `${m.name} (${m.relation}, ${calcAge(m.dob)} سنة)`),
+        infantsBadRelation: nearInfants.map(m => `${m.name} — صلته \"${m.relation || 'فارغة'}\" غير مطابقة`),
+        headIsInfant,
+        females: females.map(w => {
+          let reason = ''
+          if (!infants.length && !headIsInfant) {
+            reason = '❌ لا رضيع بصلة معتمدة (ابن/بنت/طفل)'
+          } else if (w.age !== null && (w.age < 15 || w.age > 50)) {
+            reason = `❌ عمرها ${w.age} خارج 15-50`
+          } else if (w.relation && w.relation !== '(فارغة)' && w.relation !== 'رب الأسرة (بلا صلة)' && !VALID_MOTHERS.includes(w.relation)) {
+            reason = `❌ صلتها \"${w.relation}\" غير معتمدة`
+          } else {
+            reason = '✅ تُحسب كمرضعة'
+          }
+          return { ...w, reason }
+        }),
+      })
+    })
+    return rows
+  }, [families, members, campMap])
 
       // ── مرضعة: مطابقة منطق isNursingMother في البرنامج القديم بالضبط ──
       const relation = (person.relation || '').trim()
@@ -294,6 +347,48 @@ export default function HealthReportPage() {
           </button>
         ))}
       </div>
+
+      {/* تشخيص المرضعات */}
+      <button
+        onClick={() => setShowDiagnosis(s => !s)}
+        className="w-full text-xs font-bold py-2 rounded-xl border border-border text-muted hover:text-white hover:bg-surface2"
+      >
+        🔍 {showDiagnosis ? 'إخفاء' : 'عرض'} تشخيص حالات الرضاعة ({nursingDiagnosis.length} أسرة فيها رضيع)
+      </button>
+
+      {showDiagnosis && (
+        <div className="space-y-2">
+          {nursingDiagnosis.length === 0 ? (
+            <Card><p className="text-muted text-xs text-center py-4">لا توجد أسر فيها رضيع</p></Card>
+          ) : nursingDiagnosis.map((row, i) => (
+            <Card key={i} className="p-3">
+              <p className="text-white font-black text-sm">{row.family} <span className="text-muted text-xs">— {row.camp}</span></p>
+
+              {row.infantsOk.length > 0 && (
+                <p className="text-green-400 text-[11px] mt-1">👶 رضيع معتمد: {row.infantsOk.join('، ')}</p>
+              )}
+              {row.headIsInfant && (
+                <p className="text-green-400 text-[11px] mt-1">👶 رب الأسرة نفسه رضيع (حالة نادرة)</p>
+              )}
+              {row.infantsBadRelation.length > 0 && (
+                <p className="text-amber-400 text-[11px] mt-1">⚠️ {row.infantsBadRelation.join(' | ')}</p>
+              )}
+
+              <div className="mt-2 space-y-1">
+                {row.females.map((w, j) => (
+                  <div key={j} className="flex items-center justify-between text-[11px] bg-surface2 rounded-lg px-2 py-1.5">
+                    <span className="text-white">{w.name} <span className="text-muted">({w.relation}{w.age !== null ? `, ${w.age} سنة` : ''})</span></span>
+                    <span className={w.reason.startsWith('✅') ? 'text-green-400' : 'text-red-400'}>{w.reason}</span>
+                  </div>
+                ))}
+                {row.females.length === 0 && (
+                  <p className="text-red-400 text-[11px]">❌ لا توجد أي أنثى في هذه الأسرة — لا يمكن وجود مرضعة</p>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* فلاتر */}
       <Card>
