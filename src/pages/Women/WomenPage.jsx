@@ -139,9 +139,8 @@ export default function WomenPage() {
     return list
   }, [families, members, campMap])
 
-  // صلات الطفل المعتبرة كرضيع حقيقي (مطابقة القديم)
-  const CHILD_RELATIONS = ['ابن','ابنة','بنت','طفل','طفلة','رضيع','ابنه','بنته','son','daughter']
-  const VALID_MOTHERS   = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
+  // صلات الأمومة المعتمدة لحساب المرضعة تلقائياً
+  const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
 
   // الأسر التي فيها زوجة/أم مسجّلة بصلة محددة
   const famHasNamedWife = useMemo(() => {
@@ -153,16 +152,19 @@ export default function WomenPage() {
     return s
   }, [members])
 
-  // الأسر التي فيها رضيع حقيقي (عمر < 2 + صلته ابن/بنت/طفل فقط)
+  // الأسر التي فيها رضيع (عمر 0-2 سنة) — بدون شرط على الصلة
   const famWithInfant = useMemo(() => {
     const s = new Set()
     members.forEach(m => {
-      const a   = calcAge(m.dob)
-      const rel = (m.relation || '').trim()
-      if (a !== null && a < 2 && CHILD_RELATIONS.includes(rel)) s.add(m.family_id)
+      const a = calcAge(m.dob)
+      if (a !== null && a < 2) s.add(m.family_id)
+    })
+    families.forEach(f => {
+      const a = calcAge(f.head_dob)
+      if (a !== null && a < 2) s.add(f.id)
     })
     return s
-  }, [members])
+  }, [members, families])
 
   // هل هذه المرأة مرضعة تلقائياً؟ (مطابقة isNursingMother في القديم بالضبط)
   function isAutoNursing(w) {

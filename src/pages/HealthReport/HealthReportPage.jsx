@@ -97,8 +97,7 @@ export default function HealthReportPage() {
   }, [camps])
 
   // رصد الأسر التي فيها رضيع (عمر < 2) لحساب المرضعات تلقائياً
-  const CHILD_RELATIONS = ['ابن','ابنة','بنت','طفل','طفلة','رضيع','ابنه','بنته','son','daughter']
-  // family_id → عدد الزوجات/أمهات المسجّلات بصلة محددة (لاستخدامه في حالة relation الفارغة)
+  // family_id → زوجات/أمهات مسجّلات بصلة محددة (لحالة relation الفارغة)
   const famHasNamedWife = useMemo(() => {
     const s = new Set()
     const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
@@ -109,15 +108,19 @@ export default function HealthReportPage() {
     return s
   }, [members])
   // الأسر التي فيها رضيع حقيقي (عمر < 2 + صلته ابن/بنت/طفل... فقط)
+  // الأسر التي فيها رضيع (عمر 0-2 سنة) — بدون شرط على الصلة
   const famWithInfant = useMemo(() => {
     const s = new Set()
     members.forEach(m => {
-      const a   = calcAge(m.dob)
-      const rel = (m.relation || '').trim()
-      if (a !== null && a < 2 && CHILD_RELATIONS.includes(rel)) s.add(m.family_id)
+      const a = calcAge(m.dob)
+      if (a !== null && a < 2) s.add(m.family_id)
+    })
+    families.forEach(f => {
+      const a = calcAge(f.head_dob)
+      if (a !== null && a < 2) s.add(f.id)
     })
     return s
-  }, [members])
+  }, [members, families])
 
 // ── تشخيص: تحليل كل أسرة فيها رضيع — لماذا قُبلت/رُفضت كمرضعة ──
   const nursingDiagnosis = useMemo(() => {
@@ -127,16 +130,12 @@ export default function HealthReportPage() {
     families.forEach(f => {
       const famMembers = members.filter(m => m.family_id === f.id)
       const infants = famMembers.filter(m => {
-        const a = calcAge(m.dob); const rel = (m.relation || '').trim()
-        return a !== null && a < 2 && CHILD_RELATIONS.includes(rel)
-      })
-      const nearInfants = famMembers.filter(m => {
-        const a = calcAge(m.dob); const rel = (m.relation || '').trim()
-        return a !== null && a < 2 && !CHILD_RELATIONS.includes(rel)
+        const a = calcAge(m.dob)
+        return a !== null && a < 2
       })
       const headIsInfant = calcAge(f.head_dob) !== null && calcAge(f.head_dob) < 2
 
-      if (!infants.length && !nearInfants.length && !headIsInfant) return
+      if (!infants.length && !headIsInfant) return
 
       const females = []
       if (f.head_gender === 'أنثى') {
@@ -149,17 +148,14 @@ export default function HealthReportPage() {
       rows.push({
         family: f.head_name,
         camp: campMap[f.camp_id] || '—',
-        infantsOk: infants.map(m => `${m.name} (${m.relation}, ${calcAge(m.dob)} سنة)`),
-        infantsBadRelation: nearInfants.map(m => `${m.name} — صلته \"${m.relation || 'فارغة'}\" غير مطابقة`),
+        infantsOk: infants.map(m => `${m.name} (${m.relation || 'بلا صلة'}, ${calcAge(m.dob)} سنة)`),
         headIsInfant,
         females: females.map(w => {
           let reason = ''
-          if (!infants.length && !headIsInfant) {
-            reason = '❌ لا رضيع بصلة معتمدة (ابن/بنت/طفل)'
-          } else if (w.age !== null && (w.age < 15 || w.age > 50)) {
+          if (w.age !== null && (w.age < 15 || w.age > 50)) {
             reason = `❌ عمرها ${w.age} خارج 15-50`
           } else if (w.relation && w.relation !== '(فارغة)' && w.relation !== 'رب الأسرة (بلا صلة)' && !VALID_MOTHERS.includes(w.relation)) {
-            reason = `❌ صلتها \"${w.relation}\" غير معتمدة`
+            reason = `❌ صلتها "${w.relation}" غير معتمدة (يجب زوجة/أم)`
           } else {
             reason = '✅ تُحسب كمرضعة'
           }
@@ -369,9 +365,7 @@ export default function HealthReportPage() {
               {row.headIsInfant && (
                 <p className="text-green-400 text-[11px] mt-1">👶 رب الأسرة نفسه رضيع (حالة نادرة)</p>
               )}
-              {row.infantsBadRelation.length > 0 && (
-                <p className="text-amber-400 text-[11px] mt-1">⚠️ {row.infantsBadRelation.join(' | ')}</p>
-              )}
+
 
               <div className="mt-2 space-y-1">
                 {row.females.map((w, j) => (
