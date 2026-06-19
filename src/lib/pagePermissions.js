@@ -86,17 +86,85 @@ function defaultAccess(profile, pageKey) {
 let _cache = null
 const CACHE_MS = 60_000
 
-async function fetchAllPermissions(force = false) {
-  if (!force && _cache && (Date.now() - _cache.fetchedAt < CACHE_MS)) return _cache.rows
+// ── قراءة محلية فورية من SQLite (PowerSync) ───────────────
+async function readLocal() {
+  try {
+    const { getPowerSync } = await import('./powersync')
+    const db = getPowerSync()
+    if (!db) return null
+    const rows = await db.getAll(
+      'SELECT * FROM page_permissions WHERE org_id = ?', [ORG_ID]
+    )
+    return rows.map(r => ({ ...r, allowed: !!r.allowed }))
+  } catch (e) {
+    console.warn('[pagePermissions] readLocal:', e.message)
+    return null
+  }
+}
+
+// ── كتابة محلية (INSERT OR REPLACE) ───────────────────────
+async function writeLocal(row) {
+  try {
+    const { getPowerSync } = await import('./powersync')
+    const db = getPowerSync()
+    if (!db) return
+    await db.execute(
+      `INSERT OR REPLACE INTO page_permissions
+       (id, org_id, scope, scope_value, page_key, allowed, updated_by, updated_at)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [row.id, row.org_id, row.scope, row.scope_value, row.page_key,
+       row.allowed ? 1 : 0, row.updated_by, row.updated_at]
+    )
+  } catch (e) { console.warn('[pagePermissions] writeLocal:', e.message) }
+}
+
+async function deleteLocal({ scope, scopeValue, pageKey }) {
+  try {
+    const { getPowerSync } = await import('./powersync')
+    const db = getPowerSync()
+    if (!db) return
+    await db.execute(
+      `DELETE FROM page_permissions WHERE org_id=? AND scope=? AND scope_value=? AND page_key=?`,
+      [ORG_ID, scope, scopeValue, pageKey]
+    )
+  } catch (e) { console.warn('[pagePermissions] deleteLocal:', e.message) }
+}
+
+// ── مزامنة صامتة من Supabase إلى SQLite (لا تعطّل العرض) ──
+async function syncFromServer() {
+  if (!navigator.onLine) return null
   try {
     const { data, error } = await supabase.from('page_permissions').select('*').eq('org_id', ORG_ID)
     if (error) throw error
-    _cache = { rows: data || [], fetchedAt: Date.now() }
-    return _cache.rows
+    const { getPowerSync } = await import('./powersync')
+    const db = getPowerSync()
+    if (db && data) {
+      for (const row of data) { await writeLocal(row) }
+    }
+    return (data || []).map(r => ({ ...r, allowed: !!r.allowed }))
   } catch (e) {
-    console.warn('[pagePermissions] fetchAll:', e.message)
-    return _cache?.rows || []
+    console.warn('[pagePermissions] syncFromServer:', e.message)
+    return null
   }
+}
+
+async function fetchAllPermissions(force = false) {
+  if (!force && _cache && (Date.now() - _cache.fetchedAt < CACHE_MS)) return _cache.rows
+
+  // 1. محلي فوري — يعرض أحدث ما تمت مزامنته سابقاً، حتى بدون نت
+  const local = await readLocal()
+  if (local) {
+    _cache = { rows: local, fetchedAt: Date.now() }
+  }
+
+  // 2. مزامنة من السيرفر في الخلفية (صامتة، لا تعيق الإرجاع إذا فشلت)
+  const fresh = await syncFromServer()
+  if (fresh) {
+    _cache = { rows: fresh, fetchedAt: Date.now() }
+    return fresh
+  }
+
+  return _cache?.rows || []
 }
 
 export function invalidatePagePermissionsCache() { _cache = null }
@@ -123,17 +191,41 @@ export async function loadPagePermissions() { return fetchAllPermissions(true) }
 export async function getAllPagePermissions() { return fetchAllPermissions(true) }
 
 export async function setPagePermission({ scope, scopeValue, pageKey, allowed, updatedBy }) {
-  const { error } = await supabase.from('page_permissions').upsert({
-    org_id: ORG_ID, scope, scope_value: scopeValue, page_key: pageKey,
-    allowed, updated_by: updatedBy || null, updated_at: new Date().toISOString(),
-  }, { onConflict: 'org_id,scope,scope_value,page_key' })
-  if (error) throw error
+  const updated_at = new Date().toISOString()
+  // معرّف ثابت ومتوقع (يطابق unique constraint في Supabase) — يسمح بـ INSERT OR REPLACE صحيح محلياً
+  const id = `${ORG_ID}_${scope}_${scopeValue}_${pageKey}`
+  const row = {
+    id, org_id: ORG_ID, scope, scope_value: scopeValue, page_key: pageKey,
+    allowed, updated_by: updatedBy || null, updated_at,
+  }
+
+  // 1. محلي فوراً — الواجهة تستجيب لحظياً بدون انتظار الشبكة
+  await writeLocal(row)
   invalidatePagePermissionsCache()
+
+  // 2. مزامنة للسيرفر في الخلفية — لا تعطّل تجربة المستخدم لو فشلت (تُعاد عند المزامنة التالية)
+  if (navigator.onLine) {
+    try {
+      const { error } = await supabase.from('page_permissions').upsert({
+        org_id: ORG_ID, scope, scope_value: scopeValue, page_key: pageKey,
+        allowed, updated_by: updatedBy || null, updated_at,
+      }, { onConflict: 'org_id,scope,scope_value,page_key' })
+      if (error) console.warn('[pagePermissions] upsert سيرفر:', error.message)
+    } catch (e) { console.warn('[pagePermissions] upsert سيرفر:', e.message) }
+  }
 }
 
 export async function clearPagePermission({ scope, scopeValue, pageKey }) {
-  const { error } = await supabase.from('page_permissions').delete()
-    .eq('org_id', ORG_ID).eq('scope', scope).eq('scope_value', scopeValue).eq('page_key', pageKey)
-  if (error) throw error
+  // 1. محلي فوراً
+  await deleteLocal({ scope, scopeValue, pageKey })
   invalidatePagePermissionsCache()
+
+  // 2. مزامنة للسيرفر في الخلفية
+  if (navigator.onLine) {
+    try {
+      const { error } = await supabase.from('page_permissions').delete()
+        .eq('org_id', ORG_ID).eq('scope', scope).eq('scope_value', scopeValue).eq('page_key', pageKey)
+      if (error) console.warn('[pagePermissions] حذف سيرفر:', error.message)
+    } catch (e) { console.warn('[pagePermissions] حذف سيرفر:', e.message) }
+  }
 }

@@ -20,6 +20,7 @@ const SUPABASE_TABLES = {
   dist_rounds:       () => supabase.from('dist_rounds').select('*').eq('org_id',ORG_ID),
   camp_distributions:() => supabase.from('camp_distributions').select('*').eq('org_id',ORG_ID),
   camp_dist_families:() => supabase.from('camp_dist_families').select('*'),
+  page_permissions:  () => supabase.from('page_permissions').select('*').eq('org_id',ORG_ID),
 }
 
 function parseRow(row) {
@@ -55,6 +56,8 @@ const TABLE_COLUMNS = {
     'notes','created_at','updated_at'],
   camp_dist_families: ['id','distribution_id','family_id','received','received_at',
     'received_by','notes'],
+  page_permissions: ['id','org_id','scope','scope_value','page_key','allowed',
+    'updated_by','updated_at'],
 }
 
 function prepareForSQLite(data, table) {

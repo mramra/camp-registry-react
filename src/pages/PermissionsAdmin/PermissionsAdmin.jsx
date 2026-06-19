@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { supabase, ORG_ID } from '../../lib/supabase'
+import { useLocalDB } from '../../lib/useLocalDB'
 import { ROLE_LABELS } from '../../lib/permissions'
 import {
   PAGE_REGISTRY, getAllPagePermissions, setPagePermission,
@@ -23,6 +24,7 @@ const EDITABLE_ROLES = ['super_admin', 'camp_delegate', 'assistant']
 export default function PermissionsAdmin() {
   const { profile, isOwner, refetchPagePermissions } = useAuth()
   const { showToast } = useApp()
+  const { query } = useLocalDB()
   const [rows,  setRows]  = useState([])
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -35,16 +37,26 @@ export default function PermissionsAdmin() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [permRows, { data: usersData }] = await Promise.all([
+      // 1. محلي فوراً — لا انتظار للشبكة
+      const [permRows, localUsers] = await Promise.all([
         getAllPagePermissions(),
-        supabase.from('org_members').select('id,user_id,full_name,role').eq('org_id', ORG_ID),
+        query('org_members', { org_id: ORG_ID }),
       ])
       setRows(permRows)
-      setUsers((usersData || []).filter(u => u.role !== 'platform_owner'))
+      setUsers(localUsers.filter(u => u.role !== 'platform_owner'))
     } catch (e) {
       showToast('خطأ في التحميل: ' + e.message, true)
     } finally {
       setLoading(false)
+    }
+
+    // 2. مزامنة صامتة من السيرفر في الخلفية
+    if (navigator.onLine) {
+      try {
+        const { data: usersData } = await supabase.from('org_members')
+          .select('id,user_id,full_name,role').eq('org_id', ORG_ID)
+        if (usersData) setUsers(usersData.filter(u => u.role !== 'platform_owner'))
+      } catch (e) { console.warn('[PermissionsAdmin] مزامنة المستخدمين:', e.message) }
     }
   }
 

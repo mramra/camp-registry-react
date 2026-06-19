@@ -102,6 +102,17 @@ const camp_dist_families = new Table({
     idx_family:        ['family_id'],
   },
 })
+// صلاحيات الصفحات الديناميكية (دور/مستخدم) — تُحرّر فقط من PermissionsAdmin
+const page_permissions = new Table({
+  org_id:column.text, scope:column.text, scope_value:column.text,
+  page_key:column.text, allowed:column.integer,
+  updated_by:column.text, updated_at:column.text,
+}, {
+  indexes: {
+    idx_org:   ['org_id'],
+    idx_scope: ['scope', 'scope_value'],
+  },
+})
 // جدول محلي بحت لتخزين العمليات المعلّقة وقت العمل بدون نت (بديل Dexie sync_queue)
 // لا يُزامن مع Supabase أبداً — فقط تخزين مؤقت محلي يُفرّغ عند توفر الاتصال
 const sync_queue = new Table({
@@ -120,7 +131,7 @@ const sync_queue = new Table({
 const AppSchema = new Schema({
   families, family_members, camps, org_members,
   family_movements, dist_rounds, camp_distributions, camp_dist_families,
-  sync_queue,
+  page_permissions, sync_queue,
 })
 
 export const psDb = new PowerSyncDatabase({
