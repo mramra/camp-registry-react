@@ -119,32 +119,7 @@ export default function HealthReportPage() {
     return s
   }, [members])
 
-  // تحديد أنواع الحالات الصحية لشخص
-  function getTypes(person, isFamilyHead = false) {
-    const types = []
-    const health = (person.health || '').trim()
-
-    // إعاقة
-    if (health === 'معاق' || hasData(isFamilyHead ? person.head_disabilities : person.disabilities))
-      types.push('disabled')
-
-    // إصابة
-    if (health === 'مصاب' || hasData(isFamilyHead ? person.head_injuries : person.injuries))
-      types.push('injured')
-
-    // مزمن
-    if (health === 'مزمن' || hasData(isFamilyHead ? person.head_chronic_diseases : person.chronic_diseases))
-      types.push('chronic')
-
-    // حامل / مرضع
-    const gender = (person.head_gender || person.gender || '').trim()
-    const isFemale = gender.includes('أنثى') || gender.toLowerCase().includes('female') || gender.toLowerCase() === 'f'
-    if (isFemale) {
-      const fs = parseArr(isFamilyHead ? person.head_female_status : person.female_status)
-      if (health === 'حامل' || fs.includes('حامل')) types.push('pregnant')
-
-
-  // ── تشخيص: تحليل كل أسرة فيها رضيع — لماذا قُبلت/رُفضت كمرضعة ──
+// ── تشخيص: تحليل كل أسرة فيها رضيع — لماذا قُبلت/رُفضت كمرضعة ──
   const nursingDiagnosis = useMemo(() => {
     const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
     const rows = []
@@ -194,6 +169,30 @@ export default function HealthReportPage() {
     })
     return rows
   }, [families, members, campMap])
+
+  // تحديد أنواع الحالات الصحية لشخص
+  function getTypes(person, isFamilyHead = false) {
+    const types = []
+    const health = (person.health || '').trim()
+
+    // إعاقة
+    if (health === 'معاق' || hasData(isFamilyHead ? person.head_disabilities : person.disabilities))
+      types.push('disabled')
+
+    // إصابة
+    if (health === 'مصاب' || hasData(isFamilyHead ? person.head_injuries : person.injuries))
+      types.push('injured')
+
+    // مزمن
+    if (health === 'مزمن' || hasData(isFamilyHead ? person.head_chronic_diseases : person.chronic_diseases))
+      types.push('chronic')
+
+    // حامل / مرضع
+    const gender = (person.head_gender || person.gender || '').trim()
+    const isFemale = gender.includes('أنثى') || gender.toLowerCase().includes('female') || gender.toLowerCase() === 'f'
+    if (isFemale) {
+      const fs = parseArr(isFamilyHead ? person.head_female_status : person.female_status)
+      if (health === 'حامل' || fs.includes('حامل')) types.push('pregnant')
 
       // ── مرضعة: مطابقة منطق isNursingMother في البرنامج القديم بالضبط ──
       const relation = (person.relation || '').trim()
