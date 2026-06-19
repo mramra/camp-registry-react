@@ -244,14 +244,18 @@ export default function DiagnosticsPage() {
         <div className="mb-3 bg-surface border border-green/30 rounded-2xl p-3">
           <p className="text-green text-xs font-black mb-2">✅ تقرير الرفع</p>
           <div className="flex flex-col gap-1 text-xs">
-            <div className="flex justify-between">
-              <span className="text-muted">أسر رُفعت:</span>
-              <span className="text-green font-bold">{pushReport.families.uploaded} من {pushReport.families.total}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">أفراد رُفعوا:</span>
-              <span className="text-green font-bold">{pushReport.family_members.uploaded} من {pushReport.family_members.total}</span>
-            </div>
+            {[
+              ['families', 'أسر'],
+              ['family_members', 'أفراد'],
+              ['dist_rounds', 'جولات توزيع'],
+              ['camp_distributions', 'دفعات'],
+              ['camp_dist_families', 'استلام'],
+            ].map(([key, label]) => pushReport[key] && (
+              <div key={key} className="flex justify-between">
+                <span className="text-muted">{label} رُفعت:</span>
+                <span className="text-green font-bold">{pushReport[key].uploaded} من {pushReport[key].total}</span>
+              </div>
+            ))}
             {pushReport.errors.length > 0 && (
               <div className="mt-2 pt-2 border-t border-border">
                 <p className="text-red text-[11px] font-bold mb-1">أخطاء ({pushReport.errors.length}):</p>
@@ -260,7 +264,7 @@ export default function DiagnosticsPage() {
                 ))}
               </div>
             )}
-            {pushReport.families.uploaded === 0 && pushReport.family_members.uploaded === 0 && pushReport.errors.length === 0 && (
+            {Object.entries(pushReport).every(([k,v]) => k==='errors' || v.uploaded === 0) && pushReport.errors.length === 0 && (
               <p className="text-muted text-[11px] mt-1">كل البيانات المحلية موجودة بالفعل في السيرفر ✅</p>
             )}
           </div>
