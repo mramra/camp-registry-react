@@ -99,8 +99,19 @@ export default function UsersList() {
     if (!form.national_id.trim()) errs.national_id = 'رقم الهوية مطلوب'
     if (form.national_id.trim().length < 9) errs.national_id = 'رقم هوية غير صالح'
     if (!form.role) errs.role = 'الدور مطلوب'
-    if (form.role !== 'super_admin' && !form.camp_id) errs.camp_id = 'اختر المخيم'
+    if (form.role === 'camp_delegate' && !form.camp_id) errs.camp_id = 'اختر المخيم'
+    if (form.role === 'assistant' && !form.supervisor_id) errs.supervisor_id = 'اختر المندوب التابع له'
     return errs
+  }
+
+  // المخيم الفعلي الذي سيُحفظ — يُستنتج تلقائياً للمساعد من مندوبه
+  function resolveCampId() {
+    if (form.role === 'assistant') {
+      const sup = users.find(u => u.id === form.supervisor_id)
+      return sup?.camp_id || null
+    }
+    if (form.role === 'super_admin') return null
+    return form.camp_id || null
   }
 
   async function handleAdd(e) {
@@ -115,7 +126,7 @@ export default function UsersList() {
         email: `${form.national_id.trim()}@c.co`, password: pass,
         full_name: form.full_name.trim(), national_id: form.national_id.trim(),
         phone: form.phone.trim(), role: form.role,
-        camp_id: form.camp_id || null, org_id: ORG_ID,
+        camp_id: resolveCampId(), org_id: ORG_ID,
         supervisor_id: form.supervisor_id || null,
         can_add: form.can_add, can_edit: form.can_edit,
         can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
@@ -140,7 +151,7 @@ export default function UsersList() {
         ...editUser,
         full_name:    form.full_name.trim(),
         phone:        form.phone?.trim() || null,
-        camp_id:      form.camp_id || null,
+        camp_id:      resolveCampId(),
         supervisor_id: form.supervisor_id || null,
         can_add:      form.can_add,
         can_edit:     form.can_edit,
@@ -385,7 +396,10 @@ export default function UsersList() {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="➕ إضافة مستخدم" size="lg">
         <form onSubmit={handleAdd} className="flex flex-col gap-4">
           <Field label="الاسم الكامل *" value={form.full_name} onChange={v=>setF('full_name',v)} error={errors.full_name}/>
-          <Field label="رقم الهوية *" value={form.national_id} onChange={v=>setF('national_id',v)} type="tel" inputMode="numeric" error={errors.national_id}/>
+          <div>
+            <Field label="رقم الهوية * (يُستخدم كاسم دخول)" value={form.national_id} onChange={v=>setF('national_id',v)} type="tel" inputMode="numeric" error={errors.national_id}/>
+            <p className="text-muted text-[11px] mt-1">🔑 هذا الرقم هو ما يُدخله المستخدم للدخول للنظام</p>
+          </div>
           <Field label="رقم الجوال" value={form.phone} onChange={v=>setF('phone',v)} type="tel"/>
           <div>
             <label className="text-xs font-bold text-muted block mb-1.5">الدور *</label>
@@ -399,17 +413,24 @@ export default function UsersList() {
               ))}
             </div>
           </div>
-          {form.role !== 'super_admin' && (
+          {form.role !== 'super_admin' && form.role !== 'assistant' && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">المخيم *</label>
               <select value={form.camp_id} onChange={e=>setF('camp_id',e.target.value)}
                 className={`w-full bg-surface2 border ${errors.camp_id?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}>
                 <option value="">— اختر المخيم —</option>
-                {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                {camps.map(c=>{
+                  const hasDelegate = users.some(u => u.role==='camp_delegate' && u.camp_id===c.id)
+                  return <option key={c.id} value={c.id}>{c.name}{hasDelegate ? ' ⚠️ له مندوب بالفعل' : ''}</option>
+                })}
               </select>
               {errors.camp_id && <p className="text-red text-xs mt-1">{errors.camp_id}</p>}
+              {form.role === 'camp_delegate' && form.camp_id && users.some(u => u.role==='camp_delegate' && u.camp_id===form.camp_id) && (
+                <p className="text-amber-400 text-[11px] mt-1.5">⚠️ هذا المخيم له مندوب مُعيّن بالفعل — تأكد من نقل أو استبدال المندوب الحالي.</p>
+              )}
             </div>
           )}
+          {/* المساعد: المخيم يُستنتج تلقائياً من المندوب — يُعرض بعد اختياره أدناه */}
           {/* تابع لمدير إيواء — للمندوب فقط */}
           {form.role === 'camp_delegate' && isOwner && (
             <div>
@@ -426,14 +447,23 @@ export default function UsersList() {
           {/* تابع لمندوب — للمساعد فقط */}
           {form.role === 'assistant' && (isOwner || isSuperAdmin) && (
             <div>
-              <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب</label>
+              <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب *</label>
               <select value={form.supervisor_id} onChange={e=>setF('supervisor_id',e.target.value)}
-                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                className={`w-full bg-surface2 border ${errors.supervisor_id?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}>
                 <option value="">— اختر المندوب —</option>
                 {users.filter(u=>u.role==='camp_delegate').map(u=>(
                   <option key={u.id} value={u.id}>{u.full_name} {u.camp_id && campMap[u.camp_id] ? `— ${campMap[u.camp_id]}` : ''}</option>
                 ))}
               </select>
+              {errors.supervisor_id && <p className="text-red text-xs mt-1">{errors.supervisor_id}</p>}
+              {form.supervisor_id && (
+                <div className="mt-2 p-3 rounded-xl bg-surface2 border border-border">
+                  <p className="text-muted text-[11px]">⛺ المخيم (تلقائي حسب المندوب)</p>
+                  <p className="text-white text-sm font-bold mt-0.5">
+                    {campMap[users.find(u=>u.id===form.supervisor_id)?.camp_id] || '— لم يُحدَّد مخيم للمندوب —'}
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <div className="flex gap-3">
@@ -460,13 +490,16 @@ export default function UsersList() {
               </select>
             </div>
           )}
-          {form.role !== 'super_admin' && (
+          {form.role !== 'super_admin' && form.role !== 'assistant' && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">المخيم</label>
               <select value={form.camp_id} onChange={e=>setF('camp_id',e.target.value)}
                 className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
                 <option value="">— بدون مخيم —</option>
-                {camps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                {camps.map(c=>{
+                  const hasDelegate = users.some(u => u.role==='camp_delegate' && u.camp_id===c.id && u.id!==editUser?.id)
+                  return <option key={c.id} value={c.id}>{c.name}{hasDelegate ? ' ⚠️ له مندوب بالفعل' : ''}</option>
+                })}
               </select>
             </div>
           )}
@@ -492,6 +525,14 @@ export default function UsersList() {
                   <option key={u.id} value={u.id}>{u.full_name} {u.camp_id && campMap[u.camp_id] ? `— ${campMap[u.camp_id]}` : ''}</option>
                 ))}
               </select>
+              {form.supervisor_id && (
+                <div className="mt-2 p-3 rounded-xl bg-surface2 border border-border">
+                  <p className="text-muted text-[11px]">⛺ المخيم (تلقائي حسب المندوب)</p>
+                  <p className="text-white text-sm font-bold mt-0.5">
+                    {campMap[users.find(u=>u.id===form.supervisor_id)?.camp_id] || '— لم يُحدَّد مخيم للمندوب —'}
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <div className="flex gap-3">

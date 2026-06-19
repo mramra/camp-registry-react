@@ -50,7 +50,8 @@ const camps = new Table({
 })
 const org_members = new Table({
   org_id:column.text, user_id:column.text, full_name:column.text,
-  role:column.text, phone:column.text, camp_id:column.text,
+  national_id:column.text, role:column.text, phone:column.text, camp_id:column.text,
+  supervisor_id:column.text, allowed_pages:column.text,
   can_add:column.integer, can_edit:column.integer,
   can_delete:column.integer, can_export:column.integer,
   can_import:column.integer, is_active:column.integer,
