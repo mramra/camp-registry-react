@@ -37,10 +37,9 @@ const ALLOWED = {
     'health','chronic_diseases','disabilities','injuries','orphan_status','created_at','updated_at'],
   dist_rounds: ['id','org_id','name','description','status','start_date','end_date',
     'created_by','created_at','updated_at'],
-  camp_distributions: ['id','org_id','round_id','camp_id','assigned_to','status','notes',
+  camp_distributions: ['id','org_id','round_id','camp_id','status','quantity',
     'created_at','updated_at'],
-  camp_dist_families: ['id','distribution_id','family_id','received','received_at',
-    'received_by','notes'],
+  camp_dist_families: ['id','distribution_id','family_id','received_at','notes'],
 }
 
 function clean(table, rec) {
