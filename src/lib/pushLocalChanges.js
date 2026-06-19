@@ -24,10 +24,14 @@ async function sqliteGetAll(db, table) {
 // الحقول المقبولة في Supabase لكل جدول
 const ALLOWED = {
   families: ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
-    'head_marital','phone1','phone2','tent','original_address','address_details',
-    'status','notes','category_tags','economic_level','version','created_at','updated_at','created_by','updated_by'],
+    'head_marital','phone1','phone2','tent','tent2','original_address','address_details',
+    'address','notes','category_tags','category_details','economic_level','tags',
+    'entry_date','exit_date','exit_reason','transferred_to_camp_id',
+    'head_orphan_status','head_orphan_cause','head_disabilities','head_injuries',
+    'head_chronic_diseases','head_female_status','head_photo_url','client_id',
+    'version','created_at','updated_at','created_by','updated_by'],
   family_members: ['id','family_id','name','national_id','relation','dob','gender',
-    'health','chronic_diseases','disabilities','injuries','orphan_status','notes','created_at','updated_at'],
+    'health','chronic_diseases','disabilities','injuries','orphan_status','created_at','updated_at'],
 }
 
 function clean(table, rec) {
