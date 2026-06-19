@@ -43,6 +43,7 @@ export default function DiagnosticsPage() {
   const [pushing, setPushing]   = useState(false)
   const [pushMsg, setPushMsg]   = useState('')
   const [pushReport, setPushReport] = useState(null)
+  const [adminKey, setAdminKey] = useState('')
 
   // تحديث السجل كل ثانية
   useEffect(() => {
@@ -154,7 +155,7 @@ export default function DiagnosticsPage() {
     setPushReport(null)
     setPushMsg('بدء الرفع...')
     try {
-      const report = await pushLocalChanges(setPushMsg)
+      const report = await pushLocalChanges(setPushMsg, adminKey || null)
       setPushReport(report)
       await runAll()  // أعد الفحص لرؤية التطابق
     } catch(e) {
@@ -219,6 +220,13 @@ export default function DiagnosticsPage() {
           🔌 ربط PowerSync
         </button>
       </div>
+
+      {/* مفتاح إداري اختياري — لتجاوز RLS عند الحاجة، لا يُحفظ */}
+      <input
+        type="password" value={adminKey} onChange={e=>setAdminKey(e.target.value)}
+        placeholder="مفتاح إداري (اختياري — فقط إذا ظهر خطأ RLS)"
+        className="w-full mb-2 bg-surface2 border border-border rounded-xl px-3 py-2 text-xs text-white"
+      />
 
       {/* زر الرفع الآمن */}
       <button onClick={doPush} disabled={pushing}

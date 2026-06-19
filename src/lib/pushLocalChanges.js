@@ -8,6 +8,9 @@
  *   - يُرجع تقريراً مفصلاً بما رُفع، وأي فشل سببه RLS يُشرح بوضوح
  */
 import { supabase, ORG_ID } from './supabase'
+import { createClient } from '@supabase/supabase-js'
+
+const SUPABASE_URL = 'https://ojclpkenecicujkqhhlu.supabase.co'
 
 async function getDb() {
   try {
@@ -62,7 +65,8 @@ function explainError(msg) {
  * يرفع كل الجداول المحلية غير الموجودة في السيرفر بالترتيب الصحيح
  * (يحترم العلاقات: المخيمات/الأسر أولاً، ثم الأفراد، ثم الدفعات، ثم الاستلام)
  */
-export async function pushLocalChanges(onProgress = () => {}) {
+export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
+  const db_client = adminKey ? createClient(SUPABASE_URL, adminKey) : supabase
   const report = {
     families:            { uploaded: 0, total: 0 },
     family_members:      { uploaded: 0, total: 0 },
@@ -86,7 +90,7 @@ export async function pushLocalChanges(onProgress = () => {}) {
     report[table].total = local.length
     if (!local.length) return
 
-    let query = supabase.from(table).select(idKey)
+    let query = db_client.from(table).select(idKey)
     if (extraFilter) query = query.eq(extraFilter.col, extraFilter.val)
     const { data: serverRows, error: selErr } = await query
     if (selErr) {
@@ -105,7 +109,7 @@ export async function pushLocalChanges(onProgress = () => {}) {
     for (let i = 0; i < missing.length; i += BATCH) {
       const batch = missing.slice(i, i + BATCH).map(r => clean(table, r))
       try {
-        const { error } = await supabase.from(table).upsert(batch)
+        const { error } = await db_client.from(table).upsert(batch)
         if (error) throw error
         report[table].uploaded += batch.length
         onProgress(`✅ ${table}: ${report[table].uploaded}/${missing.length}`)
