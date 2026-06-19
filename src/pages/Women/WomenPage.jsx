@@ -139,29 +139,47 @@ export default function WomenPage() {
     return list
   }, [families, members, campMap])
 
-  // الأنثى الأكبر سناً في كل أسرة
-  const famOldestFemaleAge = useMemo(() => {
-    const map = {}
-    members.filter(m => m.gender === 'أنثى' || m.gender === 'female').forEach(m => {
-      const a = calcAge(m.dob)
-      if (a === null) return
-      if (map[m.family_id] === undefined || a > map[m.family_id]) map[m.family_id] = a
-    })
-    families.filter(f => f.head_gender === 'أنثى').forEach(f => {
-      const a = calcAge(f.head_dob)
-      if (a === null) return
-      if (map[f.id] === undefined || a > map[f.id]) map[f.id] = a
-    })
-    return map
-  }, [members, families])
+  // صلات الطفل المعتبرة كرضيع حقيقي (مطابقة القديم)
+  const CHILD_RELATIONS = ['ابن','ابنة','بنت','طفل','طفلة','رضيع','ابنه','بنته','son','daughter']
+  const VALID_MOTHERS   = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
 
-  // الأسر التي فيها رضيع (عمر < 2 سنة) — لحساب المرضعات تلقائياً
+  // الأسر التي فيها زوجة/أم مسجّلة بصلة محددة
+  const famHasNamedWife = useMemo(() => {
+    const s = new Set()
+    members.forEach(m => {
+      const rel = (m.relation || '').trim()
+      if (VALID_MOTHERS.includes(rel)) s.add(m.family_id)
+    })
+    return s
+  }, [members])
+
+  // الأسر التي فيها رضيع حقيقي (عمر < 2 + صلته ابن/بنت/طفل فقط)
   const famWithInfant = useMemo(() => {
     const s = new Set()
-    members.forEach(m => { const a = calcAge(m.dob); if (a !== null && a < 2) s.add(m.family_id) })
-    families.forEach(f => { const a = calcAge(f.head_dob); if (a !== null && a < 2) s.add(f.id) })
+    members.forEach(m => {
+      const a   = calcAge(m.dob)
+      const rel = (m.relation || '').trim()
+      if (a !== null && a < 2 && CHILD_RELATIONS.includes(rel)) s.add(m.family_id)
+    })
     return s
-  }, [members, families])
+  }, [members])
+
+  // هل هذه المرأة مرضعة تلقائياً؟ (مطابقة isNursingMother في القديم بالضبط)
+  function isAutoNursing(w) {
+    const relation = (w.relation || '').trim()
+    const age = w.age
+    const famId = w.family_id
+    const inAgeRange = age === null || (age >= 15 && age <= 50)
+    let relationOk = false
+    if (relation) {
+      relationOk = VALID_MOTHERS.includes(relation)
+    } else if (!w.isHead) {
+      relationOk = !famHasNamedWife.has(famId)
+    } else {
+      relationOk = true // رب أسرة أنثى بلا relation = أم الأسرة
+    }
+    return inAgeRange && relationOk && famWithInfant.has(famId)
+  }
 
   // النتائج المفلترة
   const filtered = useMemo(() => {
@@ -179,14 +197,8 @@ export default function WomenPage() {
         const rel = w.relation || ''
         if (statusFilter === 'حامل'   && !fs.includes('حامل'))  return false
         if (statusFilter === 'مرضع') {
-          const famId = w.family_id
-          const age = w.age
           const explicit = fs.includes('مرضع') || w.marital === 'مرضع'
-          const oldestAge = famOldestFemaleAge[famId]
-          const isOldest  = age === null || oldestAge === undefined || age >= oldestAge
-          const isAdultFemale = (age === null || age >= 18)
-          const auto = isAdultFemale && famWithInfant.has(famId) && isOldest
-          if (!explicit && !auto) return false
+          if (!explicit && !isAutoNursing(w)) return false
         }
         if (statusFilter === 'أرملة'  && !['أرملة','أرمل'].includes(mar) && !['أرملة','أرمل'].includes(rel)) return false
         if (statusFilter === 'مطلقة'  && !['مطلقة','مطلق'].includes(mar) && !['مطلقة','مطلق'].includes(rel)) return false
@@ -210,15 +222,12 @@ export default function WomenPage() {
       nursing: base.filter(w => {
         const fs2 = parseArr(w.female_status)
         if (fs2.includes('مرضع')) return true
-        const oldestAge = famOldestFemaleAge[w.family_id]
-        const isOldest  = w.age === null || oldestAge === undefined || w.age >= oldestAge
-        const isAdultFemale = w.age === null || w.age >= 18
-        return isAdultFemale && famWithInfant.has(w.family_id) && isOldest
+        return isAutoNursing(w)
       }).length,
       widows:   base.filter(w => ['أرملة','أرمل'].includes(w.marital) || ['أرملة','أرمل'].includes(w.relation)).length,
       divorced: base.filter(w => ['مطلقة','مطلق'].includes(w.marital) || ['مطلقة','مطلق'].includes(w.relation)).length,
     }
-  }, [allWomen, campFilter, families, famWithInfant, famOldestFemaleAge])
+  }, [allWomen, campFilter, families, famWithInfant, famHasNamedWife])
 
   function exportExcel() {
     try {

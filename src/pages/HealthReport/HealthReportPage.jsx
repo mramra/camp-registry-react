@@ -96,30 +96,27 @@ export default function HealthReportPage() {
   }, [camps])
 
   // رصد الأسر التي فيها رضيع (عمر < 2) لحساب المرضعات تلقائياً
-  // الأنثى الأكبر سناً في كل أسرة (family_id → أكبر عمر أنثى)
-  const famOldestFemaleAge = useMemo(() => {
-    const map = {}
-    // أفراد الأسرة الإناث
-    members.filter(m => m.gender === 'أنثى' || m.gender === 'female').forEach(m => {
-      const a = calcAge(m.dob)
-      if (a === null) return
-      if (map[m.family_id] === undefined || a > map[m.family_id]) map[m.family_id] = a
+  const CHILD_RELATIONS = ['ابن','ابنة','بنت','طفل','طفلة','رضيع','ابنه','بنته','son','daughter']
+  // family_id → عدد الزوجات/أمهات المسجّلات بصلة محددة (لاستخدامه في حالة relation الفارغة)
+  const famHasNamedWife = useMemo(() => {
+    const s = new Set()
+    const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
+    members.forEach(m => {
+      const rel = (m.relation || '').trim()
+      if (VALID_MOTHERS.includes(rel)) s.add(m.family_id)
     })
-    // رب الأسرة الأنثى
-    families.filter(f => f.head_gender === 'أنثى').forEach(f => {
-      const a = calcAge(f.head_dob)
-      if (a === null) return
-      if (map[f.id] === undefined || a > map[f.id]) map[f.id] = a
-    })
-    return map
-  }, [members, families])
-
+    return s
+  }, [members])
+  // الأسر التي فيها رضيع حقيقي (عمر < 2 + صلته ابن/بنت/طفل... فقط)
   const famWithInfant = useMemo(() => {
     const s = new Set()
-    members.forEach(m => { const a = calcAge(m.dob); if (a !== null && a < 2) s.add(m.family_id) })
-    families.forEach(f => { const a = calcAge(f.head_dob); if (a !== null && a < 2) s.add(f.id) })
+    members.forEach(m => {
+      const a   = calcAge(m.dob)
+      const rel = (m.relation || '').trim()
+      if (a !== null && a < 2 && CHILD_RELATIONS.includes(rel)) s.add(m.family_id)
+    })
     return s
-  }, [members, families])
+  }, [members])
 
   // تحديد أنواع الحالات الصحية لشخص
   function getTypes(person, isFamilyHead = false) {
@@ -138,27 +135,38 @@ export default function HealthReportPage() {
     if (health === 'مزمن' || hasData(isFamilyHead ? person.head_chronic_diseases : person.chronic_diseases))
       types.push('chronic')
 
-    // حامل
+    // حامل / مرضع
     const gender = (person.head_gender || person.gender || '').trim()
-    if (gender !== 'ذكر') {
+    const isFemale = gender.includes('أنثى') || gender.toLowerCase().includes('female') || gender.toLowerCase() === 'f'
+    if (isFemale) {
       const fs = parseArr(isFamilyHead ? person.head_female_status : person.female_status)
       if (health === 'حامل' || fs.includes('حامل')) types.push('pregnant')
 
-      // مرضع — صريح أو تلقائي
+      // ── مرضعة: مطابقة منطق isNursingMother في البرنامج القديم بالضبط ──
       const relation = (person.relation || '').trim()
-      const age = calcAge(isFamilyHead ? person.head_dob : person.dob)
+      const age   = calcAge(isFamilyHead ? person.head_dob : person.dob)
       const famId = isFamilyHead ? person.id : person.family_id
-      // الأدوار التي قد تكون مرضعة تلقائياً (رب الأسرة الأنثى + زوجة + أم)
+
+      // 1) صريحة
       const explicitNursing = health === 'مرضع' || fs.includes('مرضع')
-      // تلقائي: أنثى في دور أمومة + رضيع (< 2 سنة) في نفس الأسرة + عمرها 13+
-      // الشرط الثالث: أكبر سناً من باقي إناث الأسرة + 18 سنة على الأقل
-      const oldestAge = famOldestFemaleAge[famId]
-      const isOldest  = age === null || oldestAge === undefined || age >= oldestAge
-      // أي أنثى 18+ في أسرة فيها رضيع → مرضعة تلقائية (بغض النظر عن الصلة)
-      const isAdultFemale = gender !== 'ذكر' && (age === null || age >= 18)
-      const autoNursing = isAdultFemale && famWithInfant.has(famId) && isOldest
-      if (explicitNursing || autoNursing)
-        types.push('nursing')
+
+      // 2) تلقائية
+      let autoNursing = false
+      if (!explicitNursing) {
+        const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
+        const inAgeRange = age === null || (age >= 15 && age <= 50)
+        let relationOk = false
+        if (relation) {
+          relationOk = VALID_MOTHERS.includes(relation)
+        } else if (!isFamilyHead) {
+          relationOk = !famHasNamedWife.has(famId)
+        } else {
+          relationOk = true // رب أسرة أنثى بلا relation = أم الأسرة
+        }
+        autoNursing = inAgeRange && relationOk && famWithInfant.has(famId)
+      }
+
+      if (explicitNursing || autoNursing) types.push('nursing')
     }
 
     return types
@@ -214,7 +222,7 @@ export default function HealthReportPage() {
     })
 
     return list
-  }, [families, members, campMap, famWithInfant, famOldestFemaleAge])
+  }, [families, members, campMap, famWithInfant, famHasNamedWife])
 
   const filtered = useMemo(() => allCases.filter(c => {
     if (campFilter && c.camp_id !== campFilter) return false
