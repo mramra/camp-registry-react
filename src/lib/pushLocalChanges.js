@@ -37,7 +37,7 @@ const ALLOWED = {
     'health','chronic_diseases','disabilities','injuries','orphan_status','created_at','updated_at'],
   dist_rounds: ['id','org_id','name','description','status','start_date','end_date',
     'created_by','created_at','updated_at'],
-  camp_distributions: ['id','org_id','round_id','camp_id','status','quantity',
+  camp_distributions: ['id','org_id','round_id','camp_id','status','quantity','description',
     'created_at','updated_at'],
   camp_dist_families: ['id','distribution_id','family_id','received_at','notes'],
 }
@@ -49,6 +49,7 @@ function clean(table, rec) {
     if (!allowed || allowed.includes(k)) out[k] = rec[k]
   }
   if (Array.isArray(out.category_tags)) out.category_tags = JSON.stringify(out.category_tags)
+  if (table === 'camp_distributions' && !out.description) out.description = out.notes || '-'
   return out
 }
 
@@ -119,12 +120,50 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
     }
   }
 
+  // مثل pushTable لكن تأخذ قائمة جاهزة بدل القراءة من SQLite (للسجلات المُفلترة مسبقاً)
+  async function pushTableFromList(table, local, idKey = 'id') {
+    report[table].total = local.length
+    if (!local.length) return
+    const { data: serverRows, error: selErr } = await db_client.from(table).select(idKey)
+    if (selErr) {
+      report.errors.push(`${table} (قراءة): ${explainError(selErr.message)}`)
+      return
+    }
+    const serverIds = new Set((serverRows || []).map(r => r[idKey]))
+    const missing = local.filter(r => !serverIds.has(r[idKey]))
+    if (!missing.length) return
+    onProgress(`📤 رفع ${missing.length} سجل إلى ${table}...`)
+    const BATCH = 50
+    for (let i = 0; i < missing.length; i += BATCH) {
+      const batch = missing.slice(i, i + BATCH).map(r => clean(table, r))
+      try {
+        const { error } = await db_client.from(table).upsert(batch)
+        if (error) throw error
+        report[table].uploaded += batch.length
+        onProgress(`✅ ${table}: ${report[table].uploaded}/${missing.length}`)
+      } catch (e) {
+        report.errors.push(`${table} (دفعة): ${explainError(e.message)}`)
+        break
+      }
+    }
+  }
+
   // الترتيب يحترم العلاقات الخارجية (FK)
   await pushTable('families', 'id', { col: 'org_id', val: ORG_ID })
   await pushTable('family_members')
   await pushTable('dist_rounds', 'id', { col: 'org_id', val: ORG_ID })
   await pushTable('camp_distributions', 'id', { col: 'org_id', val: ORG_ID })
-  await pushTable('camp_dist_families')
+
+  // camp_dist_families: استثنِ أي سجل يشير لدفعة غير موجودة فعلياً على السيرفر (يمنع خطأ FK)
+  onProgress('📋 فحص distribution_id الصحيحة...')
+  const { data: validDists } = await db_client.from('camp_distributions').select('id')
+  const validDistIds = new Set((validDists || []).map(d => d.id))
+  const allLocalDistFam = await sqliteGetAll(db, 'camp_dist_families')
+  const validLocalDistFam = allLocalDistFam.filter(r => validDistIds.has(r.distribution_id))
+  if (validLocalDistFam.length < allLocalDistFam.length) {
+    report.errors.push(`camp_dist_families: تم تجاهل ${allLocalDistFam.length - validLocalDistFam.length} سجل يشير لدفعة غير موجودة على السيرفر`)
+  }
+  await pushTableFromList('camp_dist_families', validLocalDistFam)
 
   onProgress('✅ اكتمل الرفع')
   return report
