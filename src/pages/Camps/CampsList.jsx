@@ -49,8 +49,6 @@ export default function CampsList() {
     return () => window.removeEventListener('delta-sync', handler)
   }, [])
 
-  useEffect(() => { loadData() }, [])
-
   async function loadData() {
     setLoading(true)
     try {
