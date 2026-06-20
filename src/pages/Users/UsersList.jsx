@@ -589,6 +589,7 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className={`text-[10px] font-bold ${cfg.color}`}>{cfg.label}</span>
+            {user.national_id && <span className="text-[10px] text-muted">🪪 {user.national_id}</span>}
             {user.camp_id && campMap[user.camp_id] && <span className="text-[10px] text-blue">🏕️ {campMap[user.camp_id]}</span>}
             <span className={`text-[10px] ${user.is_active!==false?'text-green':'text-red'}`}>{user.is_active!==false?'● نشط':'● موقوف'}</span>
           </div>
