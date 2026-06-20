@@ -71,16 +71,28 @@ export async function logFamilyActivity({ familyId, familyName, membersCount, ac
 /**
  * يجلب آخر N عملية من سجل النشاط (للوحة التحكم)
  */
-export async function fetchRecentFamilyActivity(limit = 5) {
+/**
+ * يجلب آخر N عملية من سجل النشاط (للوحة التحكم)
+ * allowedFamilyIds: لو محدَّدة (Set أو array)، يُستثنى أي نشاط على أسرة خارج
+ * هذا النطاق — ضروري لعزل البيانات بحسب المخيم (مدير الإيواء/المندوب/المساعد)
+ */
+export async function fetchRecentFamilyActivity(limit = 5, allowedFamilyIds = null) {
   try {
+    // لو محدود النطاق، نجلب دفعة أكبر للتعويض عن الفلترة اللاحقة، ثم نقص للحد المطلوب
+    const fetchLimit = allowedFamilyIds ? Math.max(limit * 5, 50) : limit
     const { data, error } = await supabase
       .from('family_activity_log')
       .select('*')
       .eq('org_id', ORG_ID)
       .order('created_at', { ascending: false })
-      .limit(limit)
+      .limit(fetchLimit)
     if (error) throw error
-    return data || []
+    let rows = data || []
+    if (allowedFamilyIds) {
+      const allowedSet = allowedFamilyIds instanceof Set ? allowedFamilyIds : new Set(allowedFamilyIds)
+      rows = rows.filter(r => r.family_id && allowedSet.has(r.family_id))
+    }
+    return rows.slice(0, limit)
   } catch (e) {
     console.warn('[fetchRecentFamilyActivity]', e.message)
     return []
