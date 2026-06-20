@@ -170,14 +170,12 @@ export default function UsersList() {
         const { error } = await supabase.from('org_members')
           .update(updates).eq('id', editUser.id)
         if (error) {
-          await enqueue('update_member', updates)
-          showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
+          showToast('⚠️ خطأ في المزامنة: ' + error.message, true)
         } else {
           showToast('✅ تم التحديث')
         }
       } else {
-        await enqueue('update_member', updates)
-        showToast('💾 حُفظ محلياً — سيُزامَن عند الاتصال')
+        showToast('⚠️ لا يوجد اتصال — لم يتم حفظ التغييرات على السيرفر', true)
       }
       setEditUser(null)
     } catch(err) { showToast('خطأ: ' + err.message, true) }
@@ -195,9 +193,10 @@ export default function UsersList() {
     if (navigator.onLine) {
       const { error } = await supabase.from('org_members')
         .update({ is_active: newStatus }).eq('id', user.id)
-      if (error) await enqueue('update_member', updated)
+      if (error) { showToast('⚠️ خطأ في المزامنة: ' + error.message, true); return }
     } else {
-      await enqueue('update_member', updated)
+      showToast('⚠️ لا يوجد اتصال — لم يتم حفظ التغيير على السيرفر', true)
+      return
     }
     showToast(newStatus ? '✅ تم التفعيل' : '🚫 تم الإيقاف')
   }
@@ -212,13 +211,13 @@ export default function UsersList() {
       if (navigator.onLine) {
         try {
           await callAdminAPI('delete_user', { user_id: user.user_id, member_id: user.id })
-        } catch {
-          await enqueue('delete_member', { id: user.id, user_id: user.user_id })
-          showToast('⚠️ سيُحذف من السيرفر عند المزامنة')
+        } catch (apiErr) {
+          showToast('⚠️ خطأ أثناء الحذف من السيرفر: ' + apiErr.message, true)
           return
         }
       } else {
-        await enqueue('delete_member', { id: user.id, user_id: user.user_id })
+        showToast('⚠️ لا يوجد اتصال — لم يتم الحذف من السيرفر', true)
+        return
       }
       showToast('✅ تم الحذف')
     } catch(err) { showToast('خطأ: ' + err.message, true) }

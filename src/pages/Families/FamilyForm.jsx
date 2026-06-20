@@ -589,24 +589,15 @@ export default function FamilyForm() {
               console.log(`[sync] ✓ أفراد: +${toInsert.length} ~${toUpdate.length} -${toDelete.length}`)
             } catch(e) {
               console.warn('[sync members bg]', e.message)
-              // أضف للطابور إذا فشل
-              for (const m of memberDocs)
-                await enqueue('insert_member', { ...m, org_id: ORG_ID }).catch(()=>{})
             }
           }
           syncMembers() // بدون await — لا تعيق الحفظ
         }
         showToast(isEdit ? '✅ تم تحديث الأسرة وستتم مزامنتها' : '✅ تمت إضافة الأسرة وستتم مزامنتها')
       } else {
-        // ══ أوف لاين: أضف للقائمة لرفعها لاحقاً ════════════
-        await addToQueue('upsert', 'families', familyData)
-        for (const m of memberDocs)
-          await addToQueue('upsert', 'family_members', m)
-        for (const id of removedIds)
-          await addToQueue('delete', 'family_members', { id }, id)
-        showToast(isEdit
-          ? '💾 تم تحديث الأسرة محلياً — سيُرفع عند الاتصال'
-          : '💾 تمت إضافة الأسرة محلياً — ستُرفع عند الاتصال')
+        // لا يوجد اتصال — الحفظ في الأعلى (upsert/bulkUpsert) كان يفترض أن يفشل
+        // فعلياً قبل الوصول هنا، لكن نضمن رسالة واضحة لو حدث تغيّر مفاجئ بالاتصال.
+        showToast('⚠️ لا يوجد اتصال بالإنترنت — لا يمكن حفظ التغييرات الآن. أعد المحاولة بعد الاتصال', true)
       }
 
       // تأخير بسيط ليرى المستخدم رسالة التأكيد قبل مغادرة الصفحة
