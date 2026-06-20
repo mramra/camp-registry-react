@@ -30,6 +30,7 @@ export default function Alerts() {
   const [loading,  setLoading] = useState(true)
   const { isOwner, isSuperAdmin, isCampDelegate, profile } = useAuth()
   const { online } = useApp()
+  const { query } = useLocalDB()
   const navigate = useNavigate()
 
   useEffect(() => { loadAlerts() }, [])

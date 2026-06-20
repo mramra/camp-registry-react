@@ -370,7 +370,6 @@ export default function ExportPage() {
     setLoading(true)
     try {
       const data    = await getFullData()
-      const XLSX    = await getXLSX()
       const missing = data.filter(f=>!f.head_name||!f.head_id||!f.phone1||!f.camp_id)
       if (!missing.length) return showToast('✅ لا توجد بيانات ناقصة')
       const colHeaders = ['#','اسم رب الأسرة','رقم الهوية','رقم الجوال','المخيم','النواقص']

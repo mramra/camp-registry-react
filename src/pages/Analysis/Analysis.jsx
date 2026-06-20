@@ -141,11 +141,8 @@ export default function Analysis() {
   const [allFamilies, setAllFamilies] = useState([])
   const [allMembers,  setAllMembers]  = useState([])
 
-  const { query } = useLocalDB()
+  const { query, bulkUpsert } = useLocalDB()
   useEffect(() => { loadStats() }, [filterCamp])
-  useEffect(() => { loadData() }, [])
-  useEffect(() => { if (psReady)  loadStats() }, [psReady])
-  useEffect(() => { if (psSynced) loadStats() }, [psSynced])
 
   async function loadStats() {
     setLoading(true)

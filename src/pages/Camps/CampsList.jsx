@@ -162,7 +162,6 @@ export default function CampsList() {
         }),
       }
       await upsert('camps', data)
-      await enqueue(editCamp ? 'update_camp' : 'insert_camp', data)
       setCamps(prev => editCamp ? prev.map(c=>c.id===data.id?data:c) : [...prev, data])
       setShowForm(false)
       showToast(editCamp ? '✅ تم التعديل' : '✅ تمت الإضافة')
@@ -178,8 +177,12 @@ export default function CampsList() {
     if (!window.confirm(`حذف "${camp.name}"؟`)) return
     try {
       await remove('camps', camp.id)
-      if (navigator.onLine) await supabase.from('camps').delete().eq('id', camp.id)
-      else await enqueue('delete_camp', { id: camp.id })
+      if (navigator.onLine) {
+        await supabase.from('camps').delete().eq('id', camp.id)
+      } else {
+        showToast('⚠️ لا يوجد اتصال — لم يتم الحذف من السيرفر', true)
+        return
+      }
       setCamps(prev => prev.filter(c => c.id !== camp.id))
       showToast('✅ تم الحذف')
     } catch(err) { showToast('خطأ: ' + err.message, true) }
