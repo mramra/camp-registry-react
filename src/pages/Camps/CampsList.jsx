@@ -18,6 +18,7 @@ export default function CampsList() {
   const [camps,       setCamps]       = useState([])
   const [famCount,    setFamCount]    = useState({})
   const [memberMap,   setMemberMap]   = useState({})
+  const [managerMap,  setManagerMap]  = useState({})
   const [loading,     setLoading]     = useState(true)
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
@@ -91,6 +92,20 @@ export default function CampsList() {
       }
     })
     setMemberMap(mm)
+    // مدير الإيواء لكل مخيم: عبر camps.manager_id → org_members.id (دور super_admin)
+    const memberById = Object.fromEntries(members.map(m => [m.id, m]))
+    const gm = {}
+    camps.forEach(c => {
+      const mgr = c.manager_id ? memberById[c.manager_id] : null
+      if (mgr?.full_name) gm[c.id] = mgr.full_name
+    })
+    // نفس منطق الفرع: لو الفرع بلا مدير إيواء خاص، يظهر مدير المخيم الرئيسي تلقائياً
+    camps.forEach(c => {
+      if (c.parent_camp_id && !gm[c.id] && gm[c.parent_camp_id]) {
+        gm[c.id] = gm[c.parent_camp_id]
+      }
+    })
+    setManagerMap(gm)
     setCamps(camps)
   }
 
@@ -254,6 +269,7 @@ export default function CampsList() {
               sub={children.filter(c=>c.parent_camp_id===camp.id)}
               famCount={famCount}
               memberMap={memberMap}
+              managerMap={managerMap}
               isOwner={isOwner}
               isSuperAdmin={isSuperAdmin}
               isCampDelegate={isCampDelegate}
@@ -362,7 +378,7 @@ export default function CampsList() {
   )
 }
 
-function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCampDelegate, profile, onEdit, onDelete, collapsed, onToggle }) {
+function CampCard({ camp, sub, famCount, memberMap, managerMap, isOwner, isSuperAdmin, isCampDelegate, profile, onEdit, onDelete, collapsed, onToggle }) {
   const fc = famCount[camp.id] || 0
   const st = STATUS_MAP[camp.status] || { label: camp.status||'—', color:'#6b7280' }
   const canEdit = isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)
@@ -375,6 +391,11 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="font-black text-white text-sm">⛺ {camp.name}</div>
+            {managerMap[camp.id] ? (
+              <div className="text-[11px] mt-0.5" style={{color:'#ef4444'}}>🔴 مدير الإيواء: {managerMap[camp.id]}</div>
+            ) : (
+              <div className="text-[11px] mt-0.5 font-bold" style={{color:'#ef4444'}}>⚠️ بلا مدير إيواء معيّن</div>
+            )}
             {memberMap[camp.id] ? (
               <div className="text-[11px] mt-0.5" style={{color:'#f59e0b'}}>🟠 مندوب: {memberMap[camp.id]}</div>
             ) : (
@@ -434,6 +455,11 @@ function CampCard({ camp, sub, famCount, memberMap, isOwner, isSuperAdmin, isCam
           <div className="flex items-start justify-between">
             <div>
               <div className="font-bold text-white text-xs">🏕️ {s.name}</div>
+              {managerMap[s.id] ? (
+                <div className="text-[10px] mt-0.5" style={{color:'#ef4444'}}>🔴 {managerMap[s.id]}</div>
+              ) : (
+                <div className="text-[10px] mt-0.5 font-bold" style={{color:'#ef4444'}}>⚠️ بلا مدير إيواء</div>
+              )}
               {memberMap[s.id] ? (
                 <div className="text-[10px] mt-0.5" style={{color:'#f59e0b'}}>🟠 {memberMap[s.id]}</div>
               ) : (
