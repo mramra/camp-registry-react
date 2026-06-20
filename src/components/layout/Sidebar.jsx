@@ -42,6 +42,7 @@ const NAV_GROUPS = [
       { icon: '👩', label: 'النساء',          path: '/women',        pageKey: 'women' },
       { icon: '🧒', label: 'سجل الأطفال',     path: '/children',     pageKey: 'children' },
       { icon: '⚕️', label: 'الحالات الصحية',  path: '/health-report', pageKey: 'health_report' },
+      { icon: '📋', label: 'تقارير الاحتياجات', path: '/needs-report', pageKey: 'needs_report' },
     ],
   },
   {
@@ -50,7 +51,6 @@ const NAV_GROUPS = [
     label: 'التحليل والتقارير',
     items: [
       { icon: '📊', label: 'التحليل',             path: '/analysis',     pageKey: 'analysis' },
-      { icon: '📋', label: 'تقارير الاحتياجات',   path: '/needs-report', pageKey: 'needs_report' },
       { icon: '🏕️', label: 'مقارنة المخيمات',    path: '/camp-compare', pageKey: 'camp_compare' },
       { icon: '📤', label: 'الاستيراد والتصدير',  path: '/export',       pageKey: 'export' },
     ],
