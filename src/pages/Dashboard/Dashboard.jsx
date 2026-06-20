@@ -79,7 +79,7 @@ export default function Dashboard() {
         famQ,
         Promise.resolve({ data: allCampsD, error: null }),
       ])
-        const f2 = !fRes.error && fRes.data?.length ? fRes.data : fams
+        const f2 = !fRes.error ? (fRes.data || []) : fams
         const c2 = !cRes.error && cRes.data?.length ? cRes.data : camps
         await bulkUpsert('families', f2)
         await bulkUpsert('camps', c2)
