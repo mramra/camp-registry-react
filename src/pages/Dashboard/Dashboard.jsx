@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
-import { processSyncQueue, getSyncStats } from '../../lib/sync'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
@@ -31,13 +30,9 @@ function calcAge(dob) {
 
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
-  const [syncInfo, setSyncInfo] = useState({ pending:0, failed:0, conflicts:0 })
   const [recent,     setRecent]     = useState([])
   const [activity,   setActivity]   = useState([])
   const [activityDetail, setActivityDetail] = useState(null) // عنصر النشاط المختار لعرض تفاصيله
-  const [queueModal, setQueueModal] = useState(null)  // 'pending' | 'failed' | 'conflict' | null
-  const [queueItems, setQueueItems] = useState([])
-  const [syncing,  setSyncing]  = useState(false)
   const [loading,  setLoading]  = useState(true)
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
@@ -123,52 +118,10 @@ export default function Dashboard() {
       .sort((a,b) => (campCount[b.id]||0) - (campCount[a.id]||0))
       .map(c => ({ name:c.name, count:campCount[c.id]||0, pct:Math.round((campCount[c.id]||0)/Math.max(fams.length,1)*100) }))
     setStats({ families:fams.length, members:fams.length+members.length, camps:camps.length, incomplete, children, adults, elderly, noAge, total, campBars })
-    getSyncStats().then(setSyncInfo).catch(()=>{})
     // آخر 5 أسر
     const campMap2 = Object.fromEntries(camps.map(c=>[c.id,c.name]))
     const sorted = [...fams].sort((a,b)=>new Date(b.updated_at||0)-new Date(a.updated_at||0)).slice(0,5)
     setRecent(sorted.map(f=>({...f, campName:campMap2[f.camp_id]||'—'})))
-  }
-
-  async function openQueueModal(type) {
-    try {
-      const items = [].toArray()
-      setQueueItems(items)
-      setQueueModal(type)
-    } catch(e) { console.error(e) }
-  }
-
-  async function retryItem(id) {
-    try {
-      Promise.resolve()
-      const items = queueItems.map(i => i.id === id ? { ...i, status: 'pending', error: null } : i)
-      setQueueItems(items)
-      getSyncStats().then(setSyncInfo).catch(() => {})
-      showToast('✅ ستُعاد المحاولة عند المزامنة')
-    } catch(e) { showToast('خطأ: ' + e.message, true) }
-  }
-
-  async function deleteItem(id) {
-    try {
-      Promise.resolve()
-      setQueueItems(prev => prev.filter(i => i.id !== id))
-      getSyncStats().then(setSyncInfo).catch(() => {})
-      showToast('✅ تم الحذف')
-    } catch(e) { showToast('خطأ: ' + e.message, true) }
-  }
-
-  async function handleSync() {
-    if (!online) return showToast('لا يوجد اتصال', true)
-    setSyncing(true)
-    try {
-      const r = await processSyncQueue()
-      const total = r.synced + r.failed + r.conflicts
-      if (r.synced > 0)      showToast(`✅ تمت مزامنة ${r.synced} عنصر`)
-      if (r.failed > 0)      showToast(`❌ فشل ${r.failed} عنصر — اضغط على مربع الفشل للتفاصيل`, true)
-      if (r.conflicts > 0)   showToast(`⚠️ ${r.conflicts} تعارض`, true)
-      if (total === 0)        showToast('لا يوجد شيء في الطابور')
-      await loadStats()
-    } finally { setSyncing(false) }
   }
 
   const hour = new Date().getHours()
@@ -247,48 +200,19 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* المزامنة */}
+      {/* حالة الاتصال */}
       <div className="bg-surface border border-border rounded-xl p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-accent text-sm font-bold flex items-center gap-2">
-            🔄 المزامنة
-          </div>
-          <button onClick={handleSync} disabled={syncing || !online}
-            className="font-black px-4 py-2 rounded-xl text-xs disabled:opacity-50"
-            style={{background: online ? 'rgba(245,158,11,0.15)' : 'rgba(100,100,100,0.15)',
-                    color: online ? '#f59e0b' : '#6b7280',
-                    border: `1px solid ${online ? 'rgba(245,158,11,0.4)' : 'rgba(100,100,100,0.3)'}`}}>
-            {syncing ? '⏳ جارٍ...' : '🔄 مزامنة'}
-          </button>
-        </div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full" style={{background: online ? '#10b981' : '#ef4444'}}/>
-            <span className="text-white text-sm font-bold">{online ? 'متصل' : 'أوف لاين'}</span>
+            <span className="text-white text-sm font-bold">{online ? 'متصل' : 'غير متصل'}</span>
           </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label:'⏳ انتظار', value: syncInfo.pending,   color: syncInfo.pending   > 0 ? '#f59e0b' : '#6b7280', type:'pending'  },
-            { label:'❌ فشل',    value: syncInfo.failed,    color: syncInfo.failed    > 0 ? '#ef4444' : '#6b7280', type:'failed'   },
-            { label:'⚠️ تعارض', value: syncInfo.conflicts, color: syncInfo.conflicts > 0 ? '#f59e0b' : '#6b7280', type:'conflict' },
-          ].map(s => (
-            <div key={s.label}
-              onClick={() => s.value > 0 && openQueueModal(s.type)}
-              className="bg-surface2 border border-border rounded-xl p-2.5 text-center transition-all"
-              style={{
-                cursor: s.value > 0 ? 'pointer' : 'default',
-                borderColor: s.value > 0 ? s.color + '66' : undefined,
-                background: s.value > 0 ? s.color + '11' : undefined,
-              }}>
-              <div className="text-xl font-black" style={{color:s.color}}>{s.value}</div>
-              <div className="text-[10px] mt-0.5" style={{color: s.value > 0 ? s.color : '#6b7280'}}>{s.label}</div>
-              {s.value > 0 && <div className="text-[9px] text-muted mt-0.5">اضغط للتفاصيل</div>}
-            </div>
-          ))}
+          <span className="text-muted text-xs">
+            {online ? '🟢 البيانات محدّثة من الخادم' : '🔴 تعمل بالبيانات المحلية المخزّنة'}
+          </span>
         </div>
         {!online && (
-          <p className="text-muted text-[10px] text-center mt-2">البيانات محلية · ستُزامَن عند الاتصال</p>
+          <p className="text-muted text-[10px] text-center mt-2">سيُعاد تحميل أحدث البيانات تلقائياً عند رجوع الاتصال</p>
         )}
       </div>
 
@@ -387,90 +311,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Modal طابور المزامنة */}
-      {queueModal && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:1000,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'16px'}}
-          onClick={e => e.target===e.currentTarget && setQueueModal(null)}>
-          <div style={{background:'#1a1a2e',border:'1px solid #374151',borderRadius:'20px 20px 0 0',width:'100%',maxWidth:'500px',padding:'20px',maxHeight:'80vh',overflow:'auto'}}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-white font-black text-sm">
-                {queueModal==='pending'  && '⏳ العمليات المعلقة'}
-                {queueModal==='failed'   && '❌ العمليات الفاشلة'}
-                {queueModal==='conflict' && '⚠️ التعارضات'}
-              </div>
-              <button onClick={() => setQueueModal(null)}
-                className="text-muted text-xs px-3 py-1.5 rounded-xl bg-surface2 border border-border">✕ إغلاق</button>
-            </div>
-
-            {queueItems.length === 0 ? (
-              <div className="text-muted text-xs text-center py-6">لا توجد عمليات</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {queueModal === 'failed' && (
-                  <button onClick={async () => {
-                    for (const i of queueItems) await retryItem(i.id)
-                    showToast('✅ ستُعاد المحاولة لكل الفاشلة')
-                  }} className="w-full py-2.5 rounded-xl text-xs font-bold mb-1"
-                    style={{background:'rgba(245,158,11,0.15)',color:'#f59e0b',border:'1px solid rgba(245,158,11,0.4)'}}>
-                    🔄 إعادة المحاولة للكل
-                  </button>
-                )}
-                {queueItems.map(item => {
-                  const payload = (() => { try { return JSON.parse(item.payload||'{}') } catch { return {} } })()
-                  const action  = item.action || '—'
-                  const name    = payload.head_name || payload.name || payload.id?.slice(0,8) || '—'
-                  const isFamily = action.includes('family')
-                  const isCamp   = action.includes('camp')
-                  const isRound  = action.includes('round') || action.includes('batch') || action.includes('dist')
-                  const icon = isFamily ? '👨‍👩‍👧‍👦' : isCamp ? '🏕️' : isRound ? '📦' : '📋'
-                  return (
-                    <div key={item.id} className="bg-surface2 border border-border rounded-xl p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white text-xs font-bold">{icon} {name}</div>
-                          <div className="text-muted text-[10px] mt-0.5">
-                            {action} · محاولة {item.attempts||0}
-                          </div>
-                          {item.error && (
-                            <div className="text-red text-[10px] mt-1 bg-red/10 rounded-lg px-2 py-1">
-                              ⚠️ {item.error.slice(0,120)}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col gap-1 flex-shrink-0">
-                          {item.status === 'failed' && (
-                            <button onClick={() => retryItem(item.id)}
-                              className="text-[10px] font-bold px-2 py-1 rounded-lg"
-                              style={{background:'rgba(245,158,11,0.15)',color:'#f59e0b',border:'1px solid rgba(245,158,11,0.4)'}}>
-                              🔄 إعادة
-                            </button>
-                          )}
-                          <button onClick={() => deleteItem(item.id)}
-                            className="text-[10px] font-bold px-2 py-1 rounded-lg"
-                            style={{background:'rgba(239,68,68,0.1)',color:'#ef4444',border:'1px solid rgba(239,68,68,0.3)'}}>
-                            🗑️ حذف
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* إذا لا بيانات */}
       {!loading && stats?.families === 0 && (
         <div className="text-center py-8">
           <div className="text-4xl mb-3">📥</div>
-          <div className="text-white font-bold mb-1">لا توجد بيانات محلية</div>
-          <div className="text-muted text-xs mb-4">اضغط مزامنة لجلب البيانات من الخادم</div>
-          <button onClick={handleSync} disabled={syncing}
+          <div className="text-white font-bold mb-1">لا توجد بيانات</div>
+          <div className="text-muted text-xs mb-4">{online ? 'لم يتم العثور على أسر مسجّلة بعد' : 'لا يوجد اتصال — تحقق من الشبكة وأعد المحاولة'}</div>
+          <button onClick={loadStats}
             className="font-black px-5 py-2.5 rounded-xl text-sm"
             style={{background:'#f59e0b', color:'#000'}}>
-            {syncing ? '⏳ جارٍ الجلب...' : '⬇️ جلب البيانات الآن'}
+            🔄 إعادة التحميل
           </button>
         </div>
       )}
