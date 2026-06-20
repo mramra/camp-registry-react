@@ -36,10 +36,10 @@ export async function recordApprovalRequest({ familyId, action, oldData, newData
       status:      'pending',
     })
 
-    // علّم الأسرة نفسها بحالة المراجعة (إلا في حالة الحذف، حيث نستخدم pending_delete)
-    if (familyId && action !== 'delete') {
-      await supabase.from('families').update({ review_status: 'pending' }).eq('id', familyId)
-    } else if (familyId && action === 'delete') {
+    // ملاحظة: review_status='pending' يُفترض أن يكون مضمَّناً بالفعل في الحفظ
+    // الأساسي لـ insert/update (لتجنّب استدعاء UPDATE زائد). هنا فقط نتعامل
+    // مع حالة delete (pending_delete)، أو كاحتياط لو لم يُضمَّن مسبقاً.
+    if (familyId && action === 'delete') {
       await supabase.from('families').update({ pending_delete: true }).eq('id', familyId)
     }
   } catch (e) {

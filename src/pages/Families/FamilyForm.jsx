@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { logFamilyActivity, diffFamilyFields } from '../../lib/familyActivityLog'
+import { isExemptFromApproval, recordApprovalRequest } from '../../lib/familyApproval'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -461,6 +462,9 @@ export default function FamilyForm() {
       ]
       const actorId   = profile?.user_id || profile?.id || null
       const actorName = profile?.full_name || profile?.name || '—'
+      // نظام موافقة platform_owner: من ليس معفى (bypass_approval) يحتاج موافقة
+      // على كل إضافة/تعديل. الأسرة تُحفظ فوراً لكن تُعلَّم "قيد المراجعة".
+      const exempt = isExemptFromApproval(profile)
       const familyData = {
         id:             familyId,
         org_id:         ORG_ID,
@@ -485,6 +489,7 @@ export default function FamilyForm() {
         // عند التعديل: created_by يبقى كما هو (لا يُكتب فوقه)، updated_by = المستخدم الحالي
         created_by:     isEdit ? (form.created_by || null) : actorId,
         updated_by:     isEdit ? actorId : null,
+        review_status:  exempt ? 'approved' : 'pending',
       }
 
       // ═══ بيانات الأفراد ═══
@@ -546,6 +551,19 @@ export default function FamilyForm() {
             actorName,
             changes:      fieldChanges,
           })
+          // نظام الموافقة: لو المستخدم غير معفى، سجّل طلب مراجعة لـ platform_owner
+          if (!exempt) {
+            recordApprovalRequest({
+              familyId:   familyId,
+              action:     isEdit ? 'update' : 'insert',
+              oldData:    isEdit ? originalDataRef.current : null,
+              newData:    familyData,
+              changes:    fieldChanges,
+              actorId,
+              actorName,
+              actorRole:  profile?.role || null,
+            })
+          }
         } else if (fErr) {
           console.warn('[save family]', fErr.message)
           showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
@@ -593,7 +611,13 @@ export default function FamilyForm() {
           }
           syncMembers() // بدون await — لا تعيق الحفظ
         }
-        showToast(isEdit ? '✅ تم تحديث الأسرة وستتم مزامنتها' : '✅ تمت إضافة الأسرة وستتم مزامنتها')
+        if (exempt) {
+          showToast(isEdit ? '✅ تم تحديث الأسرة وستتم مزامنتها' : '✅ تمت إضافة الأسرة وستتم مزامنتها')
+        } else {
+          showToast(isEdit
+            ? '✅ تم حفظ التعديل — بانتظار موافقة ملك المنصة'
+            : '✅ تمت إضافة الأسرة — بانتظار موافقة ملك المنصة')
+        }
       } else {
         // لا يوجد اتصال — الحفظ في الأعلى (upsert/bulkUpsert) كان يفترض أن يفشل
         // فعلياً قبل الوصول هنا، لكن نضمن رسالة واضحة لو حدث تغيّر مفاجئ بالاتصال.
