@@ -155,7 +155,8 @@ export default function DiagnosticsPage() {
     setPushReport(null)
     setPushMsg('بدء الرفع...')
     try {
-      const report = await pushLocalChanges(setPushMsg, adminKey || null)
+      const cleanKey = (adminKey || '').replace(/\s+/g, '').trim()
+      const report = await pushLocalChanges(setPushMsg, cleanKey || null)
       setPushReport(report)
       await runAll()  // أعد الفحص لرؤية التطابق
     } catch(e) {

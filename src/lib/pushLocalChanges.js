@@ -69,9 +69,12 @@ function explainError(msg, usingAdminKey) {
  * (يحترم العلاقات: المخيمات/الأسر أولاً، ثم الأفراد، ثم الدفعات، ثم الاستلام)
  */
 export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
-  const db_client = adminKey
-    ? createClient(SUPABASE_URL, adminKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  const cleanedKey = adminKey ? adminKey.replace(/\s+/g, '').trim() : null
+
+  const db_client = cleanedKey
+    ? createClient(SUPABASE_URL, cleanedKey, { auth: { persistSession: false, autoRefreshToken: false } })
     : supabase
+
   const report = {
     families:            { uploaded: 0, total: 0 },
     family_members:      { uploaded: 0, total: 0 },
@@ -79,6 +82,16 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
     camp_distributions:   { uploaded: 0, total: 0 },
     camp_dist_families:   { uploaded: 0, total: 0 },
     errors: [],
+  }
+
+  if (cleanedKey) {
+    onProgress(`🔑 استخدام مفتاح إداري (${cleanedKey.length} حرف)...`)
+    const { error: testErr } = await db_client.from('families').select('id').limit(1)
+    if (testErr) {
+      report.errors.push(`المفتاح الإداري غير صالح: ${testErr.message} (تأكد من نسخه كاملاً بدون مسافات أو أسطر زائدة، طول المفتاح الصحيح ~220 حرف)`)
+      return report
+    }
+    onProgress('✅ المفتاح الإداري صالح')
   }
 
   if (!navigator.onLine) {
