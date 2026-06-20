@@ -7,16 +7,7 @@ const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
 const SUPA_URL    = 'https://ojclpkenecicujkqhhlu.supabase.co'
 
-// يمنع تكرار quickSync لو أُطلق initAuth وonAuthStateChange بنفس اللحظة لنفس فتحة التطبيق
-let appSyncTriggered = false
-function triggerAppSync() {
-  if (appSyncTriggered) return
-  if (!navigator.onLine) return
-  appSyncTriggered = true
-  import('../lib/syncAll').then(({ quickSync }) =>
-    quickSync().catch(e => console.warn('[app-open] sync:', e.message))
-  )
-}
+// Supabase مباشر: لا حاجة لسحب الجداول محلياً عند فتح التطبيق
 
 // وظيفة مساعدة: أي promise مع timeout
 function withTimeout(promise, ms, msg) {
@@ -56,7 +47,6 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
-        triggerAppSync() // سحب كل الجداول محلياً عند فتح التطبيق وهو موصول بالنت
       } else {
         localStorage.removeItem(PROFILE_KEY)
         setProfile(null)
@@ -72,44 +62,15 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
-        triggerAppSync() // محمي بحارس appSyncTriggered — لن يتكرر لو نُفّذ في initAuth أعلاه
-        // ربط PowerSync الكامل — غير معيق، بعد تأخير بسيط
-        setTimeout(() => {
-          import('../lib/powersync').then(({ connectPowerSync }) =>
-            connectPowerSync().catch(() => {})
-          )
-        }, 2000)
       } else {
         setUser(null); setProfile(null)
         localStorage.removeItem(PROFILE_KEY)
         setLoading(false)
-        // اقطع PowerSync
-        import('../lib/powersync').then(({ disconnectPowerSync }) =>
-          disconnectPowerSync().catch(() => {})
-        )
       }
     })
   }
 
   async function fetchProfile(userId) {
-    // ① SQLite أولاً (فوري)
-    try {
-      const { getPowerSync } = await import('../lib/powersync')
-      const db = getPowerSync()
-      if (db) {
-        const rows = await db.getAll(
-          `SELECT * FROM org_members WHERE user_id = ? AND org_id = ?`,
-          [userId, ORG_ID]
-        )
-        if (rows?.length) {
-          setProfile(rows[0])
-          localStorage.setItem(PROFILE_KEY, JSON.stringify(rows[0]))
-          setLoading(false)
-        }
-      }
-    } catch {}
-
-    // ② Supabase في الخلفية مع timeout
     if (!navigator.onLine) { setLoading(false); setPagePermLoaded(true); return }
     try {
       const { data: members, error } = await withTimeout(
@@ -121,23 +82,6 @@ export function AuthProvider({ children }) {
       if (!error && p) {
         setProfile(p)
         localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
-        try {
-          const { getPowerSync } = await import('../lib/powersync')
-          const db = getPowerSync()
-          if (db) {
-            const ALLOWED = ['id','org_id','user_id','full_name','role','phone','camp_id',
-              'can_add','can_edit','can_delete','can_export','can_import','is_active',
-              'created_at','updated_at']
-            const cols = Object.keys(p).filter(k => ALLOWED.includes(k) && p[k] !== undefined)
-            const vals = cols.map(k => (p[k] !== null && typeof p[k] === 'object') ? JSON.stringify(p[k]) : p[k])
-            if (cols.length) {
-              await db.execute(
-                `INSERT OR REPLACE INTO org_members (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,
-                vals
-              )
-            }
-          }
-        } catch {}
         const { data: meta } = await supabase.auth.getUser()
         setMustChange(!!(meta?.user?.user_metadata?.must_change_pass))
         // حمّل صلاحيات الصفحات (دور + استثناءات فردية) — لا تعيق تحميل الصفحة
@@ -169,24 +113,11 @@ export function AuthProvider({ children }) {
       'انتهت مهلة الاتصال (20 ثانية)\n\nتحقق من اتصالك بالإنترنت وحاول مرة أخرى'
     )
     if (error) throw error
-
-    // ── مزامنة فورية + إعادة ضبط Delta Sync ─────────────────
-    appSyncTriggered = true // سنسحب الآن مباشرة — لا حاجة لتكرار من onAuthStateChange
-    import('../lib/syncAll').then(({ quickSync }) =>
-      quickSync().catch(e => console.warn('[login] sync:', e.message))
-    )
-    import('../lib/deltaSync').then(({ resetDeltaSync }) => resetDeltaSync())
-
     return data
   }
 
   async function signOut() {
-    // اقطع PowerSync أولاً
-    import('../lib/powersync').then(({ disconnectPowerSync }) =>
-      disconnectPowerSync().catch(() => {})
-    )
     localStorage.removeItem(PROFILE_KEY)
-    appSyncTriggered = false // يسمح بسحب كامل جديد عند دخول مستخدم آخر بنفس الجلسة
     try { await supabase.auth.signOut() } catch {}
   }
 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
-import { getPowerSync } from '../../lib/powersync'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -70,13 +69,12 @@ function calcAge(dob) {
 
 export default function DataPage() {
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
-  const { showToast, psReady, psSynced, psStatus, online } = useApp()
+  const { showToast, online } = useApp()
 
   const [loading,       setLoading]       = useState(false)
   const [monitor,       setMonitor]       = useState(null)
   const [monLoading,    setMonLoading]    = useState(false)
   const [stats,         setStats]         = useState({})
-  const [psStats,       setPsStats]       = useState(null)
   const [camps,         setCamps]         = useState([])
   const [filterCamp,    setFilterCamp]    = useState('')
   const [exportModal,   setExportModal]   = useState(false)
@@ -118,37 +116,9 @@ export default function DataPage() {
     } catch {}
   }, [])
 
-  // ── إحصائيات PowerSync SQLite المحلي ────────────────
-  const loadPsStats = useCallback(async () => {
-    try {
-      const db = getPowerSync()
-      const results = {}
-      await Promise.all(TABLES.map(async ({ key }) => {
-        try {
-          const rows = await db.getAll(`SELECT COUNT(*) as cnt FROM ${key}`)
-          results[key] = Number(rows[0]?.cnt) || 0
-        } catch { results[key] = 0 }
-      }))
-      setPsStats({ counts: results, status: psStatus, synced: psSynced })
-    } catch(e) {
-      console.warn('[DataPage] loadPsStats error:', e.message)
-    }
-  }, [psStatus, psSynced])
-
   useEffect(() => {
     loadStats()
-    // تأخير بسيط لانتظار SQLite init
-    setTimeout(() => loadPsStats(), 1000)
   }, [])
-
-  // تحديث عند تغيير حالة PowerSync
-  useEffect(() => {
-    if (psReady) { loadStats(); loadPsStats() }
-  }, [psReady])
-
-  useEffect(() => {
-    if (psSynced) { loadStats(); loadPsStats() }
-  }, [psSynced])
 
   const loadMonitor = useCallback(async () => {
     setMonLoading(true)
@@ -199,8 +169,7 @@ export default function DataPage() {
 
   const handleRefresh = useCallback(async () => {
     await loadStats()
-    await loadPsStats()
-  }, [loadStats, loadPsStats])
+  }, [loadStats])
 
   // ── جلب البيانات للتصدير (من Supabase مباشرة) ───────
   async function getFullData() {
@@ -553,8 +522,7 @@ export default function DataPage() {
   }
 
   const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent"
-  const psColor = psStatus==='connected' ? 'text-green' : psStatus==='connecting' ? 'text-accent' : 'text-muted'
-  const psLabel = psStatus==='connected' ? '🟢 متصل' : psStatus==='connecting' ? '🟡 يتصل...' : '⚪ غير متصل'
+
 
   if (!isAdmin) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -590,52 +558,21 @@ export default function DataPage() {
       {activeTab==='stats' && (
         <div className="flex flex-col gap-3">
           {/* حالة الاتصال */}
-          <Card title="🔄 حالة المزامنة" icon="">
+          <Card title="🔄 حالة الاتصال" icon="">
             <div className="flex flex-col gap-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted">PowerSync</span>
-                <span className={psStatus==='connected'?'text-green':psStatus==='connecting'?'text-accent':'text-muted'}>
-                  {psStatus==='connected'?'🟢 متصل':psStatus==='connecting'?'🟡 يتصل...':'⚪ غير متصل'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">أول sync</span>
-                <span className={psSynced?'text-green':'text-muted'}>{psSynced?'✅ اكتمل':'⏳ انتظار'}</span>
-              </div>
               <div className="flex justify-between">
                 <span className="text-muted">الإنترنت</span>
                 <span className={online?'text-green':'text-red'}>{online?'🟢 متصل':'🔴 غير متصل'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">قاعدة البيانات</span>
-                <span className="text-blue text-xs">Supabase + PowerSync</span>
+                <span className="text-blue text-xs">Supabase (مباشر)</span>
               </div>
             </div>
             <button onClick={handleRefresh}
               className="w-full mt-3 py-2 rounded-xl text-xs font-bold border border-border text-muted active:scale-95 transition-transform">
               🔄 تحديث الإحصائيات
             </button>
-          </Card>
-
-          <Card title="💾 PowerSync SQLite المحلي" icon="">
-            <div className="flex flex-col gap-2">
-              {TABLES.map(t => (
-                <div key={t.key} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
-                  <span className="text-muted text-xs">{t.icon} {t.label}</span>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-black text-sm ${psStats?'text-white':'text-muted'}`}>
-                      {psStats?(psStats.counts[t.key]??0):'…'}
-                    </span>
-                    {psStats&&stats[t.key]!==undefined&&psStats.counts[t.key]!==stats[t.key]&&(
-                      <span className="text-accent text-[10px]">⚠️</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-muted text-[10px] mt-2 text-center">
-              {psReady?'🟢 PowerSync متصل':'🟡 PowerSync يتصل...'} — مقارنة Supabase ↔ SQLite
-            </p>
           </Card>
 
           {/* إحصائيات Supabase */}

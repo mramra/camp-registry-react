@@ -10,7 +10,6 @@ export default function Settings() {
   const [newPass, setNewPass] = useState('')
   const [confirmPass, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
-  const [clearingDB, setClearingDB] = useState(false)
   const { profile, signOut } = useAuth()
   const { showToast, online } = useApp()
 
@@ -29,22 +28,6 @@ export default function Settings() {
     finally { setSaving(false) }
   }
 
-  async function clearLocalDB() {
-    if (!window.confirm('حذف كل البيانات المحلية؟ ستحتاج إلى اتصال إنترنت لاسترجاعها.')) return
-    setClearingDB(true)
-    try {
-      const { getPowerSync } = await import('../../lib/powersync')
-      const db = getPowerSync()
-      if (db) {
-        const TABLES = ['families','camps','family_members','dist_rounds','family_movements','org_members','camp_distributions','camp_dist_families']
-        for (const tbl of TABLES) {
-          await db.execute(`DELETE FROM ${tbl}`).catch(() => {})
-        }
-      }
-      showToast('✅ تم حذف البيانات المحلية')
-    } catch(err) { showToast('خطأ: ' + err.message, true) }
-    finally { setClearingDB(false) }
-  }
 
   return (
     <div>
@@ -72,14 +55,6 @@ export default function Settings() {
             {saving ? 'جاري الحفظ...' : '💾 تغيير كلمة المرور'}
           </button>
         </form>
-      </Card>
-
-      <Card title="البيانات المحلية" icon="💾">
-        <p className="text-muted text-xs mb-4">حذف البيانات المخزنة على هذا الجهاز. لن يؤثر على بيانات السيرفر.</p>
-        <button onClick={clearLocalDB} disabled={clearingDB}
-          className="w-full bg-red/15 border border-red/30 text-red font-bold py-2.5 rounded-xl text-sm disabled:opacity-60">
-          {clearingDB ? 'جاري الحذف...' : '🗑️ حذف البيانات المحلية'}
-        </button>
       </Card>
 
       <Card title="الجلسة" icon="🚪">

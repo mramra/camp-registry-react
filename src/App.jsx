@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
 import { PowerSyncProvider } from './context/PowerSyncContext'
+import OfflineBanner from './components/ui/OfflineBanner'
 import Layout from './components/layout/Layout'
 import ErrorBoundary from './components/ErrorBoundary'
 import Spinner from './components/ui/Spinner'
@@ -147,8 +148,9 @@ export default function App() {
   return (
     <BrowserRouter basename="/camp-registry-react">
       <AuthProvider>
-        {/* PowerSyncProvider يعمل بعد تسجيل الدخول — يفشل بصمت إذا لم تكن sync rules جاهزة */}
+        {/* PowerSyncProvider الآن كاشف اتصال بسيط — لا SQLite، لا PowerSync */}
         <PowerSyncProvider>
+          <OfflineBanner />
           <AppProvider>
             <AppRoutes />
           </AppProvider>

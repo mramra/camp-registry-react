@@ -12,7 +12,6 @@
     "build:check": "eslint src --ext .js,.jsx && vite build"
   },
   "dependencies": {
-    "@powersync/web": "^1.0.0",
     "@supabase/supabase-js": "^2.39.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
