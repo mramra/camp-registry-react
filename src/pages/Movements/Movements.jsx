@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
-import { enqueue } from '../../lib/sync'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
@@ -113,7 +112,6 @@ export default function Movements() {
         created_at: new Date().toISOString(),
       }
       await upsert('family_movements', data)
-      await enqueue('insert_movement', data)
       showToast('✅ تم تسجيل الحركة')
       setShowForm(false)
       await loadData()

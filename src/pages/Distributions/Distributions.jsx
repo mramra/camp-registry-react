@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
-import { enqueue } from '../../lib/sync'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -153,7 +152,6 @@ export default function Distributions() {
         created_at: new Date().toISOString()
       }
       await upsert('dist_rounds', data)
-      await enqueue('insert_round', data)
       showToast('✅ تمت إضافة الجولة')
       setShowAddRound(false)
       setForm({ name: '', camp_id: '', notes: '' })
@@ -179,7 +177,6 @@ export default function Distributions() {
         created_at: new Date().toISOString()
       }
       await upsert('camp_distributions', data)
-      await enqueue('insert_batch', data)
       showToast('✅ تمت إضافة الدفعة')
       setShowAddBatch(false)
       setBForm({ name: '', camp_id: '', notes: '' })
@@ -217,7 +214,6 @@ export default function Distributions() {
           received_at: new Date().toISOString()
         }
         await upsert('camp_dist_families', rec)
-        await enqueue('insert_dist', rec)
         setReceived(r => ({ ...r, [family.id]: true }))
         showToast('✅ تم تسجيل الاستلام')
       }

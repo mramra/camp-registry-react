@@ -6,7 +6,6 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { logFamilyActivity } from '../../lib/familyActivityLog'
-import { enqueue } from '../../lib/sync'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
@@ -315,16 +314,8 @@ export default function FamiliesList() {
           actorName,
         })
       } else {
-        // أوف لاين: أرفق بيانات السجل مع طلب الحذف لتسجيلها عند المزامنة لاحقاً
-        await enqueue('delete_family', {
-          id,
-          _activity: {
-            familyName:   famBeforeDelete?.head_name,
-            membersCount: membersBeforeDel.length,
-            actorId,
-            actorName,
-          },
-        })
+        showToast('⚠️ لا يوجد اتصال — لم يتم الحذف من السيرفر', true)
+        return
       }
       setFamilies(f => f.filter(x => x.id !== id))
       setAllMembers(m => m.filter(x => x.family_id !== id))
