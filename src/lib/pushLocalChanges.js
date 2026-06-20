@@ -101,12 +101,31 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
 
   const db = await getDb()
 
-  // دالة عامة: رفع جدول كامل (الفرق فقط) بدفعات
+  // كاش الأسر الصحيحة على السيرفر — يُستخدم لفلترة family_members (يمنع خطأ FK)
+  let validFamilyIds = null
+  async function getValidFamilyIds() {
+    if (validFamilyIds) return validFamilyIds
+    const { data } = await db_client.from('families').select('id')
+    validFamilyIds = new Set((data || []).map(r => r.id))
+    return validFamilyIds
+  }
+
+  // دالة عامة: رفع جدول كامل (الفرق فقط) بدفعات — مع تجاوز الدفعة الفاشلة بدل التوقف الكامل
   async function pushTable(table, idKey = 'id', extraFilter = null) {
     onProgress(`📋 فحص ${table}...`)
-    const local = await sqliteGetAll(db, table)
+    let local = await sqliteGetAll(db, table)
     report[table].total = local.length
     if (!local.length) return
+
+    // فلترة FK: family_members يجب أن تشير لأسرة موجودة فعلياً
+    if (table === 'family_members') {
+      const validIds = await getValidFamilyIds()
+      const before = local.length
+      local = local.filter(r => validIds.has(r.family_id))
+      if (local.length < before) {
+        report.errors.push(`family_members: تم تجاهل ${before - local.length} فرد يشير لأسرة غير موجودة على السيرفر`)
+      }
+    }
 
     let query = db_client.from(table).select(idKey)
     if (extraFilter) query = query.eq(extraFilter.col, extraFilter.val)
@@ -132,8 +151,18 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
         report[table].uploaded += batch.length
         onProgress(`✅ ${table}: ${report[table].uploaded}/${missing.length}`)
       } catch (e) {
-        report.errors.push(`${table} (دفعة): ${explainError(e.message, !!adminKey)}`)
-        break // لا فائدة من إعادة المحاولة لو RLS منع الدفعة الأولى
+        // لا نتوقف بالكامل — نحاول صفاً بصف لإنقاذ ما يمكن إنقاذه من هذه الدفعة
+        let rowSuccess = 0
+        for (const row of batch) {
+          try {
+            const { error: rowErr } = await db_client.from(table).upsert([row])
+            if (!rowErr) rowSuccess++
+          } catch {}
+        }
+        report[table].uploaded += rowSuccess
+        if (rowSuccess < batch.length) {
+          report.errors.push(`${table} (دفعة ${i / BATCH + 1}): ${explainError(e.message, !!adminKey)} — نجح ${rowSuccess}/${batch.length} فردياً`)
+        }
       }
     }
   }
@@ -160,8 +189,17 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
         report[table].uploaded += batch.length
         onProgress(`✅ ${table}: ${report[table].uploaded}/${missing.length}`)
       } catch (e) {
-        report.errors.push(`${table} (دفعة): ${explainError(e.message, !!adminKey)}`)
-        break
+        let rowSuccess = 0
+        for (const row of batch) {
+          try {
+            const { error: rowErr } = await db_client.from(table).upsert([row])
+            if (!rowErr) rowSuccess++
+          } catch {}
+        }
+        report[table].uploaded += rowSuccess
+        if (rowSuccess < batch.length) {
+          report.errors.push(`${table} (دفعة): ${explainError(e.message, !!adminKey)} — نجح ${rowSuccess}/${batch.length} فردياً`)
+        }
       }
     }
   }
