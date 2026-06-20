@@ -19,6 +19,7 @@ export default function CampsList() {
   const [famCount,    setFamCount]    = useState({})
   const [memberMap,   setMemberMap]   = useState({})
   const [managerMap,  setManagerMap]  = useState({})
+  const [orgMembers,  setOrgMembers]  = useState([])
   const [loading,     setLoading]     = useState(true)
   const [syncing,     setSyncing]     = useState(false)
   const [showForm,    setShowForm]    = useState(false)
@@ -33,7 +34,7 @@ export default function CampsList() {
     })
   }
   const [editCamp,    setEditCamp]    = useState(null)
-  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', coordinates:'' })
+  const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', coordinates:'', manager_id:'' })
   const [saving,      setSaving]      = useState(false)
 
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
@@ -106,6 +107,7 @@ export default function CampsList() {
       }
     })
     setManagerMap(gm)
+    setOrgMembers(members)
     setCamps(camps)
   }
 
@@ -120,13 +122,13 @@ export default function CampsList() {
 
   function openAdd() {
     setEditCamp(null)
-    setForm({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', notes:'' })
+    setForm({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', notes:'', manager_id:'' })
     setShowForm(true)
   }
 
   function openEdit(camp) {
     setEditCamp(camp)
-    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active', coordinates: camp.latitude && camp.longitude ? `${camp.latitude},${camp.longitude}` : '' })
+    setForm({ name:camp.name||'', camp_type:camp.camp_type||'main', parent_camp_id:camp.parent_camp_id||'', address:camp.address||'', capacity:camp.capacity||'', status:camp.status||'active', coordinates: camp.latitude && camp.longitude ? `${camp.latitude},${camp.longitude}` : '', manager_id: camp.manager_id||'' })
     setShowForm(true)
   }
 
@@ -141,12 +143,15 @@ export default function CampsList() {
     }
     setSaving(true)
     try {
-      // عند جعل المخيم فرعياً (له parent_camp_id)، يُعيَّن مدير الإيواء تلقائياً
-      // = نفس مدير المخيم الرئيسي، حتى لو لم يُحدَّد صريحاً في الفورم.
+      // الأولوية: (1) اختيار يدوي صريح من الفورم (محصور بـ platform_owner/super_admin فقط)
+      // (2) وراثة من المخيم الرئيسي لو فرع (3) القيمة القديمة المحفوظة
+      const canSetManager = isOwner || isSuperAdmin
       const parentCamp = form.parent_camp_id ? camps.find(c => c.id === form.parent_camp_id) : null
-      const resolvedManagerId = form.parent_camp_id
-        ? (parentCamp?.manager_id ?? editCamp?.manager_id ?? null)
-        : (editCamp?.manager_id ?? null)
+      const resolvedManagerId = (canSetManager && form.manager_id)
+        ? form.manager_id
+        : form.parent_camp_id
+          ? (parentCamp?.manager_id ?? editCamp?.manager_id ?? null)
+          : (editCamp?.manager_id ?? null)
 
       const data = {
         id:             editCamp?.id || crypto.randomUUID(),
@@ -320,6 +325,25 @@ export default function CampsList() {
                 <option value="">— اختر —</option>
                 {mainCamps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+            </div>
+          )}
+          {(isOwner || isSuperAdmin) && (
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">🔴 مدير الإيواء</label>
+              <select value={form.manager_id} onChange={e=>setForm(f=>({...f,manager_id:e.target.value}))}
+                className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">
+                  {form.camp_type==='sub' && form.parent_camp_id
+                    ? '— تلقائي من المخيم الرئيسي —'
+                    : '— بدون مدير إيواء —'}
+                </option>
+                {orgMembers.filter(m=>m.role==='super_admin').map(m=>(
+                  <option key={m.id} value={m.id}>{m.full_name}</option>
+                ))}
+              </select>
+              {form.camp_type==='sub' && form.parent_camp_id && !form.manager_id && (
+                <p className="text-muted text-[11px] mt-1">سيُستخدم مدير المخيم الرئيسي تلقائياً ما لم تختر غيره</p>
+              )}
             </div>
           )}
           <div>
