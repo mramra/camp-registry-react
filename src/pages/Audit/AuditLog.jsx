@@ -60,13 +60,13 @@ export default function AuditLog() {
               })
             })
           }
-        } catch {}
+        } catch (e) { console.warn(`[audit] فشل جلب سجل جدول ${t}:`, e.message) }
       }))
 
       // ترتيب حسب الوقت
       all.sort((a,b) => new Date(b.time) - new Date(a.time))
       setLogs(all.slice(0,100))
-    } catch {}
+    } catch (e) { console.warn('[audit] فشل تحميل السجل:', e.message) }
     finally { setLoading(false) }
   }
 

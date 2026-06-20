@@ -76,7 +76,7 @@ export default function Movements() {
       }
       const { data } = await q
       if (data) {
-        try { await bulkUpsert('family_movements', data.map(m=>({...m, family_name:m.families?.head_name}))) } catch {}
+        try { await bulkUpsert('family_movements', data.map(m=>({...m, family_name:m.families?.head_name}))) } catch (e) { console.warn('[movements] فشل حفظ نسخة محلية للحركات:', e.message) }
         let filtered = data
         if (filterType) filtered = filtered.filter(m => m.type===filterType)
         if (filterCamp) filtered = filtered.filter(m => m.from_camp===filterCamp||m.to_camp===filterCamp)

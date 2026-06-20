@@ -246,7 +246,7 @@ export default function UsersList() {
 
   function openEdit(user) {
     let allowedPages = {}
-    try { allowedPages = JSON.parse(user.allowed_pages || '{}') } catch {}
+    try { allowedPages = JSON.parse(user.allowed_pages || '{}') } catch (e) { console.warn('[users] صلاحيات صفحات غير صالحة للمستخدم:', user.id, e.message) }
     setForm({
       full_name: user.full_name||'', national_id: user.national_id||'', phone: user.phone||'',
       role: user.role||'', camp_id: user.camp_id||'', supervisor_id: user.supervisor_id||'',

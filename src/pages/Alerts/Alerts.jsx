@@ -132,10 +132,8 @@ export default function Alerts() {
               action: () => navigate('/distributions')
             })
           }
-        } catch(e) {}
+        } catch(e) { console.warn('[alerts] فشل فحص آخر توزيع:', e.message) }
       }
-
-      // ⑦ مستخدمون لم يغيّروا كلمة المرور
       if ((isOwner||isSuperAdmin) && online) {
         try {
           const { data:pending } = await supabase.from('org_members')
@@ -146,7 +144,7 @@ export default function Alerts() {
             desc: pending.slice(0,3).map(u=>u.full_name).join('، '),
             action: () => navigate('/users')
           })
-        } catch(e) {}
+        } catch(e) { console.warn('[alerts] فشل فحص كلمات المرور المعلّقة:', e.message) }
       }
 
       if (!list.length) list.push({

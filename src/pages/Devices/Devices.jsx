@@ -33,7 +33,7 @@ export default function Devices() {
   async function registerDevice() {
     try {
       await supabase.from('devices').upsert({ ...deviceInfo, last_seen: new Date().toISOString() }, { onConflict: 'id' })
-    } catch {}
+    } catch (e) { console.warn('[devices] فشل تسجيل الجهاز:', e.message) }
   }
 
   async function loadDevices() {

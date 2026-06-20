@@ -92,7 +92,7 @@ export default function DiagnosticsPage() {
       <Card>
         <p className="text-muted text-xs leading-relaxed">
           ℹ️ هذا التطبيق يعمل مباشرة مع Supabase بدون تخزين محلي —
-          كل قراءة وكتابة تذهب فوراً للسيرفر. لا حاجة لمزامنة أو "رفع بيانات محلية"،
+          كل قراءة وكتابة تذهب فوراً للسيرفر. لا حاجة لمزامنة أو &quot;رفع بيانات محلية&quot;،
           لأنه لا يوجد نسخة محلية أصلاً.
         </p>
       </Card>

@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
         setProfile(JSON.parse(cached))
         setLoading(false)
       }
-    } catch {}
+    } catch (e) { console.warn('[auth] قراءة الكاش المحلي فشلت:', e.message) }
 
     // ② تحقق من الجلسة مع timeout
     try {
@@ -104,7 +104,7 @@ export function AuthProvider({ children }) {
         fetch(`${SUPA_URL}/auth/v1/health`),
         3000, 'ping_timeout'
       )
-    } catch {}
+    } catch (e) { console.warn('[auth] ping الإيقاظ فشل (غير حرج):', e.message) }
 
     // تسجيل الدخول مع timeout 20 ثانية
     const { data, error } = await withTimeout(
@@ -118,7 +118,7 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     localStorage.removeItem(PROFILE_KEY)
-    try { await supabase.auth.signOut() } catch {}
+    try { await supabase.auth.signOut() } catch (e) { console.warn('[auth] signOut من السيرفر فشل (محلياً تم تسجيل الخروج):', e.message) }
   }
 
   const effectiveProfile = previewAs || profile

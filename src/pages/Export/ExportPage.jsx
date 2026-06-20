@@ -85,7 +85,7 @@ export default function ExportPage() {
       ])
       if (c?.length) setCamps(c)
       if (m?.length) setOrgMembers(m)
-    } catch {}
+    } catch (e) { console.warn('[export] فشل تحميل المخيمات/المستخدمين:', e.message) }
   }, [])
 
   useEffect(() => {

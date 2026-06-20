@@ -139,7 +139,7 @@ export default function FamiliesList() {
               showToast('⛔ لا تملك صلاحية الوصول لهذه الأسرة', true)
               return
             }
-            try { await upsert('families', data) } catch {}
+            try { await upsert('families', data) } catch (e) { console.warn('[families] فشل حفظ نسخة محلية:', e.message) }
             openFamily(data)
           }
         }
@@ -214,7 +214,7 @@ export default function FamiliesList() {
         catch(e) {
           console.warn('[sqlite] families bulkPut:', e.message)
           // محاولة بديلة — حفظ واحد واحد
-          for (const f of fams) { try { await upsert("families", f) } catch {} }
+          for (const f of fams) { try { await upsert("families", f) } catch (e2) { console.warn('[families] فشل حفظ أسرة واحدة بديلاً:', f.id, e2.message) } }
         }
       }
       if (camps?.length) {
@@ -284,7 +284,7 @@ export default function FamiliesList() {
             const others = prev.filter(m => m.family_id !== family.id)
             return [...others, ...data.map(m=>({...m,org_id:ORG_ID}))]
           })
-        } catch {}
+        } catch (e) { console.warn('[families] فشل حفظ أفراد الأسرة محلياً:', e.message) }
       }
     }
   }

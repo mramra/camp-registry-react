@@ -113,7 +113,7 @@ export default function DataPage() {
       ])
       if (campsData) setCamps(campsData)
       if (membersData) setOrgMembers(membersData)
-    } catch {}
+    } catch (e) { console.warn('[data] فشل تحميل إحصائيات المخيمات/المستخدمين:', e.message) }
   }, [])
 
   useEffect(() => {
@@ -738,7 +738,7 @@ export default function DataPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-muted text-xs text-center py-2">اضغط "فحص الآن" لعرض الاستخدام</p>
+              <p className="text-muted text-xs text-center py-2">اضغط &quot;فحص الآن&quot; لعرض الاستخدام</p>
             )}
 
             <button onClick={loadMonitor} disabled={monLoading}

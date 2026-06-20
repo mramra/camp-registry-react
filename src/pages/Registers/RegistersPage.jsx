@@ -451,7 +451,7 @@ function NeedsTab({ families, camps, filterCamp }) {
     .filter(f => filterCamp ? f.camp_id===filterCamp : true)
     .map(f => {
       let tags = []
-      try { tags = JSON.parse(f.category_tags||'[]') } catch {}
+      try { tags = JSON.parse(f.category_tags||'[]') } catch (e) { console.warn('[needs] تصنيف غير صالح للأسرة', f.id, e.message) }
       if (!Array.isArray(tags)) tags = []
       return { ...f, tags, camp: campMap[f.camp_id]||'—' }
     })
@@ -459,7 +459,7 @@ function NeedsTab({ families, camps, filterCamp }) {
 
   const counts = Object.fromEntries(
     Object.keys(NEEDS_CATS).map(k => [k, families.filter(f=>{
-      let t=[]; try{t=JSON.parse(f.category_tags||'[]')}catch{}
+      let t=[]; try{t=JSON.parse(f.category_tags||'[]')}catch(e){console.warn('[needs] تصنيف غير صالح:', e.message)}
       return Array.isArray(t)&&t.includes(k)
     }).length])
   )
