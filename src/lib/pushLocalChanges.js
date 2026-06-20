@@ -53,10 +53,13 @@ function clean(table, rec) {
   return out
 }
 
-// رسالة واضحة لو السبب RLS — بدل ترك المستخدم بلا تفسير
-function explainError(msg) {
+// رسالة واضحة لو السبب RLS — تعرض الخطأ الحقيقي ولا تُخفيه
+function explainError(msg, usingAdminKey) {
   if (/row-level security|RLS/i.test(msg)) {
-    return 'صلاحيات قاعدة البيانات (RLS) منعت الرفع — هذا الجدول يحتاج صلاحية كتابة خاصة، تواصل مع مدير النظام لتفعيلها من السيرفر.'
+    if (usingAdminKey) {
+      return `${msg} — حتى مع المفتاح الإداري! تأكد أن المفتاح المُلصق هو "service_role" كاملاً بدون مسافات (وليس anon).`
+    }
+    return `${msg} — يحتاج مفتاح إداري (service_role) في الحقل أعلاه.`
   }
   return msg
 }
@@ -66,7 +69,9 @@ function explainError(msg) {
  * (يحترم العلاقات: المخيمات/الأسر أولاً، ثم الأفراد، ثم الدفعات، ثم الاستلام)
  */
 export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
-  const db_client = adminKey ? createClient(SUPABASE_URL, adminKey) : supabase
+  const db_client = adminKey
+    ? createClient(SUPABASE_URL, adminKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    : supabase
   const report = {
     families:            { uploaded: 0, total: 0 },
     family_members:      { uploaded: 0, total: 0 },
@@ -94,7 +99,7 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
     if (extraFilter) query = query.eq(extraFilter.col, extraFilter.val)
     const { data: serverRows, error: selErr } = await query
     if (selErr) {
-      report.errors.push(`${table} (قراءة): ${explainError(selErr.message)}`)
+      report.errors.push(`${table} (قراءة): ${explainError(selErr.message, !!adminKey)}`)
       return
     }
     const serverIds = new Set((serverRows || []).map(r => r[idKey]))
@@ -114,7 +119,7 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
         report[table].uploaded += batch.length
         onProgress(`✅ ${table}: ${report[table].uploaded}/${missing.length}`)
       } catch (e) {
-        report.errors.push(`${table} (دفعة): ${explainError(e.message)}`)
+        report.errors.push(`${table} (دفعة): ${explainError(e.message, !!adminKey)}`)
         break // لا فائدة من إعادة المحاولة لو RLS منع الدفعة الأولى
       }
     }
@@ -126,7 +131,7 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
     if (!local.length) return
     const { data: serverRows, error: selErr } = await db_client.from(table).select(idKey)
     if (selErr) {
-      report.errors.push(`${table} (قراءة): ${explainError(selErr.message)}`)
+      report.errors.push(`${table} (قراءة): ${explainError(selErr.message, !!adminKey)}`)
       return
     }
     const serverIds = new Set((serverRows || []).map(r => r[idKey]))
@@ -142,7 +147,7 @@ export async function pushLocalChanges(onProgress = () => {}, adminKey = null) {
         report[table].uploaded += batch.length
         onProgress(`✅ ${table}: ${report[table].uploaded}/${missing.length}`)
       } catch (e) {
-        report.errors.push(`${table} (دفعة): ${explainError(e.message)}`)
+        report.errors.push(`${table} (دفعة): ${explainError(e.message, !!adminKey)}`)
         break
       }
     }
