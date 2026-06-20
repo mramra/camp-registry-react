@@ -30,7 +30,6 @@ const Subscription   = lazy(() => import('./pages/Subscription/Subscription'))
 const HelpPage       = lazy(() => import('./pages/Help/HelpPage'))
 const SMS            = lazy(() => import('./pages/SMS/SMS'))
 const FamilyPortal   = lazy(() => import('./pages/FamilyPortal/FamilyPortal'))
-const RegistriesPage  = lazy(() => import('./pages/Registries/RegistriesPage'))
 const RegistersPage   = lazy(() => import('./pages/Registers/RegistersPage'))
 const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
 const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
@@ -69,7 +68,9 @@ function AccessDenied({ pageLabel }) {
 
 function ProtectedRoute({ children, pageKey, pageLabel }) {
   const { user, loading, mustChange, pagePermLoaded, canAccessPageNow } = useAuth()
-  if (loading || (pageKey && !pagePermLoaded)) return (
+  const keys = Array.isArray(pageKey) ? pageKey : (pageKey ? [pageKey] : [])
+  const hasAccess = keys.length === 0 || keys.some(k => canAccessPageNow(k))
+  if (loading || (keys.length && !pagePermLoaded)) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-bg gap-4">
       <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-3xl">🏕️</div>
       <p className="text-accent font-bold text-lg">نبض المخيم</p>
@@ -78,7 +79,7 @@ function ProtectedRoute({ children, pageKey, pageLabel }) {
   )
   if (!user)      return <Navigate to="/login" replace />
   if (mustChange) return <Navigate to="/change-password" replace />
-  if (pageKey && !canAccessPageNow(pageKey)) return <AccessDenied pageLabel={pageLabel} />
+  if (keys.length && !hasAccess) return <AccessDenied pageLabel={pageLabel} />
   return children
 }
 
@@ -129,8 +130,8 @@ function AppRoutes() {
           <Route path="subscription"  element={<ProtectedRoute pageKey="subscription" pageLabel="الاشتراكات"><Subscription /></ProtectedRoute>} />
           <Route path="help"          element={<ProtectedRoute pageKey="help" pageLabel="المساعدة"><HelpPage /></ProtectedRoute>} />
           <Route path="sms"           element={<ProtectedRoute pageKey="sms" pageLabel="الرسائل"><SMS /></ProtectedRoute>} />
-          <Route path="registers"   element={<ProtectedRoute pageKey="registers" pageLabel="السجلات"><RegistersPage /></ProtectedRoute>} />
-          <Route path="registries"  element={<ProtectedRoute pageKey="registries" pageLabel="قوائم البيانات"><RegistriesPage /></ProtectedRoute>} />
+          <Route path="registers"   element={<ProtectedRoute pageKey={["registers","registries"]} pageLabel="السجلات"><RegistersPage /></ProtectedRoute>} />
+          <Route path="registries"  element={<Navigate to="/registers" replace />} />
           <Route path="permissions-admin" element={<ProtectedRoute pageKey="page_permissions" pageLabel="إدارة الصلاحيات"><PermissionsAdmin /></ProtectedRoute>} />
           <Route path="women"        element={<ProtectedRoute pageKey="women"        pageLabel="النساء"><WomenPage /></ProtectedRoute>} />
           <Route path="children"     element={<ProtectedRoute pageKey="children"     pageLabel="سجل الأطفال"><ChildrenPage /></ProtectedRoute>} />

@@ -17,14 +17,38 @@ function calcAge(dob) {
   return a>=0&&a<120?a:null
 }
 
-// ── تصدير Excel عام ──────────────────────────────────────────
+// ── تصدير Excel منسّق بالألوان (من قوائم البيانات) ──────────
 function exportXLSX(rows, sheetName, fileName) {
+  if (!rows.length) return
   const ws = XLSX.utils.json_to_sheet(rows)
-  ws['!cols'] = Object.keys(rows[0]||{}).map(()=>({wch:18}))
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, sheetName)
-  XLSX.writeFile(wb, `${fileName}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
+  const keys = Object.keys(rows[0]||{})
+  ws['!cols'] = keys.map(()=>({wch:20}))
+  // تنسيق رؤوس الأعمدة
+  keys.forEach((_,col)=>{
+    const addr = XLSX.utils.encode_cell({r:0,c:col})
+    if(ws[addr]) ws[addr].s = {
+      fill:{patternType:'solid',fgColor:{rgb:'1E3A5F'},bgColor:{rgb:'1E3A5F'}},
+      font:{bold:true,color:{rgb:'FFFFFF'},sz:10},
+      alignment:{horizontal:'center',vertical:'center'}
+    }
+  })
+  // صفوف متبادلة
+  for(let row=1;row<rows.length+1;row++){
+    const bg=(row-1)%2===0?'FFFFFF':'EEF2F7'
+    keys.forEach((_,col)=>{
+      const addr=XLSX.utils.encode_cell({r:row,c:col})
+      if(ws[addr]) ws[addr].s={
+        fill:{patternType:'solid',fgColor:{rgb:bg}},
+        font:{sz:10},alignment:{horizontal:'center',vertical:'center'}
+      }
+    })
+  }
+  const wb=XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb,ws,sheetName)
+  XLSX.writeFile(wb,`${fileName}_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.xlsx`)
 }
+
+const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none mb-2"
 
 // ════════════════════════════════════════════════════════════
 // تبويب الأطفال
@@ -47,13 +71,12 @@ function ChildrenTab({ families, members, camps, filterCamp }) {
       if (ageFilter==='3-6' && (k.age<3||k.age>6)) return false
       if (ageFilter==='7-12' && (k.age<7||k.age>12)) return false
       if (ageFilter==='13-17' && (k.age<13)) return false
-      if (search && !k.name?.includes(search) && !k.fam?.includes(search)) return false
+      if (search && !k.name?.includes(search) && !k.fam?.includes(search) && !k.national_id?.includes(search)) return false
       return true
     })
     .sort((a,b)=>(a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true}))
 
   const grps = [['0-2',kids.filter(k=>k.age<=2).length],['3-6',kids.filter(k=>k.age>=3&&k.age<=6).length],['7-12',kids.filter(k=>k.age>=7&&k.age<=12).length],['13-17',kids.filter(k=>k.age>=13).length]]
-  const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none mb-2"
 
   return (
     <div>
@@ -66,10 +89,10 @@ function ChildrenTab({ families, members, camps, filterCamp }) {
           </button>
         ))}
       </div>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ابحث..." className={SEL}/>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ابحث بالاسم أو رقم الهوية..." className={SEL}/>
       <div className="flex justify-between items-center mb-2">
         <span className="text-muted text-xs">{kids.length} طفل</span>
-        <button onClick={()=>exportXLSX(kids.map((k,i)=>({'#':i+1,'الخيمة':k.tent,'الاسم':k.name,'العمر':k.age,'الصلة':k.relation,'الجنس':k.gender||'','رب الأسرة':k.fam,'الجوال':k.phone,'المخيم':k.camp})),'سجل الأطفال','سجل_الأطفال')} className="text-xs text-accent font-bold">📥 Excel</button>
+        <button onClick={()=>exportXLSX(kids.map((k,i)=>({'#':i+1,'الخيمة':k.tent,'الاسم':k.name,'رقم الهوية':k.national_id||'','العمر':k.age,'الصلة':k.relation,'الجنس':k.gender||'','يتيم':k.orphan_status?'نعم':'','رب الأسرة':k.fam,'الجوال':k.phone,'المخيم':k.camp})),'الأطفال','سجل_الأطفال')} className="text-xs text-accent font-bold">📥 Excel</button>
       </div>
       <div className="flex flex-col gap-1.5">
         {kids.map((k,i)=>(
@@ -102,11 +125,12 @@ function WomenTab({ families, members, camps, filterCamp }) {
     ...families.filter(f=>f.head_gender==='أنثى').map(f=>({
       id:'f-'+f.id, name:f.head_name, national_id:f.head_id, dob:f.head_dob,
       age:calcAge(f.head_dob), type:'رأس الأسرة', marital:f.head_marital||'—',
-      status:f.head_female_status||'', camp:campMap[f.camp_id]||'—', camp_id:f.camp_id||'', tent:f.tent||'—', phone:f.phone1||'—', fam:f.head_name
+      status:f.head_female_status||'', chronic:f.head_chronic_diseases||'',
+      camp:campMap[f.camp_id]||'—', camp_id:f.camp_id||'', tent:f.tent||'—', phone:f.phone1||'—', fam:f.head_name
     })),
     ...members.filter(m=>m.gender==='أنثى'||['زوجة','أم','ابنة','أخت'].includes(m.relation||'')).map(m=>{
       const f=famMap[m.family_id]||{}
-      return { id:'m-'+m.id, name:m.name||'—', national_id:m.national_id||'', dob:m.dob, age:calcAge(m.dob), type:m.relation||'أنثى', marital:'—', status:'', camp:campMap[f.camp_id]||'—', camp_id:f.camp_id||'', tent:f.tent||'—', phone:f.phone1||'—', fam:f.head_name||'—' }
+      return { id:'m-'+m.id, name:m.name||'—', national_id:m.national_id||'', dob:m.dob, age:calcAge(m.dob), type:m.relation||'أنثى', marital:'—', status:'', chronic:m.chronic_diseases||'', camp:campMap[f.camp_id]||'—', camp_id:f.camp_id||'', tent:f.tent||'—', phone:f.phone1||'—', fam:f.head_name||'—' }
     })
   ]
     .filter(w=>{
@@ -119,7 +143,6 @@ function WomenTab({ families, members, camps, filterCamp }) {
 
   const types = [...new Set(women.map(w=>w.type))]
   const stats = {total:women.length, heads:women.filter(w=>w.type==='رأس الأسرة').length, pregnant:women.filter(w=>w.status==='حامل').length}
-  const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none mb-2"
 
   return (
     <div>
@@ -137,13 +160,14 @@ function WomenTab({ families, members, camps, filterCamp }) {
       </select>
       <div className="flex justify-between items-center mb-2">
         <span className="text-muted text-xs">{women.length} امرأة</span>
-        <button onClick={()=>exportXLSX(women.map((w,i)=>({'#':i+1,'الخيمة':w.tent,'الاسم':w.name,'العمر':w.age??'','الصلة':w.type,'الحالة':w.marital,'الوضع':w.status,'المخيم':w.camp,'رب الأسرة':w.fam})),'سجل النساء','سجل_النساء')} className="text-xs text-accent font-bold">📥 Excel</button>
+        <button onClick={()=>exportXLSX(women.map((w,i)=>({'#':i+1,'الخيمة':w.tent,'الاسم':w.name,'رقم الهوية':w.national_id||'','العمر':w.age??'','الصلة':w.type,'الحالة':w.marital,'الوضع':w.status,'أمراض مزمنة':w.chronic,'الجوال':w.phone,'المخيم':w.camp,'رب الأسرة':w.fam})),'النساء','سجل_النساء')} className="text-xs text-accent font-bold">📥 Excel</button>
       </div>
       <div className="flex flex-col gap-1.5">
         {women.map(w=>(
           <div key={w.id} className="bg-surface border border-border rounded-xl p-3">
             <div className="font-bold text-white text-sm">{w.name} <span className="text-muted text-xs font-normal">({w.type})</span></div>
             <div className="text-muted text-xs">{w.age??'—'} سنة • {w.marital} {w.status?`• 🔸${w.status}`:''}</div>
+            {w.chronic && <div className="text-accent text-[10px] mt-0.5">🩺 {w.chronic}</div>}
             <div className="text-muted text-[10px]">⛺{w.tent} 🏕️{w.camp}</div>
           </div>
         ))}
@@ -176,7 +200,6 @@ function HealthTab({ families, members, camps, filterCamp }) {
       const rows = []
       const t = TYPES.find(t=>t.key===type)
       if (type === 'all') {
-        // كل الحالات الصحية لرب الأسرة
         if (f.head_chronic_diseases?.trim())
           rows.push({key:'chronic',    label:'أمراض مزمنة', val:f.head_chronic_diseases})
         if (f.head_disabilities?.trim())
@@ -267,7 +290,7 @@ function HealthTab({ families, members, camps, filterCamp }) {
         <span className="text-muted text-xs">{records.length} حالة</span>
         <button onClick={()=>exportXLSX(
           records.map((r,i)=>({'#':i+1,'الخيمة':r.tent,'الاسم':r.name,'الصلة':r.role,'الهوية':r.national_id,'الجوال':r.phone,'النوع':r.healthType,'الحالة':r.val,'رب الأسرة':r.fam,'المخيم':r.camp})),
-          'سجل الصحة','سجل_الصحة'
+          'الصحة','سجل_الصحة'
         )} className="text-xs text-accent font-bold">📥 Excel</button>
       </div>
 
@@ -406,7 +429,6 @@ function DistTab({ families, camps, showToast }) {
   )
 }
 
-
 // ════════════════════════════════════════════════════════════
 // تبويب الاحتياجات
 // ════════════════════════════════════════════════════════════
@@ -497,7 +519,7 @@ function NeedsTab({ families, camps, filterCamp }) {
 }
 
 // ════════════════════════════════════════════════════════════
-// الصفحة الرئيسية
+// الصفحة الرئيسية (موحّدة: السجلات + قوائم البيانات)
 // ════════════════════════════════════════════════════════════
 const TABS = [
   {id:'children', label:'👶 الأطفال'},
@@ -538,8 +560,6 @@ export default function RegistersPage() {
   useEffect(()=>{ loadAll() },[])
   useEffect(()=>{ if(psReady)  loadAll() },[psReady])
   useEffect(()=>{ if(psSynced) loadAll() },[psSynced])
-
-  const SEL = "w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none mb-3"
 
   return (
     <div>

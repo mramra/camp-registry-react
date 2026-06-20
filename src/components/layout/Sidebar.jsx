@@ -38,7 +38,6 @@ const NAV_GROUPS = [
     label: 'السجلات الاجتماعية والصحية',
     items: [
       { icon: '📋', label: 'السجلات',         path: '/registers',    pageKey: 'registers' },
-      { icon: '📚', label: 'قوائم البيانات',  path: '/registries',   pageKey: 'registries' },
       { icon: '👩', label: 'النساء',          path: '/women',        pageKey: 'women' },
       { icon: '🧒', label: 'سجل الأطفال',     path: '/children',     pageKey: 'children' },
       { icon: '⚕️', label: 'الحالات الصحية',  path: '/health-report', pageKey: 'health_report' },

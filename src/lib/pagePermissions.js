@@ -16,7 +16,6 @@ export const PAGE_REGISTRY = {
   movements:        { label: '🔄 حركات الأسر',            path: '/movements' },
   distributions:    { label: '📦 التوزيعات',              path: '/distributions' },
   registers:        { label: '📋 السجلات',                path: '/registers' },
-  registries:       { label: '📚 قوائم البيانات',          path: '/registries' },
   women:            { label: '👩 النساء',                  path: '/women' },
   children:         { label: '🧒 سجل الأطفال',             path: '/children' },
   health_report:    { label: '⚕️ الحالات الصحية',          path: '/health-report' },
@@ -48,7 +47,7 @@ const DEFAULT_ROLE_ACCESS = {
   platform_owner: () => true,
   super_admin: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
-    registers:true, registries:true,
+    registers:true,
     women:true, children:true, health_report:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true,
@@ -56,7 +55,7 @@ const DEFAULT_ROLE_ACCESS = {
   },
   camp_delegate: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
-    registers:true, registries:true,
+    registers:true,
     women:true, children:true, health_report:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true,
@@ -64,7 +63,7 @@ const DEFAULT_ROLE_ACCESS = {
   },
   assistant: {
     dashboard:true, families:false, camps:false, movements:false, distributions:false,
-    registers:false, registries:false,
+    registers:false,
     women:false, children:false, health_report:false,
     analysis:false, needs_report:false, camp_compare:false, export:false,
     users:false, audit:false, alerts:false, data:false, diagnostics:false,
