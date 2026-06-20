@@ -208,28 +208,8 @@ export default function FamiliesList() {
       res.forEach(r => { if (!r.error && r.data) sm.push(...r.data) })
       mems = sm
 
-      // حفظ في SQLite — نتجاهل أخطاء الـ schema بأمان
-      if (fams.length) {
-        try { await bulkUpsert("families", fams) }
-        catch(e) {
-          console.warn('[sqlite] families bulkPut:', e.message)
-          // محاولة بديلة — حفظ واحد واحد
-          for (const f of fams) { try { await upsert("families", f) } catch (e2) { console.warn('[families] فشل حفظ أسرة واحدة بديلاً:', f.id, e2.message) } }
-        }
-      }
-      if (camps?.length) {
-        try { await bulkUpsert("camps", camps) }
-        catch(e) { await bulkUpsert('camps', camps) }
-      }
-      if (mems.length) {
-        try { await bulkUpsert("family_members", mems) }
-        catch(e) { await bulkUpsert('family_members', mems) }
-      }
-
       const localCamps = camps || await query('camps')
       applyData(fams, localCamps, mems)
-      // حفظ وقت آخر مزامنة
-      // SQLite (PowerSync) يتتبع آخر sync تلقائياً
     } catch(e) { console.warn('[sync]', e.message) }
     finally { setSyncing(false) }
   }

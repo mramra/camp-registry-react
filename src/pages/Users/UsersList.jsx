@@ -45,41 +45,20 @@ export default function UsersList() {
   const navigate = useNavigate()
   const { showToast, online } = useApp()
 
-  const { query, upsert, bulkUpsert, remove } = useLocalDB()
+  const { query, upsert, remove } = useLocalDB()
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
-    // ① Dexie فوراً
+    setLoading(true)
     try {
       const [lCamps, lUsers] = await Promise.all([
         query('camps'),
         query('org_members', { org_id: ORG_ID }),
       ])
-      if (lCamps.length) setCamps(lCamps)
-      if (lUsers.length) { setUsers(lUsers); setLoading(false) }
+      setCamps(lCamps)
+      setUsers(lUsers)
     } catch(e) { console.warn(e) }
     finally { setLoading(false) }
-
-    // ② سيرفر في الخلفية — يُحدّث Dexie ثم الـ state
-    if (!navigator.onLine) return
-    try {
-      const [cRes, uRes] = await Promise.all([
-        supabase.from('camps').select('*').eq('org_id', ORG_ID),
-        supabase.from('org_members').select('*').eq('org_id', ORG_ID)
-          .order('created_at', { ascending: false }),
-      ])
-      if (!cRes.error && cRes.data?.length) {
-        await bulkUpsert('camps', cRes.data)
-        setCamps(cRes.data)
-      }
-      if (!uRes.error && uRes.data?.length) {
-        // upsert — لا نحذف المحلي بل نُحدّثه
-        for (const u of uRes.data) {
-          await upsert('org_members', u)
-        }
-        setUsers(uRes.data)
-      }
-    } catch(e) { console.warn('[users sync]', e.message) }
   }
 
   function setF(field, value) {
