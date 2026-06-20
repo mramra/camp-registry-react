@@ -83,6 +83,13 @@ export default function CampsList() {
     const mm = {}
     members.filter(m => m.role==='camp_delegate' && m.camp_id)
       .forEach(m => { mm[m.camp_id] = m.full_name })
+    // عرض بصري فقط: الفرع الذي لا مندوب خاص به يظهر مندوب مخيمه الرئيسي تلقائياً
+    // (لا تعديل على البيانات الحقيقية — فقط على ما يُعرض في الواجهة)
+    camps.forEach(c => {
+      if (c.parent_camp_id && !mm[c.id] && mm[c.parent_camp_id]) {
+        mm[c.id] = mm[c.parent_camp_id]
+      }
+    })
     setMemberMap(mm)
     setCamps(camps)
   }
