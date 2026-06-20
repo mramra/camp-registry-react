@@ -107,7 +107,7 @@ export default function FamiliesList() {
   const { canWrite, canEdit, canDelete, profile } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
-  const { showToast, psReady, psSynced} = useApp()
+  const { showToast } = useApp()
   const navigate = useNavigate()
 
   const location = useLocation()
@@ -158,17 +158,6 @@ export default function FamiliesList() {
     window.addEventListener('delta-sync', handler)
     return () => window.removeEventListener('delta-sync', handler)
   }, [])
-
-
-  // 2) psReady → بيانات الجلسة السابقة متاحة في PowerSync SQLite
-  useEffect(() => {
-    if (psReady) loadLocal()
-  }, [psReady])
-
-  // 3) psSynced → أحدث بيانات بعد اكتمال المزامنة
-  useEffect(() => {
-    if (psSynced) loadLocal()
-  }, [psSynced])
 
   // ── 1. تحميل من SQLite فوراً ─────────────────────────
   async function loadLocal() {

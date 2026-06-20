@@ -32,7 +32,7 @@ export default function Movements() {
   const { canWrite } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, remove, bulkUpsert } = useLocalDB()
-  const { showToast, psReady, psSynced} = useApp()
+  const { showToast } = useApp()
 
   useEffect(() => { loadData() }, [filterType, filterCamp])
   useEffect(() => { loadData() }, [])
@@ -42,9 +42,6 @@ export default function Movements() {
     window.addEventListener('delta-sync', handler)
     return () => window.removeEventListener('delta-sync', handler)
   }, [])
-
-  useEffect(() => { if (psReady)  loadData() }, [psReady])
-  useEffect(() => { if (psSynced) loadData() }, [psSynced])
 
   async function loadData() {
     setLoading(true)

@@ -37,7 +37,7 @@ export default function Dashboard() {
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
-  const { showToast, online, psReady, psSynced } = useApp()
+  const { showToast, online } = useApp()
   const navigate = useNavigate()
 
   const { query, bulkUpsert } = useLocalDB()
@@ -57,10 +57,6 @@ export default function Dashboard() {
     setActivity(rows)
   }
 
-
-  // تحديث عند تغيّر حالة المزامنة
-  useEffect(() => { if (psReady)  loadStats() }, [psReady])
-  useEffect(() => { if (psSynced) loadStats() }, [psSynced])
 
   async function loadStats() {
     try {
