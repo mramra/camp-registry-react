@@ -347,6 +347,7 @@ export default function UsersList() {
                               isMe={isMe(asst.id)} onEdit={openEdit} onToggle={handleToggleStatus}
                               onDelete={handleDelete}
                               onReset={u => { setReset(u); setNewPass(randomPassword()) }}
+                              onPreview={handlePreview}
                               isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online} fullWidth
                             />
                           </div>
@@ -365,6 +366,7 @@ export default function UsersList() {
                 <UserCard key={d.id} user={d} cfg={ROLE_CONFIG.camp_delegate} campMap={campMap}
                   isMe={isMe(d.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
+                  onPreview={handlePreview}
                   isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                 />
               ))}
@@ -377,6 +379,7 @@ export default function UsersList() {
                 <UserCard key={a.id} user={a} cfg={ROLE_CONFIG.assistant} campMap={campMap}
                   isMe={isMe(a.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
+                  onPreview={handlePreview}
                   isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
                 />
               ))}
@@ -386,6 +389,7 @@ export default function UsersList() {
             <UserCard key={u.id} user={u} cfg={ROLE_CONFIG[u.role]||ROLE_CONFIG.assistant} campMap={campMap}
               isMe={isMe(u.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
               onReset={u2 => { setReset(u2); setNewPass(randomPassword()) }}
+              onPreview={handlePreview}
               isOwner={isOwner} isSuperAdmin={isSuperAdmin} online={online}
             />
           ))}
@@ -603,7 +607,7 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
       {user.role !== 'platform_owner' && (
         <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
           {(isOwner||isSuperAdmin) && <button onClick={()=>onEdit(user)} className="bg-blue/10 border border-blue/30 text-blue px-2.5 py-1 rounded-lg text-[11px] font-bold">✏️</button>}
-          <button onClick={()=>onPreview(user)} className="bg-green/10 border border-green/30 text-green px-2.5 py-1 rounded-lg text-[11px] font-bold">👁️</button>
+          <button onClick={()=>onPreview?.(user)} disabled={!onPreview} className="bg-green/10 border border-green/30 text-green px-2.5 py-1 rounded-lg text-[11px] font-bold disabled:opacity-40">👁️</button>
           {!isMe && <button onClick={()=>onToggle(user)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${user.is_active!==false?'bg-red/10 border-red/30 text-red':'bg-green/10 border-green/30 text-green'}`}>{user.is_active!==false?'🚫':'✅'}</button>}
           <button onClick={()=>onReset(user)} className="bg-accent/10 border border-accent/30 text-accent px-2.5 py-1 rounded-lg text-[11px] font-bold">🔑</button>
           {!isMe && (isOwner||isSuperAdmin) && <button onClick={()=>onDelete(user)} className="bg-red/10 border border-red/30 text-red px-2.5 py-1 rounded-lg text-[11px] font-bold">🗑️</button>}

@@ -530,7 +530,7 @@ const TABS = [
 ]
 
 export default function RegistersPage() {
-  const { showToast, psReady, psSynced } = useApp()
+  const { showToast } = useApp()
   const { query } = useLocalDB()
   const { getAllowedCampIds, filterLocal } = useDataScope()
   const [tab,        setTab]        = useState('children')
@@ -558,8 +558,6 @@ export default function RegistersPage() {
   }, [])
 
   useEffect(()=>{ loadAll() },[])
-  useEffect(()=>{ if(psReady)  loadAll() },[psReady])
-  useEffect(()=>{ if(psSynced) loadAll() },[psSynced])
 
   return (
     <div>
