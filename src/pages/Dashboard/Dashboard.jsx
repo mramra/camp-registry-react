@@ -5,7 +5,6 @@ import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
 import { useLocalDB } from '../../lib/useLocalDB'
-import { supabase, ORG_ID } from '../../lib/supabase'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 function checkIssues(f, mems) {
@@ -36,11 +35,11 @@ export default function Dashboard() {
   const [loading,  setLoading]  = useState(true)
 
   const { profile, isSuperAdmin, isOwner, isCampDelegate } = useAuth()
-  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
   const { showToast, online } = useApp()
   const navigate = useNavigate()
 
-  const { query, bulkUpsert } = useLocalDB()
+  const { query } = useLocalDB()
   // تحميل فوري عند فتح الصفحة
   useEffect(() => { loadStats() }, [])
   useEffect(() => { loadActivity() }, [])
@@ -78,25 +77,6 @@ export default function Dashboard() {
       const filteredCamps = campIds === null ? camps : camps.filter(c => campIds.includes(c.id))
       applyStats(filteredFams, filteredCamps, filteredMembers)
       setLoading(false)
-      // مزامنة في الخلفية
-      if (navigator.onLine) {
-        const { data: allCampsD } = await supabase.from('camps').select('*').eq('org_id', ORG_ID)
-      const campIds2 = getAllowedCampIds(allCampsD || [])
-      let famQ = supabase.from('families').select('*').eq('org_id', ORG_ID).limit(1000)
-      famQ = applyScope(famQ, campIds2)
-      const [fRes, cRes] = await Promise.all([
-        famQ,
-        Promise.resolve({ data: allCampsD, error: null }),
-      ])
-        const f2 = !fRes.error ? (fRes.data || []) : fams
-        const c2 = !cRes.error && cRes.data?.length ? cRes.data : camps
-        await bulkUpsert('families', f2)
-        await bulkUpsert('camps', c2)
-        const f2Ids = new Set(f2.map(f => f.id))
-        const m2 = members.filter(m => f2Ids.has(m.family_id))
-        const c2Filtered = campIds2 === null ? c2 : c2.filter(c => campIds2.includes(c.id))
-        applyStats(f2, c2Filtered, m2)
-      }
     } catch(e) { console.error(e); setLoading(false) }
   }
 

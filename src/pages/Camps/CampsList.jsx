@@ -40,7 +40,7 @@ export default function CampsList() {
   const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
   const { showToast } = useApp()
 
-  const { query, upsert, remove, bulkUpsert } = useLocalDB()
+  const { query, upsert, remove } = useLocalDB()
   useEffect(() => { loadData() }, [])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {
@@ -58,22 +58,8 @@ export default function CampsList() {
         query('org_members'),
       ])
       applyData(lCamps, lFams, lMems)
-      setLoading(false)
-      if (!navigator.onLine) return
-      setSyncing(true)
-      const [cRes, fRes, mRes] = await Promise.all([
-        supabase.from('camps').select('*').eq('org_id', ORG_ID),
-        supabase.from('families').select('id,camp_id').eq('org_id', ORG_ID),
-        supabase.from('org_members').select('id,full_name,role,camp_id').eq('org_id', ORG_ID),
-      ])
-      const c2 = !cRes.error && cRes.data ? cRes.data : lCamps
-      const f2 = !fRes.error && fRes.data ? fRes.data : lFams
-      const m2 = !mRes.error && mRes.data ? mRes.data : lMems
-      await bulkUpsert('camps', c2)
-      if (m2.length) await bulkUpsert('org_members', m2).catch(()=>{})
-      applyData(c2, f2, m2)
     } catch(e) { console.error(e) }
-    finally { setLoading(false); setSyncing(false) }
+    finally { setLoading(false) }
   }
 
   function applyData(camps, fams, members) {
