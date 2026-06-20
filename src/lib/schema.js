@@ -2,7 +2,7 @@
  * schema.js — مصدر الحقيقة الوحيد لبنية قاعدة البيانات
  *
  * كل عمود هنا تم تأكيده فعلياً من Supabase (فحص مباشر، لا تخمين).
- * تاريخ آخر تأكيد: 2026-06-20 (مع إضافة family_history لنظام الموافقة)
+ * تاريخ آخر تأكيد: 2026-06-20 (أُضيف family_history + أعمدة الموافقة على families/org_members)
  *
  * عند أي تعديل على قاعدة البيانات الحقيقية، يجب تحديث هذا الملف فوراً
  * ليبقى هو المصدر الوحيد المستخدم في كل الكود (PowerSync + pushLocalChanges + الصفحات).
@@ -105,8 +105,8 @@ export const TABLES = {
       'old_data', 'new_data', 'changes', 'created_at', 'updated_at', '_deleted',
       'status', 'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'review_note',
     ],
-    // old_data/new_data/changes هي jsonb حقيقية في Postgres — تُرسل وتُستقبل
-    // كقيم JS عادية (object/array) عبر Supabase REST، بدون أي JSON.parse يدوي.
+    // old_data/new_data/changes هي jsonb حقيقي في Postgres (مثل families.tags)،
+    // تُرسَل وتُستقبَل كـ JS objects عادية عبر REST — لا حاجة لـ JSON.parse يدوي.
     requiredOnInsert: ['org_id', 'action'],
   },
 }
