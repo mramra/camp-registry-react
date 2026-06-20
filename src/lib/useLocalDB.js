@@ -10,6 +10,7 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { useSyncStatus }   from '../context/PowerSyncContext'
 import { supabase, ORG_ID } from './supabase'
+import { TABLES, cleanForTable } from './schema'
 
 const SUPABASE_TABLES = {
   families:          () => supabase.from('families').select('*').eq('org_id',ORG_ID),
@@ -32,44 +33,20 @@ function parseRow(row) {
   }
 }
 
-// أعمدة كل جدول في SQLite — لمنع "no such column" عند الإدراج
-const TABLE_COLUMNS = {
-  families: ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
-    'head_marital','head_chronic_diseases','head_disabilities','head_injuries',
-    'head_female_status','head_orphan_status','head_orphan_cause','phone1','phone2',
-    'tent','original_address','address_details','notes','status','economic_level',
-    'version','created_by','updated_by','category_tags','registration_date','created_at','updated_at'],
-  family_members: ['id','family_id','name','national_id','relation','dob','gender',
-    'health','chronic_diseases','disabilities','injuries','orphan_status','notes',
-    'created_at','updated_at'],
-  camps: ['id','org_id','name','camp_type','parent_camp_id','manager_id','latitude',
-    'longitude','address','capacity','status','notes','created_at','updated_at'],
-  org_members: ['id','org_id','user_id','full_name','national_id','role','phone','camp_id',
-    'supervisor_id','allowed_pages',
-    'can_add','can_edit','can_delete','can_export','can_import','is_active',
-    'created_at','updated_at'],
-  family_movements: ['id','org_id','family_id','movement_type','from_camp_id',
-    'to_camp_id','reason','moved_by','moved_at','notes','created_at'],
-  dist_rounds: ['id','org_id','name','description','status','start_date','end_date',
-    'created_by','created_at','updated_at'],
-  camp_distributions: ['id','org_id','round_id','camp_id','assigned_to','status',
-    'notes','created_at','updated_at'],
-  camp_dist_families: ['id','distribution_id','family_id','received','received_at',
-    'received_by','notes'],
-  page_permissions: ['id','org_id','scope','scope_value','page_key','allowed',
-    'updated_by','updated_at'],
-}
+// أعمدة كل جدول: مصدرها الوحيد الآن schema.js (TABLES) — لا تكرار هنا
 
 function prepareForSQLite(data, table) {
-  const doc = { ...data }
-  if (Array.isArray(doc.category_tags))
-    doc.category_tags = JSON.stringify(doc.category_tags)
-  // فلترة الحقول التي لا تخص هذا الجدول (تمنع SQL error)
-  const allowed = TABLE_COLUMNS[table]
-  if (allowed) {
-    Object.keys(doc).forEach(k => { if (!allowed.includes(k)) delete doc[k] })
+  let doc = { ...data }
+  // أعمدة مخزّنة كنص JSON في كل من Postgres وSQLite (arrays/objects تُحوَّل لنص)
+  const def = TABLES[table]
+  const textifyKeys = [...(def?.jsonTextColumns || []), ...(def?.arrayColumns || [])]
+  for (const k of textifyKeys) {
+    if (Array.isArray(doc[k]) || (doc[k] && typeof doc[k] === 'object')) {
+      doc[k] = JSON.stringify(doc[k])
+    }
   }
-  return doc
+  // فلترة الحقول التي لا تخص هذا الجدول (تمنع "no such column")
+  return cleanForTable(table, doc)
 }
 
 export function useLocalDB() {
@@ -160,7 +137,7 @@ export function useLocalDB() {
       const db = getPowerSync()
       if (!db) return
 
-      const allowed = TABLE_COLUMNS[table]
+      const allowed = TABLES[table]?.columns
       // إن لم تكن أعمدة الجدول معروفة، رجوع للسلوك القديم الآمن (صفاً صفاً)
       if (!allowed) {
         for (const doc of prepared) {

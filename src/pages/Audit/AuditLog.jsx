@@ -43,7 +43,7 @@ export default function AuditLog() {
 
       await Promise.all(tables.map(async t => {
         try {
-          let q = supabase.from(t).select('id,updated_at,created_at,head_name,name,movement_type')
+          let q = supabase.from(t).select('id,updated_at,created_at,head_name,name,type')
             .order('updated_at', { ascending:false }).limit(20)
           if (['families','family_movements','dist_rounds'].includes(t))
             q = q.eq('org_id', ORG_ID)
@@ -55,7 +55,7 @@ export default function AuditLog() {
                 id:        r.id + t,
                 table:     t,
                 op:        isNew ? 'INSERT' : 'UPDATE',
-                label:     r.head_name || r.name || r.movement_type || r.id?.slice(0,8),
+                label:     r.head_name || r.name || r.type || r.id?.slice(0,8),
                 time:      r.updated_at || r.created_at,
               })
             })

@@ -316,7 +316,7 @@ function DistTab({camps,onlineData,showToast}) {
       {rounds.map(r=><div key={r.id} onClick={()=>loadDetails(r)}
         className="bg-surface border border-border rounded-xl p-3 cursor-pointer">
         <div className="flex justify-between">
-          <div><div className="font-bold text-white">{r.name}</div><div className="text-muted text-xs">{r.start_date||''}</div></div>
+          <div><div className="font-bold text-white">{r.name}</div><div className="text-muted text-xs">{r.created_at ? new Date(r.created_at).toLocaleDateString('ar') : ''}</div></div>
           <span className={`text-xs px-2 py-1 rounded-lg ${r.status==='active'?'bg-green/20 text-green':r.status==='completed'?'bg-blue/20 text-blue':'bg-surface2 text-muted'}`}>
             {r.status==='active'?'نشط':r.status==='completed'?'مكتمل':r.status}
           </span>

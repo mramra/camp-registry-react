@@ -360,7 +360,7 @@ function DistTab({ families, camps, showToast }) {
               <div className="flex justify-between items-start">
                 <div>
                   <div className="font-bold text-white">{r.name}</div>
-                  <div className="text-muted text-xs mt-1">{r.start_date||''}</div>
+                  <div className="text-muted text-xs mt-1">{r.created_at ? new Date(r.created_at).toLocaleDateString('ar') : ''}</div>
                 </div>
                 <span className={`text-xs font-bold px-2 py-1 rounded-lg ${r.status==='active'?'bg-green/20 text-green':'bg-surface2 text-muted'}`}>
                   {r.status==='active'?'نشط':'مكتمل'}

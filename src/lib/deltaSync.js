@@ -7,6 +7,7 @@
  *   4. تُطلق event "delta-sync" لإعادة تحميل الصفحة
  */
 import { supabase, ORG_ID } from './supabase'
+import { TABLES as SCHEMA_TABLES, cleanForTable } from './schema'
 
 const LAST_KEY   = 'ds_last_sync'
 const COUNTS_KEY = 'ds_counts'
@@ -20,24 +21,7 @@ const TABLES = [
   { name:'family_movements',orgId:true,  memberTable:false },
 ]
 
-// أعمدة كل جدول في SQLite — لمنع "no such column" عند الإدراج
-const TABLE_COLUMNS = {
-  families: ['id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
-    'head_marital','head_chronic_diseases','head_disabilities','head_injuries',
-    'head_female_status','head_orphan_status','head_orphan_cause','phone1','phone2',
-    'tent','original_address','address_details','notes','status','economic_level',
-    'version','created_by','updated_by','category_tags','registration_date','created_at','updated_at'],
-  family_members: ['id','family_id','name','national_id','relation','dob','gender',
-    'health','chronic_diseases','disabilities','injuries','orphan_status','notes',
-    'created_at','updated_at'],
-  camps: ['id','org_id','name','camp_type','parent_camp_id','manager_id','latitude',
-    'longitude','address','capacity','status','notes','created_at','updated_at'],
-  org_members: ['id','org_id','user_id','full_name','role','phone','camp_id',
-    'can_add','can_edit','can_delete','can_export','can_import','is_active',
-    'created_at','updated_at'],
-  family_movements: ['id','org_id','family_id','movement_type','from_camp_id',
-    'to_camp_id','reason','moved_by','moved_at','notes','created_at'],
-}
+// أعمدة كل جدول: المصدر الوحيد الآن هو schema.js (SCHEMA_TABLES)
 
 async function getDb() {
   try {
@@ -48,12 +32,16 @@ async function getDb() {
 
 async function sqliteUpsert(db, table, docs) {
   if (!db || !docs?.length) return
-  const allowed = TABLE_COLUMNS[table]
+  const allowed = SCHEMA_TABLES[table]?.columns
   if (!allowed) return
 
   const valueSets = docs.map(doc => {
-    const d = { ...doc }
-    if (Array.isArray(d.category_tags)) d.category_tags = JSON.stringify(d.category_tags)
+    const d = cleanForTable(table, doc)
+    const def = SCHEMA_TABLES[table]
+    const textify = [...(def?.jsonTextColumns || []), ...(def?.arrayColumns || [])]
+    for (const k of textify) {
+      if (Array.isArray(d[k]) || (d[k] && typeof d[k] === 'object')) d[k] = JSON.stringify(d[k])
+    }
     return allowed.map(col => {
       let v = d[col]
       if (v !== undefined && v !== null && typeof v === 'object') v = JSON.stringify(v)
