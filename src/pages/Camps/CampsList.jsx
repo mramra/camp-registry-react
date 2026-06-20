@@ -82,6 +82,14 @@ export default function CampsList() {
     const fc = {}
     fams.forEach(f => { fc[f.camp_id] = (fc[f.camp_id]||0)+1 })
     setFamCount(fc)
+    computeMaps(camps, members)
+    setOrgMembers(members)
+    setCamps(camps)
+  }
+
+  // يحسب memberMap (المندوبين) و managerMap (مديري الإيواء) فقط — بدون
+  // الحاجة لبيانات الأسر، قابلة للاستدعاء فوراً بعد أي تعديل محلي على المخيمات
+  function computeMaps(camps, members) {
     const mm = {}
     members.filter(m => m.role==='camp_delegate' && m.camp_id)
       .forEach(m => { mm[m.camp_id] = m.full_name })
@@ -107,8 +115,6 @@ export default function CampsList() {
       }
     })
     setManagerMap(gm)
-    setOrgMembers(members)
-    setCamps(camps)
   }
 
   // فلتر حسب الدور
@@ -187,7 +193,9 @@ export default function CampsList() {
         }),
       }
       await upsert('camps', data)
-      setCamps(prev => editCamp ? prev.map(c=>c.id===data.id?data:c) : [...prev, data])
+      const newCamps = editCamp ? camps.map(c=>c.id===data.id?data:c) : [...camps, data]
+      setCamps(newCamps)
+      computeMaps(newCamps, orgMembers)
       setShowForm(false)
       showToast(editCamp ? '✅ تم التعديل' : '✅ تمت الإضافة')
     } catch(err) { showToast('خطأ: ' + err.message, true) }
