@@ -481,6 +481,8 @@ export default function UsersList() {
       <Modal open={!!editUser} onClose={()=>setEditUser(null)} title={`✏️ ${editUser?.full_name}`} size="lg">
         <form onSubmit={handleEdit} className="flex flex-col gap-4">
           <Field label="الاسم الكامل *" value={form.full_name} onChange={v=>setF('full_name',v)} error={errors.full_name}/>
+          <Field label="🪪 رقم الهوية (لا يمكن تعديله)" value={form.national_id} onChange={()=>{}} disabled
+            title="رقم الهوية هو أساس تسجيل الدخول ولا يمكن تغييره من هنا"/>
           <Field label="رقم الجوال" value={form.phone} onChange={v=>setF('phone',v)} type="tel"/>
           {isOwner && editUser?.role !== 'platform_owner' && (
             <div>
@@ -823,12 +825,12 @@ function UserPreviewPage({ user, camps, users, onClose }) {
   )
 }
 
-function Field({ label, value, onChange, type='text', error, ...props }) {
+function Field({ label, value, onChange, type='text', error, disabled, ...props }) {
   return (
     <div>
       <label className="text-xs font-bold text-muted block mb-1.5">{label}</label>
-      <input type={type} value={value} onChange={e=>onChange(e.target.value)}
-        className={`w-full bg-surface2 border ${error?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)} disabled={disabled}
+        className={`w-full bg-surface2 border ${error?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent ${disabled?'opacity-50 cursor-not-allowed':''}`}
         {...props}/>
       {error && <p className="text-red text-xs mt-1">{error}</p>}
     </div>
