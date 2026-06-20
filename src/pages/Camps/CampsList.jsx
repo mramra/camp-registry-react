@@ -121,6 +121,13 @@ export default function CampsList() {
     }
     setSaving(true)
     try {
+      // عند جعل المخيم فرعياً (له parent_camp_id)، يُعيَّن مدير الإيواء تلقائياً
+      // = نفس مدير المخيم الرئيسي، حتى لو لم يُحدَّد صريحاً في الفورم.
+      const parentCamp = form.parent_camp_id ? camps.find(c => c.id === form.parent_camp_id) : null
+      const resolvedManagerId = form.parent_camp_id
+        ? (parentCamp?.manager_id ?? editCamp?.manager_id ?? null)
+        : (editCamp?.manager_id ?? null)
+
       const data = {
         id:             editCamp?.id || crypto.randomUUID(),
         org_id:         ORG_ID,
@@ -145,9 +152,9 @@ export default function CampsList() {
           return isNaN(v) ? null : v
         })(),
         created_at:     editCamp?.created_at || new Date().toISOString(),
+        manager_id:     resolvedManagerId,
         // احتفظ بالحقول الموجودة مسبقاً
         ...(editCamp ? {
-          manager_id:  editCamp.manager_id  || null,
           facilities:  editCamp.facilities  || 0,
           portal_open: editCamp.portal_open || false,
         } : {
