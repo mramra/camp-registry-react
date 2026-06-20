@@ -27,8 +27,9 @@ const NAV_GROUPS = [
     icon: '🏕️',
     label: 'المخيمات والمستخدمون',
     items: [
-      { icon: '🏕️', label: 'المخيمات',      path: '/camps',  pageKey: 'camps' },
-      { icon: '👥', label: 'المستخدمون',    path: '/users',  pageKey: 'users' },
+      { icon: '🏕️', label: 'المخيمات',      path: '/camps',              pageKey: 'camps' },
+      { icon: '👥', label: 'المستخدمون',    path: '/users',              pageKey: 'users' },
+      { icon: '🔐', label: 'الصلاحيات',      path: '/permissions-admin',  pageKey: 'page_permissions' },
     ],
   },
   {
@@ -59,7 +60,6 @@ const NAV_GROUPS = [
     icon: '⚙️',
     label: 'الإدارة والنظام',
     items: [
-      { icon: '🔐', label: 'الصلاحيات',      path: '/permissions-admin',   pageKey: 'page_permissions' },
       { icon: '📝', label: 'سجل التغييرات',  path: '/audit',               pageKey: 'audit' },
       { icon: '🔔', label: 'التنبيهات',       path: '/alerts',              pageKey: 'alerts' },
       { icon: '🛠️', label: 'إدارة البيانات',  path: '/data',                pageKey: 'data' },
