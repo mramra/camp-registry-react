@@ -134,14 +134,18 @@ export default function CampsList() {
     setSaving(true)
     try {
       // الأولوية: (1) اختيار يدوي صريح من الفورم (محصور بـ platform_owner فقط)
-      // (2) وراثة من المخيم الرئيسي لو فرع (3) القيمة القديمة المحفوظة
+      // (2) مدير الإيواء (super_admin) الذي يُنشئ مخيماً رئيسياً جديداً يصبح مديره تلقائياً
+      // (3) وراثة من المخيم الرئيسي لو فرع (4) القيمة القديمة المحفوظة
       const canSetManager = isOwner
       const parentCamp = form.parent_camp_id ? camps.find(c => c.id === form.parent_camp_id) : null
+      const isNewMainCampBySuperAdmin = !editCamp && !form.parent_camp_id && isSuperAdmin && !isOwner
       const resolvedManagerId = (canSetManager && form.manager_id)
         ? form.manager_id
-        : form.parent_camp_id
-          ? (parentCamp?.manager_id ?? editCamp?.manager_id ?? null)
-          : (editCamp?.manager_id ?? null)
+        : isNewMainCampBySuperAdmin
+          ? profile?.id
+          : form.parent_camp_id
+            ? (parentCamp?.manager_id ?? editCamp?.manager_id ?? null)
+            : (editCamp?.manager_id ?? null)
 
       const data = {
         id:             editCamp?.id || crypto.randomUUID(),
