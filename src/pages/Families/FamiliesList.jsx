@@ -586,6 +586,16 @@ export default function FamiliesList() {
                       <div className="font-bold text-white text-[13px] leading-snug">{f.head_name||'—'}</div>
                       {f.head_id && <div className="text-muted text-[10px]" dir="ltr">{f.head_id}</div>}
                       <div className="flex gap-1 mt-0.5 flex-wrap">
+                        {f.review_status === 'pending' && (
+                          <span style={{background:'rgba(234,179,8,0.15)',color:'#eab308',padding:'1px 6px',borderRadius:'4px',fontSize:'10px',fontWeight:'bold'}}>
+                            🔍 قيد المراجعة
+                          </span>
+                        )}
+                        {f.review_status === 'rejected' && (
+                          <span style={{background:'rgba(239,68,68,0.15)',color:'#ef4444',padding:'1px 6px',borderRadius:'4px',fontSize:'10px',fontWeight:'bold'}}>
+                            ❌ مرفوض
+                          </span>
+                        )}
                         {incomplete && (
                           <span style={{background:'rgba(239,68,68,0.15)',color:'#ef4444',padding:'1px 6px',borderRadius:'4px',fontSize:'10px',fontWeight:'bold'}}>
                             ⚠️ {famIssues.length} نقص
