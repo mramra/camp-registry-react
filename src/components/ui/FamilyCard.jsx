@@ -13,7 +13,19 @@ export default function FamilyCard({ family, members = [], onClick, onEdit, onDe
       {/* رأس البطاقة */}
       <div className="flex justify-between items-start mb-2">
         <div className="flex-1">
-          <h3 className="font-black text-white text-sm leading-tight">{family.head_name}</h3>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <h3 className="font-black text-white text-sm leading-tight">{family.head_name}</h3>
+            {family.review_status === 'pending' && (
+              <span className="bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold px-1.5 py-0.5 rounded-lg">
+                🔍 قيد المراجعة
+              </span>
+            )}
+            {family.review_status === 'rejected' && (
+              <span className="bg-red/15 border border-red/30 text-red text-[10px] font-bold px-1.5 py-0.5 rounded-lg">
+                ❌ مرفوض
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-0.5">
             {family.tent && (
               <span className="text-accent text-xs font-bold">⛺ {family.tent}</span>
