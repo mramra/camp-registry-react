@@ -24,38 +24,15 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        // PowerSync WASM files — لا نضعها في cache لتجنب مشاكل التحديث
-        navigateFallbackDenylist: [/\.wasm$/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: { cacheName: 'gf-cache', expiration: { maxEntries: 10, maxAgeSeconds: 31536000 } }
-          },
-          {
-            // مسارات PowerSync WASM — NetworkOnly دائماً
-            urlPattern: /\.wasm$/,
-            handler: 'NetworkOnly',
           }
         ]
       }
     })
   ],
   base: '/camp-registry-react/',
-
-  // ── PowerSync: تحتاج هذه الإعدادات لتعمل الـ WASM Workers ──
-  optimizeDeps: {
-    exclude: ['@powersync/web'],
-  },
-  worker: {
-    format: 'es',
-  },
-
-  // headers لبيئة التطوير فقط (لتفعيل SharedArrayBuffer محلياً)
-  server: {
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
-  },
 })
