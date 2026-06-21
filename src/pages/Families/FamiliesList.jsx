@@ -160,15 +160,19 @@ export default function FamiliesList() {
 
   // ── 1. تحميل من SQLite فوراً ─────────────────────────
   async function loadLocal() {
+    console.log('🟢 [DEBUG-v2] loadLocal بدأت — هذه النسخة المحدّثة')
     try {
+      console.log('🟢 [DEBUG-v2] جاري استدعاء query للأسر/المخيمات/الأفراد...')
       const [fams, camps, mems] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
+      console.log('🟢 [DEBUG-v2] النتيجة:', {famsCount: fams?.length, campsCount: camps?.length, memsCount: mems?.length})
       applyData(fams, camps, mems)
+      console.log('🟢 [DEBUG-v2] applyData اكتملت بنجاح')
       return fams
-    } catch(e) { console.error(e); return [] }
+    } catch(e) { console.error('🔴 [DEBUG-v2] خطأ في loadLocal:', e); return [] }
     finally { setLoading(false) }
   }
 
