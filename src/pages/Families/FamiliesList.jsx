@@ -160,19 +160,15 @@ export default function FamiliesList() {
 
   // ── 1. تحميل من SQLite فوراً ─────────────────────────
   async function loadLocal() {
-    console.log('🟢 [DEBUG-v2] loadLocal بدأت — هذه النسخة المحدّثة')
     try {
-      console.log('🟢 [DEBUG-v2] جاري استدعاء query للأسر/المخيمات/الأفراد...')
       const [fams, camps, mems] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
-      console.log('🟢 [DEBUG-v2] النتيجة:', {famsCount: fams?.length, campsCount: camps?.length, memsCount: mems?.length})
       applyData(fams, camps, mems)
-      console.log('🟢 [DEBUG-v2] applyData اكتملت بنجاح')
       return fams
-    } catch(e) { console.error('🔴 [DEBUG-v2] خطأ في loadLocal:', e); return [] }
+    } catch(e) { console.error(e); return [] }
     finally { setLoading(false) }
   }
 
@@ -232,14 +228,10 @@ export default function FamiliesList() {
     setCampsList(camps)
     // عزل بيانات المخيم: camp_delegate/assistant/مدير إيواء يرون فقط مخيماتهم المسموحة
     const campIds = getAllowedCampIds(camps)
-    console.log('🟡 [DEBUG-v3] profile:', JSON.stringify(profile))
-    console.log('🟡 [DEBUG-v3] campIds من getAllowedCampIds:', campIds)
     const scopedFams = filterLocal(fams, campIds)
-    console.log('🟡 [DEBUG-v3] scopedFams.length بعد الفلترة:', scopedFams.length, 'من أصل', fams.length)
     const scopedFamIds = new Set(scopedFams.map(f => f.id))
     const scopedMems = campIds === null ? mems : mems.filter(m => scopedFamIds.has(m.family_id))
     setFamilies(scopedFams)
-    console.log('🟡 [DEBUG-v3] setFamilies استُدعيت بـ', scopedFams.length, 'عنصر')
     setAllMembers(scopedMems)
   }
 
