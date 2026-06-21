@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
+import { countPendingRequests } from '../../lib/familyApproval'
 import { useLocalDB } from '../../lib/useLocalDB'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
@@ -29,6 +30,7 @@ function calcAge(dob) {
 
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
+  const [pendingCount, setPendingCount] = useState(0)
   const [recent,     setRecent]     = useState([])
   const [activity,   setActivity]   = useState([])
   const [activityDetail, setActivityDetail] = useState(null) // عنصر النشاط المختار لعرض تفاصيله
@@ -43,6 +45,7 @@ export default function Dashboard() {
   // تحميل فوري عند فتح الصفحة
   useEffect(() => { loadStats() }, [])
   useEffect(() => { loadActivity() }, [])
+  useEffect(() => { if (isOwner) loadPendingCount() }, [isOwner])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {
     const handler = () => { loadStats(); loadActivity() }
@@ -60,6 +63,14 @@ export default function Dashboard() {
       const rows = await fetchRecentFamilyActivity(8, allowedFamilyIds)
       setActivity(rows)
     } catch (e) { console.warn('[loadActivity]', e.message) }
+  }
+
+  async function loadPendingCount() {
+    if (!navigator.onLine) return
+    try {
+      const count = await countPendingRequests()
+      setPendingCount(count)
+    } catch (e) { console.warn('[loadPendingCount]', e.message) }
   }
 
 
@@ -142,6 +153,24 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* طلبات معلّقة بانتظار مراجعة ملك المنصة */}
+      {isOwner && pendingCount > 0 && (
+        <div
+          className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all"
+          onClick={() => navigate('/pending-requests')}>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📋</span>
+            <div>
+              <div className="text-yellow-400 font-bold text-sm">طلبات تحتاج مراجعتك</div>
+              <div className="text-muted text-[11px]">إضافة/تعديل/حذف بانتظار الموافقة</div>
+            </div>
+          </div>
+          <div className="bg-yellow-500/20 text-yellow-400 font-black text-lg rounded-full w-9 h-9 flex items-center justify-center">
+            {pendingCount}
+          </div>
+        </div>
+      )}
 
       {/* توزيع المخيمات + الفئات العمرية */}
       {stats && stats.families > 0 && (
