@@ -34,6 +34,7 @@ const RegistersPage   = lazy(() => import('./pages/Registers/RegistersPage'))
 const CampCompare    = lazy(() => import('./pages/Analysis/CampCompare'))
 const NeedsReport    = lazy(() => import('./pages/Analysis/NeedsReport'))
 const PermissionsAdmin = lazy(() => import('./pages/PermissionsAdmin/PermissionsAdmin'))
+const PendingRequests   = lazy(() => import('./pages/PendingRequests/PendingRequests'))
 const WomenPage        = lazy(() => import('./pages/Women/WomenPage'))
 const ChildrenPage     = lazy(() => import('./pages/Children/ChildrenPage'))
 
@@ -132,6 +133,7 @@ function AppRoutes() {
           <Route path="registers"   element={<ProtectedRoute pageKey={["registers","registries"]} pageLabel="السجلات"><RegistersPage /></ProtectedRoute>} />
           <Route path="registries"  element={<Navigate to="/registers" replace />} />
           <Route path="permissions-admin" element={<ProtectedRoute pageKey="page_permissions" pageLabel="إدارة الصلاحيات"><PermissionsAdmin /></ProtectedRoute>} />
+          <Route path="pending-requests" element={<ProtectedRoute pageKey="pending_requests" pageLabel="الطلبات المعلّقة"><PendingRequests /></ProtectedRoute>} />
           <Route path="women"        element={<ProtectedRoute pageKey="women"        pageLabel="النساء"><WomenPage /></ProtectedRoute>} />
           <Route path="children"     element={<ProtectedRoute pageKey="children"     pageLabel="سجل الأطفال"><ChildrenPage /></ProtectedRoute>} />
           <Route path="health-report" element={<Navigate to="/analysis" replace />} />

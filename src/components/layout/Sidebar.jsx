@@ -30,6 +30,7 @@ const NAV_GROUPS = [
       { icon: '🏕️', label: 'المخيمات',      path: '/camps',              pageKey: 'camps' },
       { icon: '👥', label: 'المستخدمون',    path: '/users',              pageKey: 'users' },
       { icon: '🔐', label: 'الصلاحيات',      path: '/permissions-admin',  pageKey: 'page_permissions' },
+      { icon: '📋', label: 'الطلبات المعلّقة', path: '/pending-requests',  pageKey: 'pending_requests' },
     ],
   },
   {

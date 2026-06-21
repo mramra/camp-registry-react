@@ -33,6 +33,7 @@ export const PAGE_REGISTRY = {
   subscription:     { label: '💳 الاشتراكات',              path: '/subscription' },
   help:             { label: '❓ المساعدة',                path: '/help' },
   page_permissions: { label: '🔐 إدارة الصلاحيات',         path: '/permissions-admin' },
+  pending_requests: { label: '📋 الطلبات المعلّقة',         path: '/pending-requests' },
 }
 
 const LEGACY_PAGE_KEY_MAP = {
@@ -50,7 +51,7 @@ const DEFAULT_ROLE_ACCESS = {
     women:true, children:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true,
-    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false,
+    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:false,
   },
   camp_delegate: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
@@ -58,7 +59,7 @@ const DEFAULT_ROLE_ACCESS = {
     women:true, children:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true,
-    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false,
+    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:false,
   },
   assistant: {
     dashboard:true, families:false, camps:false, movements:false, distributions:false,
@@ -66,7 +67,7 @@ const DEFAULT_ROLE_ACCESS = {
     women:false, children:false,
     analysis:false, needs_report:false, camp_compare:false, export:false,
     users:false, audit:false, alerts:false, data:false, diagnostics:false,
-    devices:false, sms:false, settings:true, subscription:false, help:true, page_permissions:false,
+    devices:false, sms:false, settings:true, subscription:false, help:true, page_permissions:false, pending_requests:false,
   },
 }
 
