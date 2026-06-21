@@ -124,6 +124,20 @@ function DrillDownModal({ title, items, campMap, onClose, onOpenFamily }) {
   )
 }
 
+// قراءة آمنة لأعمدة jsonb المخزَّنة كـ array (قد تأتي كنص JSON أو مصفوفة حقيقية)
+function parseArr(val) {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  if (typeof val === 'string') {
+    const s = val.trim().replace(/^"+|"+$/g, '')
+    if (!s || s === '[]' || s === 'null') return []
+    try { const p = JSON.parse(s); return Array.isArray(p) ? p : [] }
+    catch { return [] }
+  }
+  return []
+}
+function hasHealthData(val) { return parseArr(val).length > 0 }
+
 export default function Analysis() {
   const [tab,        setTab]        = useState('overview')
   const [stats,      setStats]      = useState(null)
@@ -190,6 +204,7 @@ export default function Analysis() {
           campName: campMap[f.camp_id],
           relation: 'رب الأسرة', isHead: true,
           dob: f.head_dob, gender: f.head_gender, health: null,
+          disabilities: f.head_disabilities, injuries: f.head_injuries, chronic: f.head_chronic_diseases,
         })),
         // الأفراد
         ...mems.map(m => ({
@@ -199,6 +214,7 @@ export default function Analysis() {
           campName: campMap[fams.find(f=>f.id===m.family_id)?.camp_id],
           relation: m.relation, isHead: false,
           dob: m.dob, gender: m.gender, health: m.health,
+          disabilities: m.disabilities, injuries: m.injuries, chronic: m.chronic_diseases,
         }))
       ]
 
@@ -219,12 +235,18 @@ export default function Analysis() {
       const noGenderP = allPersons.filter(p => p.personGender!=='ذكر'&&p.personGender!=='male'&&p.personGender!=='أنثى'&&p.personGender!=='female')
       const noGender  = noGenderP.length
 
+      // الحالات الصحية: تُحسَب من الحقول التفصيلية الحقيقية (إعاقات/إصابات/أمراض مزمنة)
+      // لا من عمود health العام البسيط — لتطابق صفحة "الحالات الصحية" بدقة.
+      const disabledPersons = allPersons.filter(p => hasHealthData(p.disabilities))
+      const injuredPersons  = allPersons.filter(p => hasHealthData(p.injuries))
+      const chronicPersons  = allPersons.filter(p => hasHealthData(p.chronic))
+      const healthyCount = allPersons.length - new Set([...disabledPersons, ...injuredPersons, ...chronicPersons].map(p=>p.personId+p.famId)).size
+
       const healthData = {
-        'سليم': mems.filter(m => !m.health || m.health === 'سليم').length,
-        'مريض': mems.filter(m => m.health === 'مريض').length,
-        'معاق': mems.filter(m => m.health === 'معاق').length,
-        'مزمن': mems.filter(m => m.health === 'مزمن').length,
-        'مصاب': mems.filter(m => m.health === 'مصاب').length,
+        'سليم': Math.max(healthyCount, 0),
+        'معاق': disabledPersons.length,
+        'مصاب': injuredPersons.length,
+        'مزمن': chronicPersons.length,
       }
 
       const women = allPersons.filter(p => p.personGender === 'أنثى' || p.personGender === 'female')
@@ -264,11 +286,11 @@ export default function Analysis() {
         noGenderPersons:noGenderP,
         childPersons:   childPersons,
         childFamIds:  [...new Set(children.map(p=>p.famId))],
-        healthFamIds: Object.fromEntries(
-          ['مريض','معاق','مزمن','مصاب'].map(h => [
-            h, [...new Set(mems.filter(m=>m.health===h).map(m=>m.family_id))]
-          ])
-        ),
+        healthFamIds: {
+          'معاق': [...new Set(disabledPersons.map(p=>p.famId))],
+          'مصاب': [...new Set(injuredPersons.map(p=>p.famId))],
+          'مزمن': [...new Set(chronicPersons.map(p=>p.famId))],
+        },
       })
     } catch(err) { showToast('خطأ في التحميل: ' + err.message, true) }
     finally { setLoading(false) }
