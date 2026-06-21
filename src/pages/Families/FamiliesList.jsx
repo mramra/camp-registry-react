@@ -232,10 +232,14 @@ export default function FamiliesList() {
     setCampsList(camps)
     // عزل بيانات المخيم: camp_delegate/assistant/مدير إيواء يرون فقط مخيماتهم المسموحة
     const campIds = getAllowedCampIds(camps)
+    console.log('🟡 [DEBUG-v3] profile:', JSON.stringify(profile))
+    console.log('🟡 [DEBUG-v3] campIds من getAllowedCampIds:', campIds)
     const scopedFams = filterLocal(fams, campIds)
+    console.log('🟡 [DEBUG-v3] scopedFams.length بعد الفلترة:', scopedFams.length, 'من أصل', fams.length)
     const scopedFamIds = new Set(scopedFams.map(f => f.id))
     const scopedMems = campIds === null ? mems : mems.filter(m => scopedFamIds.has(m.family_id))
     setFamilies(scopedFams)
+    console.log('🟡 [DEBUG-v3] setFamilies استُدعيت بـ', scopedFams.length, 'عنصر')
     setAllMembers(scopedMems)
   }
 
