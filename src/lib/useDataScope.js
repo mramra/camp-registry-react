@@ -8,7 +8,7 @@ import { ORG_ID } from './supabase'
  * مالك المنصة → كل شيء
  */
 export function useDataScope() {
-  const { effectiveProfile, isOwner, isSuperAdmin, isCampDelegate, isAssistant } = useAuth()
+  const { effectiveProfile, isOwner, isSuperAdmin } = useAuth()
 
   // معرّفات المخيمات المسموح بها (null = كل شيء)
   function getAllowedCampIds(allCamps) {
@@ -16,9 +16,11 @@ export function useDataScope() {
     if (isOwner) return null // كل شيء
 
     const campId = effectiveProfile.camp_id
+    const role = effectiveProfile.role
 
-    if (isSuperAdmin && !isCampDelegate) {
-      // مدير إيواء — يرى مخيماته (حيث manager_id = هو)
+    // مدير إيواء (super_admin) — يرى مخيماته (حيث manager_id = هو) + فروعها،
+    // بصرف النظر عن camp_id الخاص به (عادة فاضي لمدير الإيواء).
+    if (isSuperAdmin && role === 'super_admin') {
       const managed = allCamps.filter(c => c.manager_id === effectiveProfile.id)
       if (!managed.length) return null // لم يُعيَّن بعد → يرى الكل
       const ids = new Set(managed.map(c => c.id))
