@@ -133,9 +133,9 @@ export default function CampsList() {
     }
     setSaving(true)
     try {
-      // الأولوية: (1) اختيار يدوي صريح من الفورم (محصور بـ platform_owner/super_admin فقط)
+      // الأولوية: (1) اختيار يدوي صريح من الفورم (محصور بـ platform_owner فقط)
       // (2) وراثة من المخيم الرئيسي لو فرع (3) القيمة القديمة المحفوظة
-      const canSetManager = isOwner || isSuperAdmin
+      const canSetManager = isOwner
       const parentCamp = form.parent_camp_id ? camps.find(c => c.id === form.parent_camp_id) : null
       const resolvedManagerId = (canSetManager && form.manager_id)
         ? form.manager_id
@@ -319,7 +319,7 @@ export default function CampsList() {
               </select>
             </div>
           )}
-          {(isOwner || isSuperAdmin) && (
+          {isOwner && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">🔴 مدير الإيواء</label>
               <select value={form.manager_id} onChange={e=>setForm(f=>({...f,manager_id:e.target.value}))}

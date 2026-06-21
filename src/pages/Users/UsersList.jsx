@@ -401,15 +401,13 @@ export default function UsersList() {
               <select value={form.camp_id} onChange={e=>setF('camp_id',e.target.value)}
                 className={`w-full bg-surface2 border ${errors.camp_id?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}>
                 <option value="">— اختر المخيم —</option>
-                {camps.map(c=>{
-                  const hasDelegate = users.some(u => u.role==='camp_delegate' && u.camp_id===c.id)
-                  return <option key={c.id} value={c.id}>{c.name}{hasDelegate ? ' ⚠️ له مندوب بالفعل' : ''}</option>
-                })}
+                {camps
+                  .filter(c => c.camp_type !== 'sub') // الفروع مخفية: مندوبها تلقائي من المخيم الرئيسي
+                  .filter(c => !users.some(u => u.role==='camp_delegate' && u.camp_id===c.id)) // مخيم له مندوب بالفعل لا يظهر
+                  .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                }
               </select>
               {errors.camp_id && <p className="text-red text-xs mt-1">{errors.camp_id}</p>}
-              {form.role === 'camp_delegate' && form.camp_id && users.some(u => u.role==='camp_delegate' && u.camp_id===form.camp_id) && (
-                <p className="text-amber-400 text-[11px] mt-1.5">⚠️ هذا المخيم له مندوب مُعيّن بالفعل — تأكد من نقل أو استبدال المندوب الحالي.</p>
-              )}
             </div>
           )}
           {/* المساعد: المخيم يُستنتج تلقائياً من المندوب — يُعرض بعد اختياره أدناه */}
@@ -480,10 +478,11 @@ export default function UsersList() {
               <select value={form.camp_id} onChange={e=>setF('camp_id',e.target.value)}
                 className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
                 <option value="">— بدون مخيم —</option>
-                {camps.map(c=>{
-                  const hasDelegate = users.some(u => u.role==='camp_delegate' && u.camp_id===c.id && u.id!==editUser?.id)
-                  return <option key={c.id} value={c.id}>{c.name}{hasDelegate ? ' ⚠️ له مندوب بالفعل' : ''}</option>
-                })}
+                {camps
+                  .filter(c => c.camp_type !== 'sub') // الفروع مخفية: مندوبها تلقائي من المخيم الرئيسي
+                  .filter(c => c.id === editUser?.camp_id || !users.some(u => u.role==='camp_delegate' && u.camp_id===c.id && u.id!==editUser?.id))
+                  .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                }
               </select>
             </div>
           )}
