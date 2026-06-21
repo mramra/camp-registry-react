@@ -24,6 +24,7 @@ const EMPTY_FORM = {
   full_name:'', national_id:'', phone:'', role:'camp_delegate', camp_id:'',
   supervisor_id:'',
   can_add:true, can_edit:true, can_delete:false, can_export:false, can_import:false, allowed_pages:{},
+  bypass_approval:false,
 }
 
 export default function UsersList() {
@@ -110,7 +111,17 @@ export default function UsersList() {
         can_add: form.can_add, can_edit: form.can_edit,
         can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages), created_by: profile?.id,
+        bypass_approval: form.bypass_approval,
       })
+      // حل احتياطي: لو Edge Function تجاهلت bypass_approval (دالة خلفية قديمة لا تعرفها بعد)،
+      // نضبطها مباشرة بتحديث صريح بعد الإنشاء — فقط لو فعّلها المستخدم صراحة.
+      if (form.bypass_approval) {
+        try {
+          await supabase.from('org_members')
+            .update({ bypass_approval: true })
+            .eq('national_id', form.national_id.trim()).eq('org_id', ORG_ID)
+        } catch (e2) { console.warn('[bypass_approval fallback]', e2.message) }
+      }
       showToast('✅ تم الإنشاء\nكلمة المرور: ' + pass)
       setShowAdd(false); setForm(EMPTY_FORM); await loadData()
     } catch(err) { showToast('خطأ: ' + err.message, true) }
@@ -138,6 +149,7 @@ export default function UsersList() {
         can_export:   form.can_export,
         can_import:   form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages),
+        bypass_approval: form.bypass_approval,
       }
       if (isOwner) updates.role = form.role
 
@@ -232,6 +244,7 @@ export default function UsersList() {
       can_add: user.can_add??true, can_edit: user.can_edit??true,
       can_delete: user.can_delete??false, can_export: user.can_export??false,
       can_import: user.can_import??false, allowed_pages: allowedPages,
+      bypass_approval: user.bypass_approval??false,
     })
     setErrors({}); setEditUser(user)
   }
@@ -410,6 +423,16 @@ export default function UsersList() {
               {errors.camp_id && <p className="text-red text-xs mt-1">{errors.camp_id}</p>}
             </div>
           )}
+          {isOwner && form.role !== 'platform_owner' && (
+            <button type="button" onClick={()=>setF('bypass_approval', !form.bypass_approval)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold transition-all
+                ${form.bypass_approval ? 'bg-accent/15 border-accent text-accent' : 'bg-surface2 border-border text-muted'}`}>
+              <span>🔓 صلاحية دائمة (تجاوز موافقة ملك المنصة)</span>
+              <span className={`w-10 h-5 rounded-full relative transition-colors ${form.bypass_approval ? 'bg-accent' : 'bg-border'}`}>
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.bypass_approval ? 'right-0.5' : 'left-0.5'}`}/>
+              </span>
+            </button>
+          )}
           {/* المساعد: المخيم يُستنتج تلقائياً من المندوب — يُعرض بعد اختياره أدناه */}
           {/* تابع لمدير إيواء — للمندوب فقط */}
           {form.role === 'camp_delegate' && isOwner && (
@@ -471,6 +494,16 @@ export default function UsersList() {
                 ))}
               </select>
             </div>
+          )}
+          {isOwner && editUser?.role !== 'platform_owner' && (
+            <button type="button" onClick={()=>setF('bypass_approval', !form.bypass_approval)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold transition-all
+                ${form.bypass_approval ? 'bg-accent/15 border-accent text-accent' : 'bg-surface2 border-border text-muted'}`}>
+              <span>🔓 صلاحية دائمة (تجاوز موافقة ملك المنصة)</span>
+              <span className={`w-10 h-5 rounded-full relative transition-colors ${form.bypass_approval ? 'bg-accent' : 'bg-border'}`}>
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.bypass_approval ? 'right-0.5' : 'left-0.5'}`}/>
+              </span>
+            </button>
           )}
           {form.role !== 'super_admin' && form.role !== 'assistant' && (
             <div>
