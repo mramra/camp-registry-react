@@ -27,10 +27,6 @@ function parseRow(row) {
 export function useLocalDB() {
   // ── قراءة ──────────────────────────────────────────────
   const query = useCallback(async (table, filters = {}, options = {}) => {
-    if (!navigator.onLine) {
-      console.warn(`[useLocalDB] لا يوجد اتصال — تعذرت قراءة ${table}`)
-      return []
-    }
     const { limit, offset, orderBy } = options
     try {
       let q = supabase.from(table).select('*')
