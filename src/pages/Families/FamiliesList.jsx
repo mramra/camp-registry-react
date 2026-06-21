@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { logFamilyActivity } from '../../lib/familyActivityLog'
+import { isExemptFromApproval, recordApprovalRequest } from '../../lib/familyApproval'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
@@ -103,7 +104,7 @@ export default function FamiliesList() {
   const [selected,    setSelected]    = useState(null)
   const [selMembers,  setSelMembers]  = useState([])
 
-  const { canWrite, canEdit, canDelete, profile } = useAuth()
+  const { canWrite, canEdit, canDelete, profile, isOwner } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const { showToast } = useApp()
@@ -226,9 +227,12 @@ export default function FamiliesList() {
     camps.forEach(c => { cm[c.id] = c.name })
     setCampMap(cm)
     setCampsList(camps)
+    // طلبات حذف معلّقة: تختفي من القوائم العادية لمن ليس platform_owner
+    // (يبقى السجل موجوداً فعلياً بقاعدة البيانات حتى موافقة/رفض ملك المنصة)
+    const visibleFams = isOwner ? fams : fams.filter(f => !f.pending_delete)
     // عزل بيانات المخيم: camp_delegate/assistant/مدير إيواء يرون فقط مخيماتهم المسموحة
     const campIds = getAllowedCampIds(camps)
-    const scopedFams = filterLocal(fams, campIds)
+    const scopedFams = filterLocal(visibleFams, campIds)
     const scopedFamIds = new Set(scopedFams.map(f => f.id))
     const scopedMems = campIds === null ? mems : mems.filter(m => scopedFamIds.has(m.family_id))
     setFamilies(scopedFams)
@@ -273,18 +277,23 @@ export default function FamiliesList() {
   async function deleteFamily(id) {
     if (!window.confirm('حذف هذه الأسرة؟')) return
     try {
-      // اجلب بيانات الأسرة قبل حذفها (الاسم وعدد الأفراد) لتسجيلها في سجل النشاط
       const famBeforeDelete  = families.find(f => f.id === id)
       const membersBeforeDel = allMembers.filter(m => m.family_id === id)
       const actorId   = profile?.user_id || profile?.id || null
       const actorName = profile?.full_name || profile?.name || '—'
+      const exempt = isExemptFromApproval(profile)
 
-      await remove('families', id)
-      await Promise.all((await query('family_members', {family_id:id})).map(m => remove('family_members', m.id)))
-      if (navigator.onLine) {
+      if (!navigator.onLine) {
+        showToast('⚠️ لا يوجد اتصال — لم يتم الحذف من السيرفر', true)
+        return
+      }
+
+      if (exempt) {
+        // حذف فعلي ونهائي فوراً (platform_owner أو مستخدم له bypass_approval)
+        await remove('families', id)
+        await Promise.all((await query('family_members', {family_id:id})).map(m => remove('family_members', m.id)))
         await supabase.from('family_members').delete().eq('family_id', id)
         await supabase.from('families').delete().eq('id', id)
-        // سجّل عملية الحذف في سجل النشاط
         logFamilyActivity({
           familyId:     id,
           familyName:   famBeforeDelete?.head_name,
@@ -293,14 +302,26 @@ export default function FamiliesList() {
           actorId,
           actorName,
         })
+        setFamilies(f => f.filter(x => x.id !== id))
+        setAllMembers(m => m.filter(x => x.family_id !== id))
+        setSelected(null)
+        showToast('✅ تم الحذف')
       } else {
-        showToast('⚠️ لا يوجد اتصال — لم يتم الحذف من السيرفر', true)
-        return
+        // طلب حذف: السجل يبقى موجوداً، يُعلَّم فقط (pending_delete)، ينتظر موافقة ملك المنصة
+        // recordApprovalRequest تتولى تحديث pending_delete=true داخلياً
+        await recordApprovalRequest({
+          familyId: id,
+          action: 'delete',
+          oldData: famBeforeDelete,
+          newData: null,
+          changes: null,
+          actorId, actorName,
+          actorRole: profile?.role || null,
+        })
+        setFamilies(f => f.filter(x => x.id !== id))
+        setSelected(null)
+        showToast('✅ تم إرسال طلب الحذف — بانتظار موافقة ملك المنصة')
       }
-      setFamilies(f => f.filter(x => x.id !== id))
-      setAllMembers(m => m.filter(x => x.family_id !== id))
-      setSelected(null)
-      showToast('✅ تم الحذف')
     } catch (err) { showToast('خطأ: ' + err.message, true) }
   }
 
