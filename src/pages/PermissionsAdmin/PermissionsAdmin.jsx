@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import {
   PAGE_REGISTRY, getAllPagePermissions, setPagePermission, clearPagePermission,
-} from '../../lib/pagePermissions'
+} from '../../lib/permissions'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 

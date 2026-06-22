@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
-import { hasPermission, hasPagePermission } from '../lib/permissions'
-import { loadPagePermissions, canAccessPageSync } from '../lib/pagePermissions'
+import { hasPermission, hasPagePermission, loadPagePermissions, canAccessPageSync } from '../lib/permissions'
 
 const AuthContext = createContext(null)
 const PROFILE_KEY = 'camp_profile'
