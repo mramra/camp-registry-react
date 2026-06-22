@@ -51,7 +51,7 @@ const DEFAULT_ROLE_ACCESS = {
     women:true, children:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true,
-    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:false,
+    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:true,
   },
   camp_delegate: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
@@ -59,7 +59,7 @@ const DEFAULT_ROLE_ACCESS = {
     women:true, children:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true,
-    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:false,
+    devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:true,
   },
   assistant: {
     dashboard:true, families:false, camps:false, movements:false, distributions:false,

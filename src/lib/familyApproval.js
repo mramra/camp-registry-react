@@ -48,6 +48,27 @@ export async function recordApprovalRequest({ familyId, action, oldData, newData
 }
 
 /** يجلب كل الطلبات المعلّقة (status='pending') لعرضها في صفحة المراجعة */
+/**
+ * هل هذا المستخدم (profile) مخوَّل لمراجعة طلب صادر عن مستخدم آخر (requesterUser)؟
+ * يطابق منطق دالة _can_review_request في SQL، لاستخدامه في فلترة الواجهة فقط
+ * (الحماية الحقيقية موجودة في RLS، هذا فقط لتجربة استخدام صحيحة).
+ */
+export function canUserReviewRequest(profile, requesterUser) {
+  if (!profile || !requesterUser) return false
+  if (profile.role === 'platform_owner') return true
+  if (!profile.can_review_approvals) return false
+
+  if (profile.role === 'camp_delegate' && requesterUser.role === 'assistant') {
+    return requesterUser.supervisor_id === profile.id
+  }
+  if (profile.role === 'super_admin' && ['assistant', 'camp_delegate'].includes(requesterUser.role)) {
+    // يُفترض أن managedCampIds مُحسَّبة مسبقاً عبر useDataScope ومُمرَّرة هنا لو احتجنا دقة أكبر؛
+    // كحد أدنى آمن، نسمح بالعرض ونترك RLS الحقيقية تفصل وقت الحفظ الفعلي.
+    return true
+  }
+  return false
+}
+
 export async function fetchPendingRequests() {
   try {
     const { data, error } = await supabase
@@ -99,6 +120,7 @@ export async function approveRequest(request, reviewer) {
       status: 'approved',
       reviewed_by: reviewer?.user_id || reviewer?.id || null,
       reviewed_by_name: reviewer?.full_name || '—',
+      reviewed_by_role: reviewer?.role || null,
       reviewed_at: new Date().toISOString(),
     }).eq('id', id)
     return { ok: true }
@@ -136,6 +158,7 @@ export async function rejectRequest(request, reviewer, note) {
       status: 'rejected',
       reviewed_by: reviewer?.user_id || reviewer?.id || null,
       reviewed_by_name: reviewer?.full_name || '—',
+      reviewed_by_role: reviewer?.role || null,
       reviewed_at: new Date().toISOString(),
       review_note: note || null,
     }).eq('id', id)

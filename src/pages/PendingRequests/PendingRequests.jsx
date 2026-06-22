@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
-import { fetchPendingRequests, approveRequest, rejectRequest } from '../../lib/familyApproval'
+import { useLocalDB } from '../../lib/useLocalDB'
+import { fetchPendingRequests, approveRequest, rejectRequest, canUserReviewRequest } from '../../lib/familyApproval'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -11,6 +12,13 @@ const ACTION_LABEL = {
   insert: { icon: '➕', label: 'إضافة أسرة جديدة', color: '#10b981' },
   update: { icon: '✏️', label: 'تعديل بيانات أسرة', color: '#3b82f6' },
   delete: { icon: '🗑️', label: 'طلب حذف أسرة', color: '#ef4444' },
+}
+
+const ROLE_LABEL = {
+  platform_owner: 'ملك المنصة',
+  super_admin: 'مدير الإيواء',
+  camp_delegate: 'المندوب',
+  assistant: 'المساعد',
 }
 
 function FieldDiff({ changes }) {
@@ -34,6 +42,7 @@ function FieldDiff({ changes }) {
 export default function PendingRequests() {
   const { profile, isOwner } = useAuth()
   const { showToast } = useApp()
+  const { query } = useLocalDB()
   const navigate = useNavigate()
   const [requests, setRequests] = useState([])
   const [loading,  setLoading]  = useState(true)
@@ -41,13 +50,24 @@ export default function PendingRequests() {
   const [rejectingId, setRejectingId] = useState(null)
   const [note, setNote] = useState('')
 
-  useEffect(() => { load() }, [])
+  const canReview = isOwner || profile?.can_review_approvals === true
+
+  useEffect(() => { if (canReview) load() }, [canReview])
 
   async function load() {
     setLoading(true)
     try {
-      const rows = await fetchPendingRequests()
-      setRequests(rows)
+      const [rows, members] = await Promise.all([
+        fetchPendingRequests(),
+        query('org_members'),
+      ])
+      const byUserId = Object.fromEntries(members.map(m => [m.user_id, m]))
+      // فلترة: يظهر فقط للمستخدم لو هو platform_owner، أو مخوَّل هرمياً
+      // (الحماية الحقيقية في RLS — هذا فقط لتجربة استخدام نظيفة لا تعرض ما لا يخصه)
+      const visible = isOwner
+        ? rows
+        : rows.filter(r => canUserReviewRequest(profile, byUserId[r.changed_by]))
+      setRequests(visible)
     } catch (e) {
       showToast('خطأ: ' + e.message, true)
     } finally {
@@ -81,18 +101,18 @@ export default function PendingRequests() {
     }
   }
 
-  if (!isOwner) {
+  if (!canReview) {
     return (
       <div className="text-center py-16">
         <div className="text-4xl mb-3">⛔</div>
-        <p className="text-muted">هذه الصفحة مخصّصة لملك المنصة فقط</p>
+        <p className="text-muted">لا تملك صلاحية مراجعة الطلبات</p>
       </div>
     )
   }
 
   return (
     <div>
-      <PageHeader icon="📋" title="الطلبات المعلّقة" subtitle={`${requests.length} طلب بانتظار المراجعة`} />
+      <PageHeader icon="📋" title="الطلبات المعلّقة" subtitle={`${requests.length} طلب بانتظار مراجعتك`} />
 
       {loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
@@ -112,7 +132,8 @@ export default function PendingRequests() {
                       <span className="font-bold text-white text-sm">{meta.label}</span>
                     </div>
                     <div className="text-muted text-xs mt-0.5">
-                      👤 {req.user_name || '—'} • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
+                      👤 {req.user_name || '—'} ({ROLE_LABEL[req.user_role] || req.user_role || '—'})
+                      • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
                     </div>
                   </div>
                   <button onClick={() => navigate(`/families/edit/${req.family_id}`)}

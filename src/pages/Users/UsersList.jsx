@@ -25,6 +25,7 @@ const EMPTY_FORM = {
   supervisor_id:'',
   can_add:true, can_edit:true, can_delete:false, can_export:false, can_import:false, allowed_pages:{},
   bypass_approval:false,
+  can_review_approvals:true,
 }
 
 export default function UsersList() {
@@ -102,6 +103,7 @@ export default function UsersList() {
     setSaving(true)
     try {
       const pass = randomPassword()
+      const reviewVal = form.role !== 'assistant' ? form.can_review_approvals : false
       await callAdminAPI('create_user', {
         email: `${form.national_id.trim()}@c.co`, password: pass,
         full_name: form.full_name.trim(), national_id: form.national_id.trim(),
@@ -112,15 +114,16 @@ export default function UsersList() {
         can_delete: form.can_delete, can_export: form.can_export, can_import: form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages), created_by: profile?.id,
         bypass_approval: form.bypass_approval,
+        can_review_approvals: reviewVal,
       })
-      // حل احتياطي: لو Edge Function تجاهلت bypass_approval (دالة خلفية قديمة لا تعرفها بعد)،
-      // نضبطها مباشرة بتحديث صريح بعد الإنشاء — فقط لو فعّلها المستخدم صراحة.
-      if (form.bypass_approval) {
+      // حل احتياطي: لو Edge Function تجاهلت الحقول الجديدة (دالة خلفية قديمة لا تعرفها بعد)،
+      // نضبطها مباشرة بتحديث صريح بعد الإنشاء — فقط لو فُعِّلت صراحة أو خرجت عن الافتراضي.
+      if (form.bypass_approval || !reviewVal) {
         try {
           await supabase.from('org_members')
-            .update({ bypass_approval: true })
+            .update({ bypass_approval: form.bypass_approval, can_review_approvals: reviewVal })
             .eq('national_id', form.national_id.trim()).eq('org_id', ORG_ID)
-        } catch (e2) { console.warn('[bypass_approval fallback]', e2.message) }
+        } catch (e2) { console.warn('[approval fields fallback]', e2.message) }
       }
       showToast('✅ تم الإنشاء\nكلمة المرور: ' + pass)
       setShowAdd(false); setForm(EMPTY_FORM); await loadData()
@@ -150,6 +153,7 @@ export default function UsersList() {
         can_import:   form.can_import,
         allowed_pages: JSON.stringify(form.allowed_pages),
         bypass_approval: form.bypass_approval,
+        can_review_approvals: form.role !== 'assistant' ? form.can_review_approvals : false,
       }
       if (isOwner) updates.role = form.role
 
@@ -245,6 +249,7 @@ export default function UsersList() {
       can_delete: user.can_delete??false, can_export: user.can_export??false,
       can_import: user.can_import??false, allowed_pages: allowedPages,
       bypass_approval: user.bypass_approval??false,
+      can_review_approvals: user.can_review_approvals??true,
     })
     setErrors({}); setEditUser(user)
   }
@@ -433,8 +438,16 @@ export default function UsersList() {
               </span>
             </button>
           )}
-          {/* المساعد: المخيم يُستنتج تلقائياً من المندوب — يُعرض بعد اختياره أدناه */}
-          {/* تابع لمدير إيواء — للمندوب فقط */}
+          {isOwner && ['super_admin','camp_delegate'].includes(form.role) && (
+            <button type="button" onClick={()=>setF('can_review_approvals', !form.can_review_approvals)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold transition-all
+                ${form.can_review_approvals ? 'bg-accent/15 border-accent text-accent' : 'bg-surface2 border-border text-muted'}`}>
+              <span>📋 يقدر يوافق على طلبات من تحته</span>
+              <span className={`w-10 h-5 rounded-full relative transition-colors ${form.can_review_approvals ? 'bg-accent' : 'bg-border'}`}>
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.can_review_approvals ? 'right-0.5' : 'left-0.5'}`}/>
+              </span>
+            </button>
+          )}
           {form.role === 'camp_delegate' && isOwner && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">👤 تابع لمدير إيواء</label>
@@ -502,6 +515,16 @@ export default function UsersList() {
               <span>🔓 صلاحية دائمة (تجاوز موافقة ملك المنصة)</span>
               <span className={`w-10 h-5 rounded-full relative transition-colors ${form.bypass_approval ? 'bg-accent' : 'bg-border'}`}>
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.bypass_approval ? 'right-0.5' : 'left-0.5'}`}/>
+              </span>
+            </button>
+          )}
+          {isOwner && ['super_admin','camp_delegate'].includes(form.role) && (
+            <button type="button" onClick={()=>setF('can_review_approvals', !form.can_review_approvals)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold transition-all
+                ${form.can_review_approvals ? 'bg-accent/15 border-accent text-accent' : 'bg-surface2 border-border text-muted'}`}>
+              <span>📋 يقدر يوافق على طلبات من تحته</span>
+              <span className={`w-10 h-5 rounded-full relative transition-colors ${form.can_review_approvals ? 'bg-accent' : 'bg-border'}`}>
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${form.can_review_approvals ? 'right-0.5' : 'left-0.5'}`}/>
               </span>
             </button>
           )}
