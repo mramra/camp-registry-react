@@ -1,0 +1,513 @@
+/**
+ * db.js — كل ما يتصل بقاعدة البيانات (Supabase) بملف واحد موحَّد
+ * ════════════════════════════════════════════════════════════
+ * كل قراءة وكتابة في النظام تذهب مباشرة لـ Supabase. لا SQLite، لا
+ * PowerSync، لا تخزين محلي من أي نوع. التطبيق يحتاج اتصالاً بالإنترنت.
+ *
+ * الأقسام:
+ *   1. العميل والاتصال (client, ORG_ID, callAdminAPI)
+ *   2. تعريفات الجداول (مصدر الحقيقة الوحيد لبنية قاعدة البيانات)
+ *   3. عمليات CRUD عامة (useLocalDB) — الاسم بقي كما هو لأن 19+ صفحة
+ *      تستورده بهذا الاسم؛ تغييره يتطلب تعديل كل تلك الصفحات بلا فائدة عملية
+ *   4. نظام موافقة platform_owner على عمليات الأسر
+ *   5. سجل نشاط الأسر (إضافة/تعديل/حذف)
+ */
+import { createClient } from '@supabase/supabase-js'
+import { useCallback } from 'react'
+
+// ════════════════════════════════════════════════════════════
+// 1. العميل والاتصال
+// ════════════════════════════════════════════════════════════
+
+const SUPABASE_URL = 'https://ojclpkenecicujkqhhlu.supabase.co'
+const SUPABASE_ANON_KEY = 'sb_publishable_d6q8hoDDcohuZFHk3jxI7g_IBWWCmNu'
+export const ORG_ID = 'ddc8abe7-518f-40a4-8c3b-ee03bb0f47d5'
+export const PLATFORM_OWNER_ID = '583dce20-a25f-41b3-824e-6568bf4989ae'
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+/** دالة تغليف: تستدعي Edge Function للـ Admin API */
+export async function callAdminAPI(action, payload) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session?.access_token}`,
+    },
+    body: JSON.stringify({ action, ...payload }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+// ════════════════════════════════════════════════════════════
+// 2. تعريفات الجداول — مصدر الحقيقة الوحيد لبنية قاعدة البيانات
+//
+// كل عمود هنا تم تأكيده فعلياً من Supabase (فحص مباشر، لا تخمين).
+// تاريخ آخر تأكيد: 2026-06-20
+//
+// ⚠️ ملاحظة: family_members.disabilities / injuries / chronic_diseases /
+// female_status هي مصفوفات (array) حقيقية في Postgres، تُرسَل وتُستقبَل
+// كمصفوفة JS عادية عبر REST مباشرة — لا حاجة لـ JSON.parse عند الكتابة.
+// ════════════════════════════════════════════════════════════
+
+export const TABLES = {
+  families: {
+    columns: [
+      'id', 'org_id', 'camp_id', 'head_name', 'head_id', 'head_dob', 'head_gender',
+      'phone1', 'phone2', 'notes', 'version', 'created_at', 'updated_at',
+      'head_marital', 'tent', 'original_address', 'address_details',
+      'head_photo_url', 'address', 'tags', 'entry_date', 'exit_date', 'exit_reason',
+      'transferred_to_camp_id', 'client_id', 'created_by', 'updated_by', 'tent2',
+      'category_tags', 'category_details', 'economic_level',
+      'head_orphan_status', 'head_orphan_cause', 'head_disabilities',
+      'head_injuries', 'head_chronic_diseases', 'head_female_status', '_deleted',
+      'review_status', 'pending_delete',
+    ],
+    // أعمدة مخزّنة كـ JSON-string في Postgres (text) — تحتاج JSON.parse عند القراءة
+    jsonTextColumns: ['tags', 'category_tags', 'category_details',
+      'head_disabilities', 'head_injuries', 'head_chronic_diseases', 'head_female_status'],
+    requiredOnInsert: ['org_id', 'head_name'],
+  },
+
+  family_members: {
+    columns: [
+      'id', 'family_id', 'name', 'relation', 'national_id', 'dob', 'gender',
+      'created_at', 'health', 'orphan_status', 'orphan_cause',
+      'disabilities', 'injuries', 'chronic_diseases', 'female_status',
+      'updated_at', '_deleted',
+    ],
+    arrayColumns: ['disabilities', 'injuries', 'chronic_diseases', 'female_status'],
+    requiredOnInsert: ['family_id', 'name'],
+  },
+
+  camps: {
+    columns: [
+      'id', 'org_id', 'name', 'status', 'address', 'latitude', 'longitude',
+      'capacity', 'manager_id', 'created_at', 'facilities', 'portal_open',
+      'parent_camp_id', 'camp_type', 'updated_at', '_deleted',
+    ],
+    requiredOnInsert: ['org_id', 'name'],
+  },
+
+  org_members: {
+    columns: [
+      'id', 'org_id', 'user_id', 'camp_id', 'role', 'full_name', 'phone',
+      'is_active', 'created_at', 'national_id', 'must_change_pass',
+      'can_add', 'can_edit', 'can_delete', 'last_sync', 'can_export', 'can_import',
+      'created_by', 'page_permissions', 'delegate_camps', 'supervisor_id',
+      'allowed_pages', '_deleted', 'updated_at', 'bypass_approval',
+    ],
+    jsonTextColumns: ['allowed_pages'],
+    requiredOnInsert: ['org_id', 'role', 'full_name'],
+  },
+
+  family_movements: {
+    columns: [
+      'id', 'family_id', 'org_id', 'type', 'from_camp', 'to_camp', 'date',
+      'reason', 'notes', 'created_by', 'created_at', 'updated_at', '_deleted',
+    ],
+    requiredOnInsert: ['family_id', 'org_id', 'type'],
+  },
+
+  dist_rounds: {
+    columns: [
+      'id', 'org_id', 'camp_id', 'name', 'type', 'status', 'created_at',
+      'tags', 'seq', 'prev_round_id', 'updated_at', '_deleted',
+    ],
+    requiredOnInsert: ['org_id', 'name'],
+  },
+
+  camp_distributions: {
+    columns: [
+      'id', 'org_id', 'camp_id', 'description', 'quantity', 'type', 'status',
+      'distributed_at', 'created_at', 'round_id', 'updated_at', '_deleted',
+    ],
+    requiredOnInsert: ['org_id', 'camp_id', 'description'],
+  },
+
+  camp_dist_families: {
+    columns: [
+      'id', 'distribution_id', 'family_id', 'received_at', 'notes',
+      'round_id', 'org_id', 'updated_at', '_deleted',
+    ],
+    requiredOnInsert: ['distribution_id', 'family_id'],
+  },
+
+  family_history: {
+    columns: [
+      'id', 'family_id', 'org_id', 'action', 'changed_by', 'user_name', 'user_role',
+      'old_data', 'new_data', 'changes', 'created_at', 'updated_at', '_deleted',
+      'status', 'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'review_note',
+    ],
+    // old_data/new_data/changes هي jsonb حقيقي في Postgres، تُرسَل وتُستقبَل
+    // كـ JS objects عادية عبر REST — لا حاجة لـ JSON.parse يدوي.
+    requiredOnInsert: ['org_id', 'action'],
+  },
+}
+
+/** يُبقي فقط الأعمدة الموجودة فعلياً في الجدول المطلوب */
+export function cleanForTable(table, record) {
+  const def = TABLES[table]
+  if (!def) return record
+  const out = {}
+  for (const key of Object.keys(record)) {
+    if (def.columns.includes(key)) out[key] = record[key]
+  }
+  return out
+}
+
+/** يحوّل أعمدة JSON-text من نص إلى مصفوفة/كائن عند القراءة */
+export function parseJsonColumns(table, record) {
+  const def = TABLES[table]
+  if (!def?.jsonTextColumns) return record
+  const out = { ...record }
+  for (const col of def.jsonTextColumns) {
+    if (typeof out[col] === 'string') {
+      try { out[col] = JSON.parse(out[col]) } catch { /* يبقى كما هو */ }
+    }
+  }
+  return out
+}
+
+/** فحص سريع: هل كل الأعمدة المطلوبة موجودة في السجل؟ */
+export function validateRequired(table, record) {
+  const def = TABLES[table]
+  if (!def) return { valid: true }
+  const missing = def.requiredOnInsert.filter(k => record[k] === undefined || record[k] === null || record[k] === '')
+  return { valid: missing.length === 0, missing }
+}
+
+// ════════════════════════════════════════════════════════════
+// 3. عمليات CRUD عامة
+// ════════════════════════════════════════════════════════════
+
+// الجداول المُقيَّدة بـ org_id (الباقي بلا قيد أو بقيد مختلف يُمرَّر عبر filters)
+const ORG_SCOPED = new Set([
+  'families', 'camps', 'org_members', 'family_movements',
+  'dist_rounds', 'camp_distributions', 'page_permissions',
+])
+
+function parseRow(row) {
+  return row
+}
+
+export function useLocalDB() {
+  // ── قراءة ──────────────────────────────────────────────
+  const query = useCallback(async (table, filters = {}, options = {}) => {
+    const { limit, offset, orderBy } = options
+    try {
+      let q = supabase.from(table).select('*')
+      if (ORG_SCOPED.has(table) && !('org_id' in filters)) q = q.eq('org_id', ORG_ID)
+      Object.keys(filters).forEach(k => { q = q.eq(k, filters[k]) })
+      if (orderBy) {
+        const desc = orderBy.startsWith('-')
+        q = q.order(desc ? orderBy.slice(1) : orderBy, { ascending: !desc })
+      }
+      if (limit)  q = q.limit(Number(limit))
+      if (offset) q = q.range(Number(offset), Number(offset) + Number(limit || 50) - 1)
+
+      const { data, error } = await q
+      if (error) { console.warn(`[db] ${table}:`, error.message); return [] }
+      return (data || []).map(parseRow)
+    } catch (e) {
+      console.warn(`[db] ${table}:`, e.message)
+      return []
+    }
+  }, [])
+
+  // ── عدد السجلات المطابقة للفلتر ──────────────────────────
+  const count = useCallback(async (table, filters = {}) => {
+    if (!navigator.onLine) return 0
+    try {
+      let q = supabase.from(table).select('id', { count: 'exact', head: true })
+      if (ORG_SCOPED.has(table) && !('org_id' in filters)) q = q.eq('org_id', ORG_ID)
+      Object.keys(filters).forEach(k => { q = q.eq(k, filters[k]) })
+      const { count: c, error } = await q
+      if (error) return 0
+      return c || 0
+    } catch { return 0 }
+  }, [])
+
+  // ── كتابة (دفعة) ──────────────────────────────────────────
+  const bulkUpsert = useCallback(async (table, docs) => {
+    if (!docs?.length) return
+    if (!navigator.onLine) {
+      console.warn(`[db] لا يوجد اتصال — تعذر حفظ ${table}`)
+      throw new Error('لا يوجد اتصال بالإنترنت — لا يمكن الحفظ الآن')
+    }
+    const now = new Date().toISOString()
+    const prepared = docs.map(d => cleanForTable(table, {
+      ...d,
+      org_id: d.org_id || (ORG_SCOPED.has(table) ? ORG_ID : d.org_id),
+      updated_at: d.updated_at || now,
+    }))
+    const { error } = await supabase.from(table).upsert(prepared)
+    if (error) {
+      console.warn(`[db] bulkUpsert ${table}:`, error.message)
+      throw error
+    }
+  }, [])
+
+  const upsert = useCallback(async (table, data) => {
+    await bulkUpsert(table, [data])
+    return data
+  }, [bulkUpsert])
+
+  const remove = useCallback(async (table, id) => {
+    if (!navigator.onLine) {
+      throw new Error('لا يوجد اتصال بالإنترنت — لا يمكن الحذف الآن')
+    }
+    const { error } = await supabase.from(table).delete().eq('id', id)
+    if (error) {
+      console.warn(`[db] remove ${table}:`, error.message)
+      throw error
+    }
+  }, [])
+
+  return { ready: navigator.onLine, query, count, upsert, bulkUpsert, remove }
+}
+
+// ════════════════════════════════════════════════════════════
+// 4. نظام موافقة platform_owner على عمليات الأسر
+// ════════════════════════════════════════════════════════════
+
+/** هل هذا المستخدم معفى من نظام الموافقة (تنفيذ فوري بدون مراجعة)؟ */
+export function isExemptFromApproval(profile) {
+  if (!profile) return false
+  return profile.role === 'platform_owner' || profile.bypass_approval === true
+}
+
+/**
+ * يفلتر قائمة أسر، فيستثني الأسر المرفوضة بالكامل (review_status='rejected')
+ * والمعلَّمة لحذف معلَّق (pending_delete=true) — لأي من ليس platform_owner.
+ */
+export function visibleFamilies(fams, isOwner) {
+  if (isOwner) return fams
+  return fams.filter(f => !f.pending_delete && f.review_status !== 'rejected')
+}
+
+/**
+ * هل هذا المستخدم (profile) مخوَّل لمراجعة طلب صادر عن مستخدم آخر (requesterUser)؟
+ * يطابق منطق دالة _can_review_request في SQL، لاستخدامه في فلترة الواجهة فقط
+ * (الحماية الحقيقية موجودة في RLS، هذا فقط لتجربة استخدام صحيحة).
+ */
+export function canUserReviewRequest(profile, requesterUser) {
+  if (!profile || !requesterUser) return false
+  if (profile.role === 'platform_owner') return true
+  if (!profile.can_review_approvals) return false
+
+  if (profile.role === 'camp_delegate' && requesterUser.role === 'assistant') {
+    return requesterUser.supervisor_id === profile.id
+  }
+  if (profile.role === 'super_admin' && ['assistant', 'camp_delegate'].includes(requesterUser.role)) {
+    return true
+  }
+  return false
+}
+
+/** يسجّل طلب مراجعة لعملية على أسرة (insert/update/delete) في family_history */
+export async function recordApprovalRequest({ familyId, action, oldData, newData, changes, actorId, actorName, actorRole }) {
+  try {
+    await supabase.from('family_history').insert({
+      org_id: ORG_ID,
+      family_id: familyId,
+      action,
+      changed_by: actorId || null,
+      user_name: actorName || '—',
+      user_role: actorRole || null,
+      old_data: oldData || null,
+      new_data: newData || null,
+      changes: changes || null,
+      status: 'pending',
+    })
+    if (action === 'delete' && familyId) {
+      await supabase.from('families').update({ pending_delete: true }).eq('id', familyId)
+    }
+  } catch (e) {
+    console.warn('[recordApprovalRequest]', e.message)
+    throw e
+  }
+}
+
+/** يجلب كل طلبات الموافقة المعلّقة (status='pending') */
+export async function fetchPendingRequests() {
+  try {
+    const { data, error } = await supabase
+      .from('family_history')
+      .select('*')
+      .eq('org_id', ORG_ID)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  } catch (e) {
+    console.warn('[fetchPendingRequests]', e.message)
+    return []
+  }
+}
+
+/** يحسب عدد الطلبات المعلّقة فقط (للداشبورد) */
+export async function countPendingRequests() {
+  try {
+    const { count, error } = await supabase
+      .from('family_history')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', ORG_ID)
+      .eq('status', 'pending')
+    if (error) throw error
+    return count || 0
+  } catch (e) {
+    console.warn('[countPendingRequests]', e.message)
+    return 0
+  }
+}
+
+/** يوافق على طلب: يطبّق التغيير الفعلي على families/family_members */
+export async function approveRequest(req, reviewer) {
+  try {
+    const { family_id, action, new_data } = req
+
+    if (action === 'delete') {
+      await supabase.from('family_members').delete().eq('family_id', family_id)
+      await supabase.from('families').delete().eq('id', family_id)
+    } else {
+      await supabase.from('families').update({ review_status: 'approved' }).eq('id', family_id)
+    }
+
+    await supabase.from('family_history').update({
+      status: 'approved',
+      reviewed_by: reviewer?.user_id || reviewer?.id || null,
+      reviewed_by_name: reviewer?.full_name || '—',
+      reviewed_by_role: reviewer?.role || null,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', req.id)
+
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+}
+
+/** يرفض طلباً: يعيد البيانات لحالتها السابقة (rollback) عند التعديل، أو يُعلِّم الإضافة كمرفوضة */
+export async function rejectRequest(req, reviewer, note) {
+  try {
+    const { family_id, action, old_data } = req
+
+    if (action === 'insert') {
+      await supabase.from('families').update({ review_status: 'rejected' }).eq('id', family_id)
+    } else if (action === 'update' && old_data) {
+      const restoreData = { ...old_data }
+      delete restoreData.id
+      await supabase.from('families').update(restoreData).eq('id', family_id)
+    } else if (action === 'delete') {
+      await supabase.from('families').update({ pending_delete: false }).eq('id', family_id)
+    }
+
+    await supabase.from('family_history').update({
+      status: 'rejected',
+      reviewed_by: reviewer?.user_id || reviewer?.id || null,
+      reviewed_by_name: reviewer?.full_name || '—',
+      reviewed_by_role: reviewer?.role || null,
+      reviewed_at: new Date().toISOString(),
+      review_note: note || null,
+    }).eq('id', req.id)
+
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// 5. سجل نشاط الأسر (إضافة / تعديل / حذف)
+// ════════════════════════════════════════════════════════════
+
+// الحقول القابلة للتتبع عند التعديل + تسمياتها بالعربية للعرض
+export const TRACKED_FIELDS = {
+  head_name:        'اسم رب الأسرة',
+  head_id:           'رقم الهوية',
+  head_gender:       'الجنس',
+  head_dob:          'تاريخ الميلاد',
+  head_marital:      'الحالة الاجتماعية',
+  phone1:            'الهاتف 1',
+  phone2:            'الهاتف 2',
+  camp_id:           'المخيم',
+  tent:              'الخيمة',
+  original_address:  'العنوان الأصلي',
+  address_details:   'تفاصيل العنوان',
+  notes:             'ملاحظات',
+  economic_level:    'المستوى الاقتصادي',
+  status:            'الحالة',
+}
+
+/**
+ * يحسب الفرق بين بيانات الأسرة القديمة والجديدة
+ * يُرجع كائناً بالشكل: { field: { old, new } } لكل حقل تغيّر فعلياً فقط
+ */
+export function diffFamilyFields(oldData, newData, valueResolvers = {}) {
+  const changes = {}
+  for (const field of Object.keys(TRACKED_FIELDS)) {
+    const oldRaw = oldData?.[field] ?? null
+    const newRaw = newData?.[field] ?? null
+    const oldStr = oldRaw === null || oldRaw === '' ? null : String(oldRaw)
+    const newStr = newRaw === null || newRaw === '' ? null : String(newRaw)
+    if (oldStr !== newStr) {
+      const resolve = valueResolvers[field]
+      changes[field] = {
+        old: resolve && oldStr ? resolve(oldStr) : oldStr,
+        new: resolve && newStr ? resolve(newStr) : newStr,
+      }
+    }
+  }
+  return changes
+}
+
+/**
+ * يسجّل عملية على أسرة في جدول family_activity_log
+ * لا يرمي استثناء أبداً — التسجيل لا يجب أن يفشل عملية الحفظ/الحذف الأساسية
+ */
+export async function logFamilyActivity({ familyId, familyName, membersCount, action, actorId, actorName, changes }) {
+  try {
+    if (!navigator.onLine) return
+    await supabase.from('family_activity_log').insert({
+      org_id:        ORG_ID,
+      family_id:     familyId || null,
+      family_name:   familyName || '—',
+      members_count: membersCount || 0,
+      action,
+      actor_id:      actorId || null,
+      actor_name:    actorName || '—',
+      changes:       changes && Object.keys(changes).length ? changes : null,
+    })
+  } catch (e) {
+    console.warn('[logFamilyActivity]', e.message)
+  }
+}
+
+/**
+ * يجلب آخر N عملية من سجل النشاط (للوحة التحكم)
+ * allowedFamilyIds: لو محدَّدة، يُستثنى أي نشاط على أسرة خارج هذا النطاق
+ */
+export async function fetchRecentFamilyActivity(limit = 5, allowedFamilyIds = null) {
+  try {
+    const fetchLimit = allowedFamilyIds ? Math.max(limit * 5, 50) : limit
+    const { data, error } = await supabase
+      .from('family_activity_log')
+      .select('*')
+      .eq('org_id', ORG_ID)
+      .order('created_at', { ascending: false })
+      .limit(fetchLimit)
+    if (error) throw error
+    let rows = data || []
+    if (allowedFamilyIds) {
+      const allowedSet = allowedFamilyIds instanceof Set ? allowedFamilyIds : new Set(allowedFamilyIds)
+      rows = rows.filter(r => r.family_id && allowedSet.has(r.family_id))
+    }
+    return rows.slice(0, limit)
+  } catch (e) {
+    console.warn('[fetchRecentFamilyActivity]', e.message)
+    return []
+  }
+}

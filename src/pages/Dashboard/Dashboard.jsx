@@ -3,10 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
-import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
-import { countPendingRequests, visibleFamilies } from '../../lib/familyApproval'
 import { calcAge, isIncomplete } from '../../lib/helpers'
-import { useLocalDB } from '../../lib/useLocalDB'
+import { TRACKED_FIELDS as FIELD_LABELS, countPendingRequests, fetchRecentFamilyActivity, useLocalDB, visibleFamilies } from '../../lib/db'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 export default function Dashboard() {

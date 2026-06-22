@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase, ORG_ID } from '../../lib/supabase'
+import { ORG_ID, supabase } from '../../lib/db'
 
 const STATUS_LABELS = { active:'نشط ✅', ok:'نشط ✅', pending:'معلق ⏳', departed:'مغادر 📤', inactive:'مغادر 📤' }
 const CAT_LABELS = { martyr:'🕊️ أسرة شهيد', captive:'⛓️ أسرة أسير', no_provider:'💔 فاقد معيل', destroyed:'🏗️ بيت مهدم', large:'👨‍👩‍👧‍👦 أسرة كبيرة' }

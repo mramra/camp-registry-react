@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react'
-import { supabase, ORG_ID } from '../../lib/supabase'
+import { ORG_ID, supabase } from '../../lib/db'
 import { formatDate } from '../../lib/utils'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'

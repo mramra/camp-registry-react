@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, ORG_ID } from '../lib/supabase'
+import { ORG_ID, supabase } from '../lib/db'
 import { hasPermission, hasPagePermission, loadPagePermissions, canAccessPageSync } from '../lib/permissions'
 
 const AuthContext = createContext(null)

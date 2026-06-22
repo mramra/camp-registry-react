@@ -1,8 +1,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, ORG_ID, callAdminAPI } from '../../lib/supabase'
-import { useLocalDB } from '../../lib/useLocalDB'
+import { ORG_ID, callAdminAPI, supabase, useLocalDB } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { randomPassword } from '../../lib/utils'

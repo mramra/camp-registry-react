@@ -1,9 +1,8 @@
 
 import { useState, useEffect } from 'react'
-import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
-import { visibleFamilies } from '../../lib/familyApproval'
+import { useLocalDB, visibleFamilies } from '../../lib/db'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'

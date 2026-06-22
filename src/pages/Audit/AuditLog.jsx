@@ -3,7 +3,7 @@
  * يعرض آخر العمليات: إضافة / تعديل / حذف
  */
 import { useState, useEffect } from 'react'
-import { supabase, ORG_ID } from '../../lib/supabase'
+import { ORG_ID, supabase } from '../../lib/db'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'

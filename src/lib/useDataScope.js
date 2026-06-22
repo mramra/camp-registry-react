@@ -1,5 +1,5 @@
 import { useAuth } from '../context/AuthContext'
-import { ORG_ID } from './supabase'
+import { ORG_ID } from './db'
 
 /**
  * hook يُحدد نطاق البيانات المسموح بها حسب دور المستخدم
