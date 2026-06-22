@@ -6,6 +6,7 @@ import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { randomPassword } from '../../lib/utils'
+import { getCreatableRoles } from '../../lib/permissions'
 import PageHeader from '../../components/ui/PageHeader'
 import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
@@ -66,12 +67,6 @@ export default function UsersList() {
   function setF(field, value) {
     setForm(f => ({ ...f, [field]: value }))
     if (errors[field]) setErrors(e => ({ ...e, [field]: null }))
-  }
-
-  function getAllowedRoles() {
-    if (isOwner)      return ['super_admin','camp_delegate','assistant']
-    if (isSuperAdmin) return ['camp_delegate','assistant']
-    return ['assistant']
   }
 
   function validate() {
@@ -404,7 +399,7 @@ export default function UsersList() {
           <div>
             <label className="text-xs font-bold text-muted block mb-1.5">الدور *</label>
             <div className="flex flex-col gap-1.5">
-              {getAllowedRoles().map(r => (
+              {getCreatableRoles(profile).map(r => (
                 <button key={r} type="button" onClick={() => setF('role',r)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold border text-right transition-all
                     ${form.role===r?'bg-accent/15 text-accent border-accent':'bg-surface2 border-border text-muted'}`}>

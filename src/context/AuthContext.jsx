@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, ORG_ID } from '../lib/supabase'
-import { hasPermission, hasPagePermission, getCampFilter } from '../lib/permissions'
+import { hasPermission, hasPagePermission } from '../lib/permissions'
 import { loadPagePermissions, canAccessPageSync } from '../lib/pagePermissions'
 
 const AuthContext = createContext(null)
@@ -136,7 +136,6 @@ export function AuthProvider({ children }) {
   const canDelete = can('delete')
   const canExport = can('export')
   const canImport = can('import')
-  const campFilter = getCampFilter(effectiveProfile)
   // فحص صلاحية صفحة معيّنة بمنطق الأولوية (استثناء مستخدم > دور > افتراضي)
   const canAccessPageNow = (pageKey) => canAccessPageSync(effectiveProfile, pageKey, pagePermRows)
 
@@ -146,7 +145,7 @@ export function AuthProvider({ children }) {
     isPreviewMode: !!previewAs,
     role, isOwner, isSuperAdmin, isCampDelegate, isAssistant,
     canWrite, canEdit, canDelete, canExport, canImport,
-    can, canPage, campFilter,
+    can, canPage,
     pagePermRows, pagePermLoaded, canAccessPageNow,
     refetchPagePermissions: () => loadPagePermissions().then(setPagePermRows),
     signIn, signOut,

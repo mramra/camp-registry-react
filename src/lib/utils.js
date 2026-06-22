@@ -20,15 +20,6 @@ export function formatDateTime(dateStr) {
   } catch { return dateStr }
 }
 
-export function calcAge(dob) {
-  if (!dob) return null
-  const b = new Date(dob), t = new Date()
-  let age = t.getFullYear() - b.getFullYear()
-  if (t.getMonth() < b.getMonth() ||
-     (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) age--
-  return age >= 0 && age < 120 ? age : null
-}
-
 export function truncate(str, len = 30) {
   return str && str.length > len ? str.slice(0, len) + '…' : str
 }

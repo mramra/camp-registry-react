@@ -70,26 +70,6 @@ export function hasPagePermission(profile, pageKey, op = 'view') {
 }
 
 // ── تصفية البيانات بالمخيم حسب الدور ────────────────────────
-export function getCampFilter(profile) {
-  if (!profile) return null
-  const role = profile.role
-
-  if (role === 'platform_owner') return null      // كل شيء
-  if (role === 'super_admin')    return null      // كل مخيمات المنظمة
-  if (role === 'camp_delegate')  return profile.camp_id  // مخيمه فقط
-  if (role === 'assistant') {
-    // المخيمات المصرح بها
-    try {
-      const pages = typeof profile.allowed_pages === 'string'
-        ? JSON.parse(profile.allowed_pages)
-        : (profile.allowed_pages || {})
-      // نرجع camp_id الرئيسي
-      return profile.camp_id || null
-    } catch { return profile.camp_id || null }
-  }
-  return profile.camp_id || null
-}
-
 // ── من يستطيع إنشاء أي دور ──────────────────────────────────
 export function getCreatableRoles(profile) {
   if (!profile) return []
