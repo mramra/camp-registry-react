@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
-import { approveRequest, canUserReviewRequest, fetchPendingRequests, rejectRequest, useLocalDB } from '../../lib/db'
+import {
+  approveRequest, canUserReviewRequest, fetchPendingRequests, fetchDecisionLog,
+  rejectRequest, useLocalDB,
+} from '../../lib/db'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -38,12 +41,45 @@ function FieldDiff({ changes }) {
   )
 }
 
+function RequestHeader({ req, navigate }) {
+  const meta = ACTION_LABEL[req.action] || ACTION_LABEL.update
+  const famName = req.new_data?.head_name || req.old_data?.head_name || req.family_name || '—'
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span style={{ color: meta.color }}>{meta.icon}</span>
+            <span className="font-bold text-white text-sm">{meta.label}</span>
+          </div>
+          <div className="text-muted text-xs mt-0.5">
+            👤 {req.user_name || '—'} ({ROLE_LABEL[req.user_role] || req.user_role || '—'})
+            • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
+          </div>
+        </div>
+        <button onClick={() => navigate(`/families/edit/${req.family_id}`)}
+          className="text-accent text-[11px] font-bold whitespace-nowrap">
+          عرض الأسرة ←
+        </button>
+      </div>
+
+      <div className="bg-surface2 rounded-xl px-3 py-2 mb-2">
+        <span className="text-white font-bold text-sm">{famName}</span>
+      </div>
+
+      {req.action === 'update' && <FieldDiff changes={req.changes} />}
+    </>
+  )
+}
+
 export default function PendingRequests() {
   const { profile, isOwner } = useAuth()
   const { showToast } = useApp()
   const { query } = useLocalDB()
   const navigate = useNavigate()
+  const [tab, setTab] = useState('pending') // 'pending' | 'log'
   const [requests, setRequests] = useState([])
+  const [decisionLog, setDecisionLog] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [busyId,   setBusyId]   = useState(null)
   const [rejectingId, setRejectingId] = useState(null)
@@ -51,22 +87,24 @@ export default function PendingRequests() {
 
   const canReview = isOwner || profile?.can_review_approvals === true
 
-  useEffect(() => { if (canReview) load() }, [canReview])
+  useEffect(() => { if (canReview) load() }, [canReview, tab])
 
   async function load() {
     setLoading(true)
     try {
-      const [rows, members] = await Promise.all([
-        fetchPendingRequests(),
-        query('org_members'),
-      ])
+      const members = await query('org_members')
       const byUserId = Object.fromEntries(members.map(m => [m.user_id, m]))
-      // فلترة: يظهر فقط للمستخدم لو هو platform_owner، أو مخوَّل هرمياً
-      // (الحماية الحقيقية في RLS — هذا فقط لتجربة استخدام نظيفة لا تعرض ما لا يخصه)
-      const visible = isOwner
-        ? rows
-        : rows.filter(r => canUserReviewRequest(profile, byUserId[r.changed_by]))
-      setRequests(visible)
+
+      if (tab === 'pending') {
+        const rows = await fetchPendingRequests()
+        // فلترة: يظهر فقط للمستخدم لو هو platform_owner، أو مخوَّل هرمياً
+        const visible = isOwner ? rows : rows.filter(r => canUserReviewRequest(profile, byUserId[r.changed_by]))
+        setRequests(visible)
+      } else {
+        const rows = await fetchDecisionLog()
+        const visible = isOwner ? rows : rows.filter(r => canUserReviewRequest(profile, byUserId[r.changed_by]))
+        setDecisionLog(visible)
+      }
     } catch (e) {
       showToast('خطأ: ' + e.message, true)
     } finally {
@@ -111,41 +149,32 @@ export default function PendingRequests() {
 
   return (
     <div>
-      <PageHeader icon="📋" title="الطلبات المعلّقة" subtitle={`${requests.length} طلب بانتظار مراجعتك`} />
+      <PageHeader icon="📋" title="الطلبات المعلّقة"
+        subtitle={tab === 'pending' ? `${requests.length} طلب بانتظار مراجعتك` : `${decisionLog.length} قرار سابق`} />
+
+      {/* تبويبان */}
+      <div className="flex gap-2 mb-4 bg-surface2 rounded-xl p-1">
+        <button onClick={() => setTab('pending')}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'pending' ? 'bg-accent text-bg' : 'text-muted'}`}>
+          ⏳ معلّقة
+        </button>
+        <button onClick={() => setTab('log')}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'log' ? 'bg-accent text-bg' : 'text-muted'}`}>
+          📜 سجل القرارات
+        </button>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
-      ) : requests.length === 0 ? (
-        <EmptyState icon="✅" title="لا توجد طلبات معلّقة" subtitle="كل التعديلات والإضافات تمت الموافقة عليها" />
-      ) : (
-        <div className="flex flex-col gap-3">
-          {requests.map(req => {
-            const meta = ACTION_LABEL[req.action] || ACTION_LABEL.update
-            const famName = req.new_data?.head_name || req.old_data?.head_name || req.family_name || '—'
-            return (
+
+      ) : tab === 'pending' ? (
+        requests.length === 0 ? (
+          <EmptyState icon="✅" title="لا توجد طلبات معلّقة" subtitle="كل التعديلات والإضافات تمت الموافقة عليها" />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {requests.map(req => (
               <div key={req.id} className="bg-surface border border-border rounded-2xl p-4">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span style={{ color: meta.color }}>{meta.icon}</span>
-                      <span className="font-bold text-white text-sm">{meta.label}</span>
-                    </div>
-                    <div className="text-muted text-xs mt-0.5">
-                      👤 {req.user_name || '—'} ({ROLE_LABEL[req.user_role] || req.user_role || '—'})
-                      • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
-                    </div>
-                  </div>
-                  <button onClick={() => navigate(`/families/edit/${req.family_id}`)}
-                    className="text-accent text-[11px] font-bold whitespace-nowrap">
-                    عرض الأسرة ←
-                  </button>
-                </div>
-
-                <div className="bg-surface2 rounded-xl px-3 py-2 mb-2">
-                  <span className="text-white font-bold text-sm">{famName}</span>
-                </div>
-
-                {req.action === 'update' && <FieldDiff changes={req.changes} />}
+                <RequestHeader req={req} navigate={navigate} />
 
                 {req.action === 'delete' && req.old_data && (
                   <div className="bg-red/10 border border-red/20 rounded-xl px-3 py-2 text-[11px] text-muted">
@@ -153,7 +182,6 @@ export default function PendingRequests() {
                   </div>
                 )}
 
-                {/* أزرار الإجراء */}
                 {rejectingId === req.id ? (
                   <div className="mt-3 flex flex-col gap-2">
                     <textarea value={note} onChange={e => setNote(e.target.value)}
@@ -184,9 +212,36 @@ export default function PendingRequests() {
                   </div>
                 )}
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        )
+
+      ) : (
+        decisionLog.length === 0 ? (
+          <EmptyState icon="📜" title="لا توجد قرارات سابقة" subtitle="ستظهر هنا كل الطلبات بعد الموافقة أو الرفض عليها" />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {decisionLog.map(req => (
+              <div key={req.id} className="bg-surface border border-border rounded-2xl p-4">
+                <RequestHeader req={req} navigate={navigate} />
+
+                <div className={`rounded-xl px-3 py-2 text-xs font-bold flex items-center justify-between
+                  ${req.status === 'approved' ? 'bg-green/10 text-green' : 'bg-red/10 text-red'}`}>
+                  <span>{req.status === 'approved' ? '✓ تمت الموافقة' : '✕ تم الرفض'}</span>
+                  <span className="text-[10px] opacity-80">
+                    {req.reviewed_by_name || '—'} ({ROLE_LABEL[req.reviewed_by_role] || req.reviewed_by_role || '—'})
+                  </span>
+                </div>
+                {req.review_note && (
+                  <div className="text-muted text-[11px] mt-1.5">📝 {req.review_note}</div>
+                )}
+                <div className="text-muted text-[10px] mt-1">
+                  {req.reviewed_at ? new Date(req.reviewed_at).toLocaleString('ar') : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   )

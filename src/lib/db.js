@@ -348,6 +348,24 @@ export async function fetchPendingRequests() {
   }
 }
 
+/** يجلب سجل القرارات المعالَجة سابقاً (approved/rejected) — لصفحة "سجل القرارات" */
+export async function fetchDecisionLog(limit = 100) {
+  try {
+    const { data, error } = await supabase
+      .from('family_history')
+      .select('*')
+      .eq('org_id', ORG_ID)
+      .in('status', ['approved', 'rejected'])
+      .order('reviewed_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data || []
+  } catch (e) {
+    console.warn('[fetchDecisionLog]', e.message)
+    return []
+  }
+}
+
 /** يحسب عدد الطلبات المعلّقة فقط (للداشبورد) */
 export async function countPendingRequests() {
   try {
