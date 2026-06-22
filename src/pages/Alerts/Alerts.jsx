@@ -4,20 +4,11 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
 import { visibleFamilies } from '../../lib/familyApproval'
+import { isIncomplete } from '../../lib/familyValidation'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
-
-const REQUIRED = ['head_name','head_id','phone1','camp_id']
-function checkIssues(f, mems) {
-  const issues = []
-  REQUIRED.forEach(k => { if (!f[k]?.toString().trim()) issues.push(k) })
-  const m = (f.head_marital||'').trim()
-  if ((m==='متزوج'||m==='متزوجة') && !(mems||[]).some(x=>x.relation==='زوجة'||x.relation==='زوج'))
-    issues.push('زوجة')
-  return issues
-}
 
 const LEVEL_STYLE = {
   red:    { bg:'rgba(239,68,68,0.08)',    border:'rgba(239,68,68,0.4)',    text:'#ef4444' },
@@ -60,7 +51,7 @@ export default function Alerts() {
       const list = []
 
       // ① بيانات ناقصة
-      const incomplete = myFams.filter(f => checkIssues(f, mByFam[f.id]).length > 0)
+      const incomplete = myFams.filter(f => isIncomplete(f, mByFam[f.id]))
       if (incomplete.length) list.push({
         level:'yellow', icon:'⚠️',
         title:`${incomplete.length} أسرة ببيانات ناقصة`,

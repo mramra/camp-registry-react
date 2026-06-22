@@ -6,6 +6,7 @@ import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
+import { calcAge } from '../../lib/dateUtils'
 
 async function getXLSX() {
   if (window.XLSX) return window.XLSX
@@ -58,14 +59,6 @@ const MEM_COLS = [
   { key:'gender',      label:'الجنس',              def:false },
   { key:'health',      label:'الحالة الصحية',      def:false },
 ]
-
-function calcAge(dob) {
-  if (!dob) return null
-  const b = new Date(dob), t = new Date()
-  let a = t.getFullYear() - b.getFullYear()
-  if (t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate())) a--
-  return a>=0&&a<120 ? a : null
-}
 
 export default function DataPage() {
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
