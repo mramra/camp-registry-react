@@ -155,25 +155,28 @@ export default function PermissionsAdmin() {
             </tr>
           </thead>
           <tbody>
-            {pageKeys.map(pageKey => (
-              <tr key={pageKey} className="border-b border-border/50">
-                <td className="text-white text-[11px] font-bold py-2 pr-1 sticky right-0 bg-bg leading-tight" style={{ width: '90px' }}>
-                  {PAGE_REGISTRY[pageKey].label}
-                </td>
-                {ROLES.map(role => {
-                  const cellKey = `${role.key}:${pageKey}`
-                  return (
-                    <td key={role.key} className="py-2 text-center" style={{ width: '45px' }}>
-                      <Cell
-                        value={getValue(role.key, pageKey)}
-                        busy={saving === cellKey}
-                        onSet={(v) => setValue(role.key, pageKey, v)}
-                      />
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
+            {pageKeys.map((pageKey, idx) => {
+              const rowBg = idx % 2 === 0 ? '#0d1117' : '#161b22'
+              return (
+                <tr key={pageKey} className="border-b border-border/50" style={{ background: rowBg }}>
+                  <td className="text-white text-[11px] font-bold py-2 pr-1 sticky right-0 leading-tight" style={{ width: '90px', background: rowBg }}>
+                    {PAGE_REGISTRY[pageKey].label}
+                  </td>
+                  {ROLES.map(role => {
+                    const cellKey = `${role.key}:${pageKey}`
+                    return (
+                      <td key={role.key} className="py-2 text-center" style={{ width: '45px' }}>
+                        <Cell
+                          value={getValue(role.key, pageKey)}
+                          busy={saving === cellKey}
+                          onSet={(v) => setValue(role.key, pageKey, v)}
+                        />
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
