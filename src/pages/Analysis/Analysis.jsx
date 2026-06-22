@@ -7,19 +7,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { visibleFamilies } from '../../lib/familyApproval'
 import { parseArr, hasHealthData } from '../../lib/healthFields'
+import { calcAge } from '../../lib/dateUtils'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
 import { formatDate } from '../../lib/utils'
-
-function calcAge(dob) {
-  if (!dob) return null
-  const b = new Date(dob), t = new Date()
-  let age = t.getFullYear() - b.getFullYear()
-  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) age--
-  return age >= 0 && age < 120 ? age : null
-}
 
 const AGE_GROUPS = [
   { label: 'رضيع 0-2',    min: 0,  max: 2   },

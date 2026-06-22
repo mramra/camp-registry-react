@@ -5,6 +5,8 @@
  */
 import { useState, useMemo } from 'react'
 import XLSX from 'xlsx-js-style'
+import { calcAge } from '../../lib/dateUtils'
+import { styleSheet } from '../../lib/excelStyle'
 
 // ── حقول رباب الأسر (مع الزوجة) ─────────────────────────
 const FAM_COLS = [
@@ -42,38 +44,6 @@ const MEM_COLS = [
   { key:'chronic_diseases', label:'أمراض مزمنة',  def:false },
   { key:'disabilities',     label:'الإعاقات',      def:false },
 ]
-
-function calcAge(dob) {
-  if (!dob) return null
-  const b=new Date(dob),t=new Date()
-  let a=t.getFullYear()-b.getFullYear()
-  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--
-  return a>=0&&a<120?a:null
-}
-
-const NAVY='1E3A5F', GOLD='F59E0B', WHITE='FFFFFF', GRAY='F8FAFC', LGRAY='E2E8F0'
-
-function styleSheet(ws, colCount, showBanner, dataLen) {
-  const off = showBanner ? 3 : 1
-  if (showBanner) {
-    if (!ws['!merges']) ws['!merges']=[]
-    ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:colCount-1}})
-    ws['!merges'].push({s:{r:1,c:0},e:{r:1,c:colCount-1}})
-    if (!ws['!rows']) ws['!rows']=[]
-    ws['!rows'][0]={hpt:34}; ws['!rows'][1]={hpt:22}
-    if(ws['A1']) ws['A1'].s={font:{name:'Cairo',bold:true,sz:16,color:{rgb:GOLD}},fill:{patternType:'solid',fgColor:{rgb:NAVY}},alignment:{horizontal:'center',vertical:'center',readingOrder:2}}
-    if(ws['A2']) ws['A2'].s={font:{name:'Cairo',sz:10,color:{rgb:'CBD5E1'}},fill:{patternType:'solid',fgColor:{rgb:NAVY}},alignment:{horizontal:'center',vertical:'center',readingOrder:2}}
-  }
-  for(let c=0;c<colCount;c++){
-    const cell=`${String.fromCharCode(65+c)}${off}`
-    if(ws[cell]) ws[cell].s={font:{name:'Cairo',bold:true,sz:10,color:{rgb:WHITE}},fill:{patternType:'solid',fgColor:{rgb:NAVY}},alignment:{horizontal:'center',vertical:'center',wrapText:true,readingOrder:2},border:{bottom:{style:'medium',color:{rgb:GOLD}}}}
-  }
-  for(let r=0;r<dataLen;r++) for(let c=0;c<colCount;c++){
-    const cell=`${String.fromCharCode(65+c)}${off+1+r}`
-    if(ws[cell]) ws[cell].s={font:{name:'Cairo',sz:9},fill:{patternType:'solid',fgColor:{rgb:r%2===0?WHITE:GRAY}},alignment:{horizontal:'center',vertical:'center',readingOrder:2},border:{bottom:{style:'thin',color:{rgb:LGRAY}}}}
-  }
-  ws['!cols']=Array(colCount).fill({wch:18})
-}
 
 function ColPicker({ cols, onChange, label }) {
   return (
