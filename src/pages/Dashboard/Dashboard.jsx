@@ -5,29 +5,11 @@ import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
 import { countPendingRequests, visibleFamilies } from '../../lib/familyApproval'
+import { calcAge } from '../../lib/dateUtils'
+import { isIncomplete } from '../../lib/familyValidation'
 import { useLocalDB } from '../../lib/useLocalDB'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
-function checkIssues(f, mems) {
-  const issues = []
-  if (!f.head_name?.trim()) issues.push(1)
-  if (!f.head_id?.trim())   issues.push(1)
-  if (!f.phone1?.trim())    issues.push(1)
-  if (!f.camp_id)           issues.push(1)
-  const marital = (f.head_marital||'').trim()
-  if (marital==='متزوج'||marital==='متزوجة') {
-    if (!(mems||[]).some(m=>m.relation==='زوجة'||m.relation==='زوج')) issues.push(1)
-  }
-  return issues
-}
-function calcAge(dob) {
-  if (!dob) return null
-  const b=new Date(dob),t=new Date()
-  let a=t.getFullYear()-b.getFullYear()
-  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--
-  return a>=0&&a<120?a:null
-}
-
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
   const [pendingCount, setPendingCount] = useState(0)
@@ -95,7 +77,7 @@ export default function Dashboard() {
   function applyStats(fams, camps, members) {
     const mByFam = {}
     members.forEach(m => { if(!mByFam[m.family_id]) mByFam[m.family_id]=[]; mByFam[m.family_id].push(m) })
-    const incomplete = fams.filter(f => checkIssues(f, mByFam[f.id]).length > 0).length
+    const incomplete = fams.filter(f => isIncomplete(f, mByFam[f.id])).length
     // فئات عمرية
     const allPersons = [
       ...fams.map(f=>({dob:f.head_dob})),

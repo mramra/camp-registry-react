@@ -4,6 +4,7 @@ import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
 import { visibleFamilies } from '../../lib/familyApproval'
 import { parseArr } from '../../lib/healthFields'
+import { calcAge } from '../../lib/dateUtils'
 import { useDataScope }   from '../../lib/useDataScope'
 import PageHeader         from '../../components/ui/PageHeader'
 import Card               from '../../components/ui/Card'
@@ -11,17 +12,6 @@ import Spinner            from '../../components/ui/Spinner'
 import EmptyState         from '../../components/ui/EmptyState'
 
 // حساب العمر من تاريخ الميلاد
-function calcAge(dob) {
-  if (!dob) return null
-  const d = new Date(dob)
-  if (isNaN(d)) return null
-  const today = new Date()
-  let age = today.getFullYear() - d.getFullYear()
-  const m = today.getMonth() - d.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
-  return age < 0 ? 0 : age
-}
-
 function StatBox({ value, label, color = 'text-accent' }) {
   return (
     <div className="flex flex-col items-center justify-center bg-surface2 rounded-xl p-3 min-w-[70px]">
