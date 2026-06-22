@@ -8,83 +8,14 @@ import { useApp } from '../../context/AppContext'
 import { logFamilyActivity } from '../../lib/familyActivityLog'
 import { isExemptFromApproval, recordApprovalRequest, visibleFamilies } from '../../lib/familyApproval'
 import { formatDate } from '../../lib/utils'
+import { calcAge } from '../../lib/dateUtils'
+import { checkFamilyIssues, isIncomplete } from '../../lib/familyValidation'
+import { getMembers, getMemberIcon } from '../../lib/familyHelpers'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
 import Modal from '../../components/ui/Modal'
 
 const REQUIRED_FIELDS = ['head_name','head_id','phone1','camp_id']
-
-// حساب النواقص التفصيلية لكل أسرة — مثل التطبيق القديم
-function checkFamilyIssues(f, members) {
-  const issues = []
-  const mems   = members || []
-
-  // ── رب الأسرة ──
-  if (!f.head_name?.trim())
-    issues.push('اسم رب الأسرة ناقص')
-  else if ((f.head_name||'').trim().split(/\s+/).filter(Boolean).length < 4)
-    issues.push('الاسم غير رباعي')
-
-  if (!f.head_id?.trim())
-    issues.push('رقم الهوية ناقص')
-
-  if (!f.phone1?.trim())
-    issues.push('رقم الجوال ناقص')
-
-  if (!f.camp_id)
-    issues.push('المخيم غير محدد')
-
-  if (!f.head_dob)
-    issues.push('تاريخ الميلاد ناقص')
-
-  if (!f.head_marital?.trim())
-    issues.push('الحالة الاجتماعية ناقصة')
-
-  // ── النواقص الذكية — زوجة مفقودة ──
-  const marital = (f.head_marital || '').trim()
-  if (marital === 'متزوج' || marital === 'متزوجة') {
-    const hasSpouse = mems.some(m => m.relation === 'زوجة' || m.relation === 'زوج')
-    if (!hasSpouse) issues.push('بيانات الزوجة ناقصة')
-  }
-
-  // ── الأفراد — نفحص الاسم فقط كشرط إلزامي ──
-  mems.forEach(m => {
-    const name = (m.name || '').trim()
-    if (!name) {
-      issues.push('اسم فرد فارغ')
-      return
-    }
-    if (name.split(/\s+/).filter(Boolean).length < 3)
-      issues.push(`اسم "${name}" قصير جداً`)
-  })
-
-  return issues
-}
-
-function isIncomplete(f, members) {
-  return checkFamilyIssues(f, members).length > 0
-}
-
-function calcAge(dob) {
-  if (!dob) return null
-  const b = new Date(dob), t = new Date()
-  let age = t.getFullYear() - b.getFullYear()
-  if (t.getMonth() < b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) age--
-  return age >= 0 && age < 120 ? age : null
-}
-
-function getMembers(allMems, family) {
-  return allMems.filter(m => {
-    if (m.family_id !== family.id) return false
-    const rel   = (m.relation||'').trim()
-    const mName = (m.name||'').trim().replace(/\s+/g,' ')
-    const hName = (family.head_name||'').trim().replace(/\s+/g,' ')
-    if (['رب الأسرة','رب أسرة','head'].includes(rel)) return false
-    if (family.head_id && m.national_id && m.national_id.trim()===family.head_id.trim()) return false
-    if (mName && hName && mName===hName) return false
-    return true
-  })
-}
 
 const SEL = "bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent"
 
@@ -830,30 +761,6 @@ function DuplicateWarnings({ family, families, allMembers }) {
   )
 }
 
-function getMemberIcon(relation, gender) {
-  const rel = (relation || '').trim()
-  const g   = (gender   || '').trim()
-  const isFemale = g === 'أنثى' || g === 'female'
-  const isMale   = g === 'ذكر'  || g === 'male'
-  if (rel === 'زوجة' || rel === 'زوج')            return '💑'
-  if (rel === 'ابن'  || rel === 'ولد')             return '👦'
-  if (rel === 'ابنة' || rel === 'بنت')             return '👧'
-  if (rel === 'أب'   || rel === 'أم')              return isFemale ? '👩' : '👨'
-  if (rel === 'أخ'   || rel === 'أخت')             return isFemale ? '👩' : '👦'
-  if (rel === 'جد'   || rel === 'جدة')             return isFemale ? '👵' : '👴'
-  if (isFemale) return '👩'
-  if (isMale)   return '👨'
-  return '👤'
-}
-
-function calcMemberAge(dob) {
-  if (!dob) return null
-  const b = new Date(dob), t = new Date()
-  let age = t.getFullYear() - b.getFullYear()
-  if (t.getMonth() < b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) age--
-  return age >= 0 ? age : null
-}
-
 function FamilyMembersView({ members, family }) {
   const HEALTH_ICONS = { مريض:'🤒', معاق:'♿', مزمن:'💊', مصاب:'🩹' }
 
@@ -887,7 +794,7 @@ function FamilyMembersView({ members, family }) {
             <div className="text-muted text-[10px]">
               رب الأسرة
               {family.head_id ? ` · ${family.head_id}` : ''}
-              {family.head_dob ? ` · ${calcMemberAge(family.head_dob)} سنة` : ''}
+              {family.head_dob ? ` · ${calcAge(family.head_dob)} سنة` : ''}
             </div>
           </div>
           <span className="text-[10px] text-accent font-bold">
@@ -896,7 +803,7 @@ function FamilyMembersView({ members, family }) {
         </div>
         {/* باقي الأفراد */}
         {sorted.map(m => {
-          const age  = calcMemberAge(m.dob)
+          const age  = calcAge(m.dob)
           const icon = getMemberIcon(m.relation, m.gender)
           return (
             <div key={m.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-surface2">
