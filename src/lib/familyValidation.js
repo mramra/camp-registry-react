@@ -54,3 +54,32 @@ export function checkFamilyIssues(f, members) {
 export function isIncomplete(f, members) {
   return checkFamilyIssues(f, members).length > 0
 }
+
+/** خوارزمية Luhn — للتحقق من صحة رقم الهوية (يكتشف أرقاماً غير صالحة رياضياً) */
+export function luhnCheck(num) {
+  const n = String(num).replace(/\D/g,'')
+  if (!n) return false
+  let sum = 0
+  for (let i = 0; i < n.length; i++) {
+    let d = parseInt(n[n.length-1-i])
+    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9 }
+    sum += d
+  }
+  return sum % 10 === 0
+}
+
+/** تحقق الاسم الرباعي — يرجع رسالة خطأ أو null لو صحيح */
+export function validateName(name) {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length < 4) return `❌ الاسم يجب أن يكون رباعياً (${words.length}/4 كلمات)`
+  return null
+}
+
+/** تحقق تاريخ الميلاد (طبقة حماية ثانية بعد قيد DateInput، لمنع أي تاريخ مستقبلي تجاوز الواجهة) */
+export function validateDob(dob) {
+  if (!dob) return null
+  const today = new Date()
+  today.setHours(0,0,0,0)
+  if (new Date(dob) > today) return '❌ تاريخ الميلاد لا يمكن أن يكون في المستقبل'
+  return null
+}

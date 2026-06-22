@@ -36,3 +36,16 @@ export function getMemberIcon(relation, gender) {
   if (isMale)   return '👨'
   return '👤'
 }
+
+/** ترتيب أفراد الأسرة: الزوج/الزوجة أولاً، ثم الباقي حسب تاريخ الميلاد */
+export function sortMembers(mems) {
+  return [...mems].sort((a, b) => {
+    const ro = { 'زوجة':0, 'زوج':0 }
+    const ra = ro[a.relation?.trim()] ?? 1
+    const rb = ro[b.relation?.trim()] ?? 1
+    if (ra !== rb) return ra - rb
+    const da = a.dob ? new Date(a.dob).getTime() : Infinity
+    const db = b.dob ? new Date(b.dob).getTime() : Infinity
+    return da - db
+  })
+}

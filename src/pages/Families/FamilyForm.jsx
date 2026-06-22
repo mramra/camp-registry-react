@@ -4,6 +4,9 @@ import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { logFamilyActivity, diffFamilyFields } from '../../lib/familyActivityLog'
 import { isExemptFromApproval, recordApprovalRequest } from '../../lib/familyApproval'
+import { calcAge } from '../../lib/dateUtils'
+import { luhnCheck, validateName, validateDob } from '../../lib/familyValidation'
+import { sortMembers } from '../../lib/familyHelpers'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -55,34 +58,6 @@ const newMember = () => ({
 })
 
 // ══ Luhn check لرقم الهوية ══
-function luhnCheck(num) {
-  const n = String(num).replace(/\D/g,'')
-  if (!n) return false
-  let sum = 0
-  for (let i = 0; i < n.length; i++) {
-    let d = parseInt(n[n.length-1-i])
-    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9 }
-    sum += d
-  }
-  return sum % 10 === 0
-}
-
-// ══ تحقق الاسم الرباعي ══
-function validateName(name) {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  if (words.length < 4) return `❌ الاسم يجب أن يكون رباعياً (${words.length}/4 كلمات)`
-  return null
-}
-
-// ══ تحقق تاريخ الميلاد (لا مستقبل) ══
-function validateDob(dob) {
-  if (!dob) return null
-  const today = new Date()
-  today.setHours(0,0,0,0)
-  if (new Date(dob) > today) return '❌ تاريخ الميلاد لا يمكن أن يكون في المستقبل'
-  return null
-}
-
 // ══ مكوّن حقل النص (خارج الـ component الرئيسي — حل مشكلة الكيبورد) ══
 function FormField({ label, value, onChange, type='text', error, placeholder, required, ...rest }) {
   return (
@@ -201,27 +176,7 @@ function MemberRow({ member, index, onUpdate, onRemove, errors }) {
 // ══════════════════════════════════════
 // المكوّن الرئيسي
 // ══════════════════════════════════════
-function sortMembers(mems) {
-  return [...mems].sort((a, b) => {
-    const ro = { 'زوجة':0, 'زوج':0 }
-    const ra = ro[a.relation?.trim()] ?? 1
-    const rb = ro[b.relation?.trim()] ?? 1
-    if (ra !== rb) return ra - rb
-    const da = a.dob ? new Date(a.dob).getTime() : Infinity
-    const db = b.dob ? new Date(b.dob).getTime() : Infinity
-    return da - db
-  })
-}
-
-
 // ── مدخل التاريخ: يوم / شهر / سنة ─────────────────────
-function calcAgeFromDob(dob) {
-  if (!dob) return null
-  const b = new Date(dob), t = new Date()
-  let a = t.getFullYear() - b.getFullYear()
-  if (t.getMonth() < b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) a--
-  return a >= 0 && a < 120 ? a : null
-}
 
 function DateInput({ value, onChange, maxYear, minYear }) {
   const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
@@ -254,7 +209,7 @@ function DateInput({ value, onChange, maxYear, minYear }) {
   const maxYr       = maxYear || curYear
   const minYr       = minYear || 1900
   const daysInMonth = mo && yr ? new Date(parseInt(yr), parseInt(mo), 0).getDate() : 31
-  const age         = calcAgeFromDob(value)
+  const age         = calcAge(value)
 
   // قيد فعلي يمنع تاريخ ميلاد مستقبلي: لو السنة المختارة هي الحالية،
   // تُحجب الأشهر القادمة؛ ولو الشهر أيضاً الحالي، يُحجب الأيام القادمة.
