@@ -285,7 +285,10 @@ export function isExemptFromApproval(profile) {
  */
 export function visibleFamilies(fams, isOwner) {
   if (isOwner) return fams
-  return fams.filter(f => !f.pending_delete && f.review_status !== 'rejected')
+  // طلب حذف لا يزال معلَّقاً (لا قرار نهائي بعد) → يبقى مخفياً عن صاحبه حتى القرار.
+  // الإضافة المرفوضة (قرار نهائي اتُّخذ) → تظهر الآن، يميّزها review_status='rejected'
+  // (يُعرَض كشارة "❌ مرفوض" بالواجهة) بدل الاختفاء الصامت.
+  return fams.filter(f => !f.pending_delete)
 }
 
 /**
