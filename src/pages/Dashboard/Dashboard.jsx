@@ -68,6 +68,7 @@ export default function Dashboard() {
         query('family_members'),
       ])
       const fams = visibleFamilies(famsRaw, isOwner)
+        .filter(f => !f.review_status || f.review_status === 'approved') // العدّ يشمل فقط المعتمد فعلياً
       const campIds = getAllowedCampIds(camps)
       const filteredFams = filterLocal(fams, campIds)
       const filteredFamIds = new Set(filteredFams.map(f => f.id))

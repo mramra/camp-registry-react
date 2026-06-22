@@ -22,6 +22,7 @@ export default function FamiliesList() {
   const [search,      setSearch]      = useState('')
   const [filterCamp,  setFilterCamp]  = useState('')
   const [filterMiss,  setFilterMiss]  = useState('')
+  const [filterApproval, setFilterApproval] = useState('approved')
   const [filterGender,setFilterGender]= useState('')
   const [ageMin,      setAgeMin]      = useState('')
   const [ageMax,      setAgeMax]      = useState('')
@@ -301,6 +302,9 @@ export default function FamiliesList() {
       incomplete: base.filter(f => isIncomplete(f, memsByFam[f.id])).length,
       dup_id:     base.filter(f => dupFamilyIds.has(f.id)).length,
       dup_phone:  base.filter(f => dupPhoneFamilyIds.has(f.id)).length,
+      approved:   base.filter(f => (f.review_status || 'approved') === 'approved').length,
+      pending:    base.filter(f => f.review_status === 'pending').length,
+      rejected:   base.filter(f => f.review_status === 'rejected').length,
     }
   }, [families, allMembers, filterCamp, dupFamilyIds, dupPhoneFamilyIds])
 
@@ -320,6 +324,9 @@ export default function FamiliesList() {
     let list = [...families]
     if (filterCamp)   list = list.filter(f => f.camp_id === filterCamp)
     if (filterGender) list = list.filter(f => f.head_gender === filterGender)
+    if (filterApproval) {
+      list = list.filter(f => (f.review_status || 'approved') === filterApproval)
+    }
     const memsByFamF = {}
     allMembers.forEach(m => { if (!memsByFamF[m.family_id]) memsByFamF[m.family_id] = []; memsByFamF[m.family_id].push(m) })
     if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f, memsByFamF[f.id]))
@@ -362,9 +369,9 @@ export default function FamiliesList() {
       list.sort((a,b) => (memberCount[b.id]||0) - (memberCount[a.id]||0))
     }
     return list
-  }, [families, allMembers, filterCamp, filterGender, filterMiss, ageMin, ageMax, search, dupFamilyIds, dupPhoneFamilyIds, memberCount])
+  }, [families, allMembers, filterCamp, filterGender, filterMiss, filterApproval, ageMin, ageMax, search, dupFamilyIds, dupPhoneFamilyIds, memberCount])
 
-  const hasFilter = filterCamp || filterMiss || filterGender || ageMin || ageMax || search
+  const hasFilter = filterCamp || filterMiss || filterGender || ageMin || ageMax || search || filterApproval !== 'approved'
 
   function resetFilters() {
     setFilterCamp(''); setFilterMiss(''); setFilterGender('')
@@ -408,6 +415,12 @@ export default function FamiliesList() {
           <option value="incomplete">⚠️ ناقص ({counts.incomplete})</option>
           <option value="dup_id">🔁 هوية مكررة ({counts.dup_id})</option>
           <option value="dup_phone">📞 جوال مكرر ({counts.dup_phone})</option>
+        </select>
+        <select value={filterApproval} onChange={e => setFilterApproval(e.target.value)} className={SEL}>
+          <option value="approved">✅ مكتمل ({counts.approved})</option>
+          <option value="pending">🔍 قيد المراجعة ({counts.pending})</option>
+          <option value="rejected">❌ مرفوض ({counts.rejected})</option>
+          <option value="">الكل ({families.length})</option>
         </select>
         <select value={filterCamp} onChange={e => setFilterCamp(e.target.value)} className={SEL}>
           <option value="">كل المخيمات ({families.length})</option>
