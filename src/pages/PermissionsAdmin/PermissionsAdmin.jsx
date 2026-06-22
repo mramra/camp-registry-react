@@ -14,9 +14,9 @@ import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 
 const ROLES = [
-  { key: 'super_admin',   label: 'مدير الإيواء' },
-  { key: 'camp_delegate', label: 'المندوب' },
-  { key: 'assistant',     label: 'المساعد' },
+  { key: 'super_admin',   label: 'مدير الإيواء', shortLabel: 'إيواء' },
+  { key: 'camp_delegate', label: 'المندوب',      shortLabel: 'مندوب' },
+  { key: 'assistant',     label: 'المساعد',      shortLabel: 'مساعد' },
 ]
 
 const COLORS = {
@@ -145,25 +145,25 @@ export default function PermissionsAdmin() {
       </div>
 
       <div className="overflow-x-auto -mx-4 px-4">
-        <table className="w-full text-right" style={{ minWidth: '420px' }}>
+        <table className="w-full text-right" style={{ minWidth: '225px' }}>
           <thead>
             <tr className="border-b border-border">
-              <th className="text-muted text-[11px] font-bold py-2 pr-1 text-right sticky right-0 bg-bg" style={{ width: '110px' }}>الصفحة</th>
+              <th className="text-muted text-[11px] font-bold py-2 pr-1 text-right sticky right-0 bg-bg" style={{ width: '90px' }}>الصفحة</th>
               {ROLES.map(r => (
-                <th key={r.key} className="text-muted text-[10px] font-bold py-2 text-center">{r.label}</th>
+                <th key={r.key} className="text-muted text-[9px] font-bold py-2 text-center" style={{ width: '45px' }}>{r.shortLabel}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {pageKeys.map(pageKey => (
               <tr key={pageKey} className="border-b border-border/50">
-                <td className="text-white text-[11px] font-bold py-2 pr-1 sticky right-0 bg-bg leading-tight" style={{ width: '110px' }}>
+                <td className="text-white text-[11px] font-bold py-2 pr-1 sticky right-0 bg-bg leading-tight" style={{ width: '90px' }}>
                   {PAGE_REGISTRY[pageKey].label}
                 </td>
                 {ROLES.map(role => {
                   const cellKey = `${role.key}:${pageKey}`
                   return (
-                    <td key={role.key} className="py-2">
+                    <td key={role.key} className="py-2 text-center" style={{ width: '45px' }}>
                       <Cell
                         value={getValue(role.key, pageKey)}
                         busy={saving === cellKey}
