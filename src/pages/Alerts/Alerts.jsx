@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
@@ -38,11 +39,12 @@ export default function Alerts() {
   async function loadAlerts() {
     setLoading(true)
     try {
-      const [fams, camps, members] = await Promise.all([
+      const [famsRaw, camps, members] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
+      const fams = visibleFamilies(famsRaw, isOwner)
 
       const campMap = Object.fromEntries(camps.map(c=>[c.id,c]))
       const mByFam  = {}

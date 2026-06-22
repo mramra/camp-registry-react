@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
+import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
+import { visibleFamilies } from '../../lib/familyApproval'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -156,6 +158,7 @@ export default function Analysis() {
   const [allMembers,  setAllMembers]  = useState([])
 
   const { query, bulkUpsert } = useLocalDB()
+  const { isOwner } = useAuth()
   useEffect(() => { loadStats() }, [filterCamp])
 
   async function loadStats() {
@@ -184,7 +187,7 @@ export default function Analysis() {
       }
 
       const campIds = getAllowedCampIds(camps)
-      const families = filterLocal(famRaw, campIds)
+      const families = filterLocal(visibleFamilies(famRaw, isOwner), campIds)
       const campMap = Object.fromEntries(camps.map(c => [c.id, c.name]))
 
       setAllFamilies(families)

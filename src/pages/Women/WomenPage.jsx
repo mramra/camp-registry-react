@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalDB }     from '../../lib/useLocalDB'
 import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useDataScope }   from '../../lib/useDataScope'
 import PageHeader         from '../../components/ui/PageHeader'
 import Card               from '../../components/ui/Card'
@@ -52,7 +53,7 @@ export default function WomenPage() {
   const [ageTo,   setAgeTo]   = useState('')
 
   const { showToast } = useApp()
-  const { canExport }  = useAuth()
+  const { canExport, isOwner }  = useAuth()
   const { query }      = useLocalDB()
   const { getAllowedCampIds, filterLocal } = useDataScope()
 
@@ -61,11 +62,12 @@ export default function WomenPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const [f, c, m] = await Promise.all([
+      const [fRaw, c, m] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
+      const f = visibleFamilies(fRaw, isOwner)
       const campIds   = getAllowedCampIds(c)
       const scoped    = filterLocal(f, campIds)
       const scopedIds = new Set(scoped.map(x => x.id))

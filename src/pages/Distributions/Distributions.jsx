@@ -3,6 +3,7 @@ import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useDataScope } from '../../lib/useDataScope'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
@@ -111,7 +112,8 @@ export default function Distributions() {
       const campId = batch.camp_id || selected?.camp_id
       const campIds = getAllowedCampIds(campsRaw)
       const allFamsRaw = await query('families')
-      let allFams = allFamsRaw.filter(f =>
+      const ownedFams = visibleFamilies(allFamsRaw, isOwner)
+      let allFams = ownedFams.filter(f =>
         f.org_id === ORG_ID && (!campId || f.camp_id === campId) && f.status === 'active'
       )
       // حماية مضاعفة: حتى لو الدفعة بلا camp_id محدد، لا تتجاوز نطاق صلاحية المستخدم

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { formatDate } from '../../lib/utils'
@@ -28,7 +29,7 @@ export default function Movements() {
   const [form,       setForm]       = useState({ family_id:'', type:'entry', from_camp:'', to_camp:'', date: new Date().toISOString().split('T')[0], reason:'', notes:'' })
   const [saving,     setSaving]     = useState(false)
 
-  const { canWrite } = useAuth()
+  const { canWrite, isOwner } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, remove, bulkUpsert } = useLocalDB()
   const { showToast } = useApp()
@@ -87,7 +88,8 @@ export default function Movements() {
   }
 
   async function loadFamilies() {
-    const fams = await query('families')
+    const famsRaw = await query('families')
+    const fams = visibleFamilies(famsRaw, isOwner)
     const campIds = getAllowedCampIds(camps)
     setFamilies(filterLocal(fams, campIds))
   }

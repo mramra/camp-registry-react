@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase, ORG_ID } from '../../lib/supabase'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Modal from '../../components/ui/Modal'
@@ -52,11 +53,12 @@ export default function CampsList() {
   async function loadData() {
     setLoading(true)
     try {
-      const [lCamps, lFams, lMems] = await Promise.all([
+      const [lCamps, lFamsRaw, lMems] = await Promise.all([
         query('camps'),
         query('families'),
         query('org_members'),
       ])
+      const lFams = visibleFamilies(lFamsRaw, isOwner)
       applyData(lCamps, lFams, lMems)
     } catch(e) { console.error(e) }
     finally { setLoading(false) }

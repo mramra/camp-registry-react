@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { logFamilyActivity } from '../../lib/familyActivityLog'
-import { isExemptFromApproval, recordApprovalRequest } from '../../lib/familyApproval'
+import { isExemptFromApproval, recordApprovalRequest, visibleFamilies } from '../../lib/familyApproval'
 import { formatDate } from '../../lib/utils'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
@@ -227,9 +227,7 @@ export default function FamiliesList() {
     camps.forEach(c => { cm[c.id] = c.name })
     setCampMap(cm)
     setCampsList(camps)
-    // طلبات حذف معلّقة: تختفي من القوائم العادية لمن ليس platform_owner
-    // (يبقى السجل موجوداً فعلياً بقاعدة البيانات حتى موافقة/رفض ملك المنصة)
-    const visibleFams = isOwner ? fams : fams.filter(f => !f.pending_delete)
+    const visibleFams = visibleFamilies(fams, isOwner)
     // عزل بيانات المخيم: camp_delegate/assistant/مدير إيواء يرون فقط مخيماتهم المسموحة
     const campIds = getAllowedCampIds(camps)
     const scopedFams = filterLocal(visibleFams, campIds)

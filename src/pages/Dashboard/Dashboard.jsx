@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
-import { countPendingRequests } from '../../lib/familyApproval'
+import { countPendingRequests, visibleFamilies } from '../../lib/familyApproval'
 import { useLocalDB } from '../../lib/useLocalDB'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
@@ -76,11 +76,12 @@ export default function Dashboard() {
 
   async function loadStats() {
     try {
-      const [fams, camps, members] = await Promise.all([
+      const [famsRaw, camps, members] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
+      const fams = visibleFamilies(famsRaw, isOwner)
       const campIds = getAllowedCampIds(camps)
       const filteredFams = filterLocal(fams, campIds)
       const filteredFamIds = new Set(filteredFams.map(f => f.id))

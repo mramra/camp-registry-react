@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
@@ -18,7 +19,9 @@ export default function SMS() {
   const { query } = useLocalDB()
 
   useEffect(() => {
-    query('families').then(setFamilies)
+    query('families').then(fams => {
+      setFamilies(visibleFamilies(fams, isOwner))
+    })
     query('camps').then(setCamps)
   }, [])
 

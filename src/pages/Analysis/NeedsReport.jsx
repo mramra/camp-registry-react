@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -37,7 +38,7 @@ export default function NeedsReport() {
   const [filterHealth,setFilterHealth]= useState('')
   const [exporting,  setExporting]  = useState(false)
   const { showToast } = useApp()
-  const { canExport } = useAuth()
+  const { canExport, isOwner } = useAuth()
   const { query } = useLocalDB()
   const { getAllowedCampIds, filterLocal } = useDataScope()
 
@@ -46,11 +47,12 @@ export default function NeedsReport() {
   async function loadData() {
     setLoading(true)
     try {
-      const [f,c,m] = await Promise.all([
+      const [fRaw,c,m] = await Promise.all([
         query('families'),
         query('camps'),
         query('family_members'),
       ])
+      const f = visibleFamilies(fRaw, isOwner)
       const campIds = getAllowedCampIds(c)
       const scopedFams = filterLocal(f, campIds)
       const scopedFamIds = new Set(scopedFams.map(x => x.id))

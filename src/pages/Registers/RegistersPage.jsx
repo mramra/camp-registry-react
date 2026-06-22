@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { ORG_ID } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
+import { useAuth } from '../../context/AuthContext'
+import { visibleFamilies } from '../../lib/familyApproval'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
@@ -531,6 +533,7 @@ const TABS = [
 
 export default function RegistersPage() {
   const { showToast } = useApp()
+  const { isOwner } = useAuth()
   const { query } = useLocalDB()
   const { getAllowedCampIds, filterLocal } = useDataScope()
   const [tab,        setTab]        = useState('children')
@@ -548,8 +551,9 @@ export default function RegistersPage() {
         query('family_members'),
         query('camps',{org_id:ORG_ID}),
       ])
+      const famVisible = visibleFamilies(famRaw, isOwner)
       const campIds = getAllowedCampIds(c)
-      const f = filterLocal(famRaw, campIds)
+      const f = filterLocal(famVisible, campIds)
       const famIdSet = new Set(f.map(x => x.id))
       const m = campIds === null ? membersRaw : membersRaw.filter(x => famIdSet.has(x.family_id))
       setFamilies(f); setMembers(m); setCamps(c)

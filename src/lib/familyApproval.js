@@ -17,6 +17,17 @@ export function isExemptFromApproval(profile) {
 }
 
 /**
+ * يفلتر قائمة أسر، فيستثني الأسر المرفوضة بالكامل (review_status='rejected')
+ * والمعلَّمة لحذف معلَّق (pending_delete=true) — لأي من ليس platform_owner.
+ * platform_owner يرى الكل دائماً (يحتاجها للمراجعة التاريخية).
+ * تُستخدم هذه الدالة في كل صفحة تحمّل families مباشرة، بدل تكرار الشرط.
+ */
+export function visibleFamilies(fams, isOwner) {
+  if (isOwner) return fams
+  return fams.filter(f => !f.pending_delete && f.review_status !== 'rejected')
+}
+
+/**
  * يسجّل طلب مراجعة لعملية على أسرة (insert/update/delete) في family_history
  * ويُحدّث review_status/pending_delete على families حسب الحالة.
  * لا يرمي استثناء أبداً — فشل تسجيل المراجعة لا يجب أن يفشل العملية الأساسية.

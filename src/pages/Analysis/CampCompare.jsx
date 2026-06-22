@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useLocalDB } from '../../lib/useLocalDB'
 import { useApp } from '../../context/AppContext'
+import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
+import { visibleFamilies } from '../../lib/familyApproval'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -13,6 +15,7 @@ export default function CampCompare() {
   const [typeFilter, setType] = useState('all')
   const { showToast } = useApp()
   const { query } = useLocalDB()
+  const { isOwner } = useAuth()
   const { getAllowedCampIds, filterLocal } = useDataScope()
 
   useEffect(() => { loadData() }, [])
@@ -27,7 +30,7 @@ export default function CampCompare() {
       ])
       // عزل المخيم: كل شخص يرى فقط البيانات المسموحة لدوره
       const campIds = getAllowedCampIds(camps)
-      const families = filterLocal(famRaw, campIds)
+      const families = filterLocal(visibleFamilies(famRaw, isOwner), campIds)
       const famIdSet = new Set(families.map(f => f.id))
       const members = campIds === null ? membersRaw : membersRaw.filter(m => famIdSet.has(m.family_id))
       const campFams = {}
