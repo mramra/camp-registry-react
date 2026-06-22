@@ -370,21 +370,6 @@ export async function fetchDecisionLog(limit = 100) {
 }
 
 /** يحسب عدد الطلبات المعلّقة فقط (للداشبورد) */
-export async function countPendingRequests() {
-  try {
-    const { count, error } = await supabase
-      .from('family_history')
-      .select('id', { count: 'exact', head: true })
-      .eq('org_id', ORG_ID)
-      .eq('status', 'pending')
-    if (error) throw error
-    return count || 0
-  } catch (e) {
-    console.warn('[countPendingRequests]', e.message)
-    return 0
-  }
-}
-
 /** يوافق على طلب: يطبّق التغيير الفعلي على families/family_members */
 export async function approveRequest(req, reviewer) {
   try {

@@ -330,7 +330,6 @@ export default function FamiliesList() {
     const memsByFamF = {}
     allMembers.forEach(m => { if (!memsByFamF[m.family_id]) memsByFamF[m.family_id] = []; memsByFamF[m.family_id].push(m) })
     if (filterMiss === 'incomplete') list = list.filter(f => isIncomplete(f, memsByFamF[f.id]))
-    if (filterMiss === 'complete')   list = list.filter(f => !isIncomplete(f, memsByFamF[f.id]) && !dupIds.has(f.id) && !dupPhones.has(f.id))
     if (filterMiss === 'dup_id')     list = list.filter(f => dupFamilyIds.has(f.id))
     if (filterMiss === 'dup_phone')  list = list.filter(f => dupPhoneFamilyIds.has(f.id))
     if (ageMin || ageMax) {
