@@ -52,7 +52,7 @@ export function useDataScope() {
   }
 
   /**
-   * فلترة البيانات المحلية (Dexie)
+   * فلترة قائمة بيانات (مصفوفة JS عادية) حسب المخيمات المسموحة
    */
   function filterLocal(items, campIds, campField = 'camp_id') {
     if (campIds === null) return items
