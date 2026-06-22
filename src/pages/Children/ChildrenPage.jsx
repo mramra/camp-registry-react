@@ -3,23 +3,12 @@ import { useLocalDB }   from '../../lib/useLocalDB'
 import { useApp }       from '../../context/AppContext'
 import { useAuth }      from '../../context/AuthContext'
 import { visibleFamilies } from '../../lib/familyApproval'
+import { parseArr } from '../../lib/healthFields'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader       from '../../components/ui/PageHeader'
 import Card             from '../../components/ui/Card'
 import Spinner          from '../../components/ui/Spinner'
 import EmptyState       from '../../components/ui/EmptyState'
-
-function parseArr(val) {
-  if (!val) return []
-  if (Array.isArray(val)) return val
-  if (typeof val === 'string') {
-    const s = val.trim().replace(/^"+|"+$/g, '')
-    if (!s || s === '[]' || s === 'null') return []
-    try { const p = JSON.parse(s); return Array.isArray(p) ? p : [] }
-    catch { return [] }
-  }
-  return []
-}
 
 function calcAge(dob) {
   if (!dob) return null

@@ -247,11 +247,21 @@ function DateInput({ value, onChange, maxYear, minYear }) {
   }
 
   const { yr, mo, dy } = partial.current
-  const curYear     = new Date().getFullYear()
+  const today = new Date()
+  const curYear     = today.getFullYear()
+  const curMonth    = today.getMonth() + 1
+  const curDay      = today.getDate()
   const maxYr       = maxYear || curYear
   const minYr       = minYear || 1900
   const daysInMonth = mo && yr ? new Date(parseInt(yr), parseInt(mo), 0).getDate() : 31
   const age         = calcAgeFromDob(value)
+
+  // قيد فعلي يمنع تاريخ ميلاد مستقبلي: لو السنة المختارة هي الحالية،
+  // تُحجب الأشهر القادمة؛ ولو الشهر أيضاً الحالي، يُحجب الأيام القادمة.
+  const isCurYearSelected  = parseInt(yr) === curYear
+  const maxMonthAllowed    = isCurYearSelected ? curMonth : 12
+  const isCurMonthSelected = isCurYearSelected && parseInt(mo) === curMonth
+  const maxDayAllowed      = isCurMonthSelected ? curDay : daysInMonth
 
   function select(field, val) {
     partial.current = { ...partial.current, [field]: val }
@@ -271,14 +281,14 @@ function DateInput({ value, onChange, maxYear, minYear }) {
         {/* يوم */}
         <select value={dy} onChange={e => select('dy', e.target.value)} className={SEL}>
           <option value="">يوم</option>
-          {Array.from({length: daysInMonth}, (_, i) => i + 1).map(d => (
+          {Array.from({length: Math.min(daysInMonth, maxDayAllowed)}, (_, i) => i + 1).map(d => (
             <option key={d} value={String(d).padStart(2,'0')}>{d}</option>
           ))}
         </select>
         {/* شهر */}
         <select value={mo} onChange={e => select('mo', e.target.value)} className={SEL}>
           <option value="">الشهر</option>
-          {MONTHS.map((m, i) => (
+          {MONTHS.slice(0, maxMonthAllowed).map((m, i) => (
             <option key={i} value={String(i+1).padStart(2,'0')}>{m}</option>
           ))}
         </select>

@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { visibleFamilies } from '../../lib/familyApproval'
+import { parseArr, hasHealthData } from '../../lib/healthFields'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -125,20 +126,6 @@ function DrillDownModal({ title, items, campMap, onClose, onOpenFamily }) {
     </div>
   )
 }
-
-// قراءة آمنة لأعمدة jsonb المخزَّنة كـ array (قد تأتي كنص JSON أو مصفوفة حقيقية)
-function parseArr(val) {
-  if (!val) return []
-  if (Array.isArray(val)) return val
-  if (typeof val === 'string') {
-    const s = val.trim().replace(/^"+|"+$/g, '')
-    if (!s || s === '[]' || s === 'null') return []
-    try { const p = JSON.parse(s); return Array.isArray(p) ? p : [] }
-    catch { return [] }
-  }
-  return []
-}
-function hasHealthData(val) { return parseArr(val).length > 0 }
 
 export default function Analysis() {
   const [tab,        setTab]        = useState('overview')
