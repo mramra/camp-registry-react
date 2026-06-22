@@ -19,26 +19,62 @@ const ROLES = [
   { key: 'assistant',     label: 'المساعد' },
 ]
 
+const COLORS = {
+  true:    { bg: 'rgba(16,185,129,0.15)',  color: '#10b981', border: 'rgba(16,185,129,0.4)',  icon: '✓' },
+  false:   { bg: 'rgba(239,68,68,0.15)',   color: '#ef4444', border: 'rgba(239,68,68,0.4)',   icon: '✕' },
+  default: { bg: 'rgba(107,114,128,0.12)', color: '#9ca3af', border: 'rgba(107,114,128,0.3)', icon: '↺' },
+}
+const OPTIONS = [
+  { key: 'true',    icon: '✓' },
+  { key: 'false',   icon: '✕' },
+  { key: 'default', icon: '↺' },
+]
+
 function Cell({ value, busy, onSet }) {
+  const [open, setOpen] = useState(false)
   const current = value === true ? 'true' : value === false ? 'false' : 'default'
-  const colors = {
-    true:    { bg: 'rgba(16,185,129,0.15)', color: '#10b981', border: 'rgba(16,185,129,0.4)' },
-    false:   { bg: 'rgba(239,68,68,0.15)',  color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
-    default: { bg: 'rgba(107,114,128,0.12)', color: '#9ca3af', border: 'rgba(107,114,128,0.3)' },
-  }
-  const c = colors[current]
+  const c = COLORS[current]
+
   return (
-    <select
-      disabled={busy}
-      value={current}
-      onChange={(e) => onSet(e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}
-      className="w-full rounded-lg text-sm font-bold text-center px-0.5 py-1.5 appearance-none"
-      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, minWidth: '32px' }}
-    >
-      <option value="true">✓</option>
-      <option value="false">✕</option>
-      <option value="default">↺</option>
-    </select>
+    <div className="relative inline-block">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen(o => !o)}
+        className="rounded-lg text-sm font-bold flex items-center justify-center"
+        style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, width: '30px', height: '28px' }}
+      >
+        {c.icon}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className="absolute z-20 mt-1 rounded-lg overflow-hidden shadow-lg flex flex-col"
+            style={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)', left: '50%', transform: 'translateX(-50%)' }}
+          >
+            {OPTIONS.map(opt => {
+              const oc = COLORS[opt.key]
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    onSet(opt.key === 'true' ? true : opt.key === 'false' ? false : null)
+                  }}
+                  className="flex items-center justify-center text-sm font-bold"
+                  style={{ color: oc.color, width: '30px', height: '28px', background: opt.key === current ? oc.bg : 'transparent' }}
+                >
+                  {opt.icon}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
