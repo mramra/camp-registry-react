@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { calcAge, isIncomplete } from '../../lib/helpers'
-import { TRACKED_FIELDS as FIELD_LABELS, countPendingRequests, fetchRecentFamilyActivity, useLocalDB, visibleFamilies } from '../../lib/db'
+import { TRACKED_FIELDS as FIELD_LABELS, canUserReviewRequest, fetchPendingRequests, fetchRecentFamilyActivity, useLocalDB, visibleFamilies } from '../../lib/db'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 export default function Dashboard() {
@@ -24,7 +24,7 @@ export default function Dashboard() {
   // تحميل فوري عند فتح الصفحة
   useEffect(() => { loadStats() }, [])
   useEffect(() => { loadActivity() }, [])
-  useEffect(() => { if (isOwner) loadPendingCount() }, [isOwner])
+  useEffect(() => { if (isOwner || profile?.can_review_approvals) loadPendingCount() }, [isOwner, profile?.can_review_approvals])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {
     const handler = () => { loadStats(); loadActivity() }
@@ -47,8 +47,15 @@ export default function Dashboard() {
   async function loadPendingCount() {
     if (!navigator.onLine) return
     try {
-      const count = await countPendingRequests()
-      setPendingCount(count)
+      if (isOwner) {
+        const rows = await fetchPendingRequests()
+        setPendingCount(rows.length)
+        return
+      }
+      const [rows, members] = await Promise.all([fetchPendingRequests(), query('org_members')])
+      const byUserId = Object.fromEntries(members.map(m => [m.user_id, m]))
+      const visible = rows.filter(r => canUserReviewRequest(profile, byUserId[r.changed_by]))
+      setPendingCount(visible.length)
     } catch (e) { console.warn('[loadPendingCount]', e.message) }
   }
 
@@ -135,7 +142,7 @@ export default function Dashboard() {
       </div>
 
       {/* طلبات معلّقة بانتظار مراجعة ملك المنصة */}
-      {isOwner && pendingCount > 0 && (
+      {(isOwner || profile?.can_review_approvals) && pendingCount > 0 && (
         <div
           className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all"
           onClick={() => navigate('/pending-requests')}>
