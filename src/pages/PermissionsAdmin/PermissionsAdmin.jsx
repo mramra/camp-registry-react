@@ -20,27 +20,25 @@ const ROLES = [
 ]
 
 function Cell({ value, busy, onSet }) {
+  const current = value === true ? 'true' : value === false ? 'false' : 'default'
+  const colors = {
+    true:    { bg: 'rgba(16,185,129,0.15)', color: '#10b981', border: 'rgba(16,185,129,0.4)' },
+    false:   { bg: 'rgba(239,68,68,0.15)',  color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
+    default: { bg: 'rgba(107,114,128,0.12)', color: '#9ca3af', border: 'rgba(107,114,128,0.3)' },
+  }
+  const c = colors[current]
   return (
-    <div className="flex items-center justify-center gap-0.5">
-      <button disabled={busy} onClick={() => onSet(true)}
-        className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-black"
-        style={{
-          background: value === true ? '#10b981' : 'rgba(16,185,129,0.12)',
-          color: value === true ? '#fff' : '#10b981',
-        }}>✓</button>
-      <button disabled={busy} onClick={() => onSet(false)}
-        className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-black"
-        style={{
-          background: value === false ? '#ef4444' : 'rgba(239,68,68,0.12)',
-          color: value === false ? '#fff' : '#ef4444',
-        }}>✕</button>
-      <button disabled={busy} onClick={() => onSet(null)}
-        className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-black"
-        style={{
-          background: value === null ? '#6b7280' : 'rgba(107,114,128,0.12)',
-          color: value === null ? '#fff' : '#9ca3af',
-        }}>↺</button>
-    </div>
+    <select
+      disabled={busy}
+      value={current}
+      onChange={(e) => onSet(e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}
+      className="w-full rounded-lg text-[11px] font-bold text-center px-1 py-1.5 appearance-none"
+      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}` }}
+    >
+      <option value="true">✓ مسموح</option>
+      <option value="false">✕ ممنوع</option>
+      <option value="default">↺ افتراضي</option>
+    </select>
   )
 }
 
@@ -111,7 +109,7 @@ export default function PermissionsAdmin() {
       </div>
 
       <div className="overflow-x-auto -mx-4 px-4">
-        <table className="w-full text-right" style={{ minWidth: '480px' }}>
+        <table className="w-full text-right" style={{ minWidth: '560px' }}>
           <thead>
             <tr className="border-b border-border">
               <th className="text-muted text-[11px] font-bold py-2 pr-1 text-right sticky right-0 bg-bg">الصفحة</th>
