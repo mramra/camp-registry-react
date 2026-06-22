@@ -32,12 +32,12 @@ function Cell({ value, busy, onSet }) {
       disabled={busy}
       value={current}
       onChange={(e) => onSet(e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)}
-      className="w-full rounded-lg text-[11px] font-bold text-center px-1 py-1.5 appearance-none"
-      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}` }}
+      className="w-full rounded-lg text-sm font-bold text-center px-0.5 py-1.5 appearance-none"
+      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, minWidth: '32px' }}
     >
-      <option value="true">✓ مسموح</option>
-      <option value="false">✕ ممنوع</option>
-      <option value="default">↺ افتراضي</option>
+      <option value="true">✓</option>
+      <option value="false">✕</option>
+      <option value="default">↺</option>
     </select>
   )
 }
@@ -109,10 +109,10 @@ export default function PermissionsAdmin() {
       </div>
 
       <div className="overflow-x-auto -mx-4 px-4">
-        <table className="w-full text-right" style={{ minWidth: '560px' }}>
+        <table className="w-full text-right" style={{ minWidth: '420px' }}>
           <thead>
             <tr className="border-b border-border">
-              <th className="text-muted text-[11px] font-bold py-2 pr-1 text-right sticky right-0 bg-bg">الصفحة</th>
+              <th className="text-muted text-[11px] font-bold py-2 pr-1 text-right sticky right-0 bg-bg" style={{ width: '110px' }}>الصفحة</th>
               {ROLES.map(r => (
                 <th key={r.key} className="text-muted text-[10px] font-bold py-2 text-center">{r.label}</th>
               ))}
@@ -121,7 +121,7 @@ export default function PermissionsAdmin() {
           <tbody>
             {pageKeys.map(pageKey => (
               <tr key={pageKey} className="border-b border-border/50">
-                <td className="text-white text-[12px] font-bold py-2 pr-1 sticky right-0 bg-bg whitespace-nowrap">
+                <td className="text-white text-[11px] font-bold py-2 pr-1 sticky right-0 bg-bg leading-tight" style={{ width: '110px' }}>
                   {PAGE_REGISTRY[pageKey].label}
                 </td>
                 {ROLES.map(role => {
