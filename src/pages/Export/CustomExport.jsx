@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from 'react'
 import XLSX from 'xlsx-js-style'
-import { calcAge } from '../../lib/dateUtils'
+import { calcAge } from '../../lib/helpers'
 import { styleSheet } from '../../lib/excelStyle'
 
 // ── حقول رباب الأسر (مع الزوجة) ─────────────────────────

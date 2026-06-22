@@ -6,7 +6,7 @@ import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
-import { calcAge } from '../../lib/dateUtils'
+import { calcAge } from '../../lib/helpers'
 
 async function getXLSX() {
   if (window.XLSX) return window.XLSX

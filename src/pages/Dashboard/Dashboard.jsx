@@ -5,8 +5,7 @@ import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { fetchRecentFamilyActivity, TRACKED_FIELDS as FIELD_LABELS } from '../../lib/familyActivityLog'
 import { countPendingRequests, visibleFamilies } from '../../lib/familyApproval'
-import { calcAge } from '../../lib/dateUtils'
-import { isIncomplete } from '../../lib/familyValidation'
+import { calcAge, isIncomplete } from '../../lib/helpers'
 import { useLocalDB } from '../../lib/useLocalDB'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
