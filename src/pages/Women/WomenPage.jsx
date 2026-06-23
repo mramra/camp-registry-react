@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { parseArr, calcAge } from '../../lib/helpers'
+import { parseArr, calcAge, isAgeInRange } from '../../lib/helpers'
 import { useDataScope }   from '../../lib/useDataScope'
 import PageHeader         from '../../components/ui/PageHeader'
 import Card               from '../../components/ui/Card'
@@ -170,8 +170,8 @@ export default function WomenPage() {
         const f = families.find(x => x.id === w.family_id)
         if (!f || f.camp_id !== campFilter) return false
       }
-      if (ageFrom && (w.age === null || w.age < parseInt(ageFrom))) return false
-      if (ageTo   && (w.age === null || w.age > parseInt(ageTo)))   return false
+      if (ageFrom && !isAgeInRange(w.dob, ageFrom, '')) return false
+      if (ageTo   && !isAgeInRange(w.dob, '', ageTo))   return false
 
       if (statusFilter) {
         const fs = parseArr(w.female_status)

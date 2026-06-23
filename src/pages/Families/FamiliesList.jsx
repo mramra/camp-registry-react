@@ -5,7 +5,7 @@ import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { ORG_ID, isExemptFromApproval, logFamilyActivity, recordApprovalRequest, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
 import { formatDate } from '../../lib/utils'
-import { calcAge, checkFamilyIssues, isIncomplete, getMembers, getMemberIcon } from '../../lib/helpers'
+import { calcAge, checkFamilyIssues, isIncomplete, getMembers, getMemberIcon, isAgeInRange } from '../../lib/helpers'
 import PageHeader from '../../components/ui/PageHeader'
 import EmptyState from '../../components/ui/EmptyState'
 import Modal from '../../components/ui/Modal'
@@ -333,9 +333,7 @@ export default function FamiliesList() {
     if (filterMiss === 'dup_id')     list = list.filter(f => dupFamilyIds.has(f.id))
     if (filterMiss === 'dup_phone')  list = list.filter(f => dupPhoneFamilyIds.has(f.id))
     if (ageMin || ageMax) {
-      const mn = ageMin ? parseInt(ageMin) : 0
-      const mx = ageMax ? parseInt(ageMax) : 999
-      const inRange = age => age !== null && age >= mn && age <= mx
+      const inRange = dob => isAgeInRange(dob, ageMin || '', ageMax || '')
       // خريطة أفراد الأسر لتسريع البحث
       const memsByFam = {}
       allMembers.forEach(m => {
@@ -344,9 +342,9 @@ export default function FamiliesList() {
       })
       list = list.filter(f => {
         // افحص رب الأسرة أولاً
-        if (inRange(calcAge(f.head_dob))) return true
+        if (inRange(f.head_dob)) return true
         // افحص أفراد الأسرة
-        return (memsByFam[f.id]||[]).some(m => inRange(calcAge(m.dob)))
+        return (memsByFam[f.id]||[]).some(m => inRange(m.dob))
       })
     }
     if (search) {

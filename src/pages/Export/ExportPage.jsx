@@ -10,7 +10,7 @@ import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
-import { calcAge } from '../../lib/helpers'
+import { calcAge, isAgeInRange } from '../../lib/helpers'
 import { FAM_COLS, MEM_COLS, buildWifeMap, resolveFamilyColumn, resolveMemberColumn } from '../../lib/exportColumns'
 
 export default function ExportPage() {
@@ -263,10 +263,7 @@ export default function ExportPage() {
         ]
         all.forEach(m => {
           if (hasAgeFilter) {
-            const a = calcAge(m.dob)
-            if (a === null) return
-            if (memAgeMin !== '' && a < parseInt(memAgeMin)) return
-            if (memAgeMax !== '' && a > parseInt(memAgeMax)) return
+            if (!isAgeInRange(m.dob, memAgeMin, memAgeMax)) return
           }
           dataRows.push(selected.map(col => resolveMemberColumn(col.key, m, f)))
         })

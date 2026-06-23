@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from 'react'
 import XLSX from 'xlsx-js-style'
-import { calcAge } from '../../lib/helpers'
+import { calcAge, isAgeInRange } from '../../lib/helpers'
 import { styleSheet } from '../../lib/excelStyle'
 import { FAM_COLS, MEM_COLS, findWife } from '../../lib/exportColumns'
 
@@ -100,10 +100,7 @@ export default function CustomExport({ families, members, camps, orgMembers }) {
       if(filterCamp&&fam.camp_id!==filterCamp) return false
       if(search&&!m.name?.includes(search)&&!fam.head_name?.includes(search)) return false
       if(ageMin!==''||ageMax!==''){
-        const a = calcAge(m.dob)
-        if(a===null) return false
-        if(ageMin!==''&&a<parseInt(ageMin)) return false
-        if(ageMax!==''&&a>parseInt(ageMax)) return false
+        if(!isAgeInRange(m.dob, ageMin, ageMax)) return false
       }
       return true
     }).map(m=>{

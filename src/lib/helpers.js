@@ -29,6 +29,27 @@ export function calcAge(dob) {
   return age >= 0 && age < 120 ? age : null
 }
 
+/**
+ * فلترة دقيقة بمدى عمري (بالأيام الفعلية، لا بالسنوات المقرَّبة لأسفل).
+ * المشكلة التي تحلّها: calcAge يُرجع "1" لأي عمر من 12 إلى 23 شهراً تقريباً
+ * (بالتقريب لأسفل لأقرب سنة كاملة) — فطفل عمره سنة و9 أشهر يظهر "1" تماماً
+ * كطفل عمره سنة و1 يوم. هذا صحيح للعرض، لكنه مضلِّل في فلتر "من 0 إلى 1"
+ * الذي يُفهم منه عادة "أقل من سنة" (رضيع)، فيُدرج خطأً من تجاوز عامه الأول بكثير.
+ * هذه الدالة تقارن بالعمر الفعلي بالأيام (سنة = 365.25 يوم) فتُخرج من تجاوز
+ * السنة فعلياً، حتى لو كان calcAge يعرضه كـ"1".
+ */
+export function isAgeInRange(dob, min, max) {
+  if (!dob) return false
+  const b = new Date(dob)
+  if (isNaN(b)) return false
+  const ms = Date.now() - b.getTime()
+  if (ms < 0) return false
+  const years = ms / (365.25 * 24 * 3600 * 1000)
+  if (min !== '' && min !== null && min !== undefined && years < parseFloat(min)) return false
+  if (max !== '' && max !== null && max !== undefined && years > parseFloat(max)) return false
+  return true
+}
+
 // ════════════════════════════════════════════════════════════
 // 2. التحقق من بيانات الأسرة
 // ════════════════════════════════════════════════════════════
