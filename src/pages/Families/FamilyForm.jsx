@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ORG_ID, diffFamilyFields, isExemptFromApproval, logFamilyActivity, recordApprovalRequest, supabase, useLocalDB } from '../../lib/db'
+import { ORG_ID, diffFamilyFields, isExemptFromApproval, logFamilyActivity, parseJsonColumns, recordApprovalRequest, supabase, useLocalDB } from '../../lib/db'
 import { calcAge, luhnCheck, validateName, validateDob, sortMembers } from '../../lib/helpers'
+import { emptyHealthFields } from '../../lib/healthOptions'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
+import HealthStatusModal from './HealthStatusModal'
 
 // ══ ثوابت خارج الـ component ══
 const RELATION_BY_GENDER = {
@@ -45,11 +47,14 @@ const EMPTY_FORM = {
   camp_id:'', tent:'', tent2:'',
   original_address:'', address_details:'', notes:'',
   categories:[], economic_level:'', num_orphans:0,
+  head_orphan_status:null, head_orphan_cause:null,
+  head_disabilities:[], head_injuries:[], head_chronic_diseases:[], head_female_status:[],
 }
 const newMember = () => ({
   id: crypto.randomUUID(),
   name:'', gender:'', relation:'',
   national_id:'', dob:'', health:'سليم',
+  ...emptyHealthFields(),
 })
 
 // ══ Luhn check لرقم الهوية ══
@@ -74,7 +79,7 @@ function FormField({ label, value, onChange, type='text', error, placeholder, re
 }
 
 // ══ مكوّن صف الفرد (خارج الـ component الرئيسي — حل مشكلة الكيبورد) ══
-function MemberRow({ member, index, onUpdate, onRemove, errors }) {
+function MemberRow({ member, index, onUpdate, onRemove, onOpenHealth, errors }) {
   const relations = member.gender
     ? (RELATION_BY_GENDER[member.gender] || ALL_RELATIONS)
     : ALL_RELATIONS
@@ -163,6 +168,18 @@ function MemberRow({ member, index, onUpdate, onRemove, errors }) {
             {HEALTH_OPTIONS.map(h => <option key={h.v} value={h.v}>{h.label}</option>)}
           </select>
         </div>
+
+        {/* الحالات الصحية التفصيلية */}
+        <button type="button" onClick={() => onOpenHealth(member.id)}
+          className="w-full py-2 border border-accent/30 bg-accent/10 rounded-xl text-accent text-xs font-bold flex items-center justify-center gap-2">
+          🩺 الحالات الصحية التفصيلية
+          {(() => {
+            const n = (member.disabilities?.length||0) + (member.injuries?.length||0)
+              + (member.chronic_diseases?.length||0) + (member.female_status?.length||0)
+              + (member.orphan_status ? 1 : 0)
+            return n > 0 ? <span className="bg-accent text-bg text-[10px] font-black px-2 py-0.5 rounded-full">{n}</span> : null
+          })()}
+        </button>
       </div>
     </div>
   )
@@ -268,6 +285,7 @@ export default function FamilyForm() {
   const [saving,    setSaving]    = useState(false)
   const submittingRef = useRef(false)  // حارس فوري — يمنع الضغط المزدوج قبل re-render
   const originalDataRef = useRef(null) // نسخة من بيانات الأسرة الأصلية (قبل أي تعديل) — لحساب الفرق عند الحفظ
+  const [healthModalFor, setHealthModalFor] = useState(null) // null | 'head' | memberId
   const { profile, canWrite, canEdit } = useAuth()
   const { showToast } = useApp()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
@@ -280,10 +298,15 @@ export default function FamilyForm() {
       // ① جلب من SQLite فوراً
       query('families').then(fs => fs.find(f=>f.id===id) || null).then(f => {
         if (f) {
-          setForm({ ...EMPTY_FORM, ...f,
+          const parsed = parseJsonColumns('families', f)
+          setForm({ ...EMPTY_FORM, ...parsed,
             categories:    f.categories    || [],
             economic_level:f.economic_level || '',
             num_orphans:   f.num_orphans   || 0,
+            head_disabilities:     parsed.head_disabilities     || [],
+            head_injuries:         parsed.head_injuries         || [],
+            head_chronic_diseases: parsed.head_chronic_diseases || [],
+            head_female_status:    parsed.head_female_status    || [],
           })
           originalDataRef.current = f
         }
@@ -295,10 +318,15 @@ export default function FamilyForm() {
         supabase.from('families').select('*').eq('id', id).single()
           .then(({ data }) => {
             if (data) {
-              setForm({ ...EMPTY_FORM, ...data,
+              const parsed = parseJsonColumns('families', data)
+              setForm({ ...EMPTY_FORM, ...parsed,
                 categories:    data.categories    || [],
                 economic_level:data.economic_level || '',
                 num_orphans:   data.num_orphans   || 0,
+                head_disabilities:     parsed.head_disabilities     || [],
+                head_injuries:         parsed.head_injuries         || [],
+                head_chronic_diseases: parsed.head_chronic_diseases || [],
+                head_female_status:    parsed.head_female_status    || [],
               })
               originalDataRef.current = data
               // حفظ محلي محدّث
@@ -350,6 +378,11 @@ export default function FamilyForm() {
       if (field === 'gender') updated.relation = ''
       return updated
     }))
+  }, [])
+
+  // تحديث عدة حقول دفعة واحدة لفرد معيّن (يُستخدم من مودال الحالات الصحية)
+  const updateMemberFields = useCallback((memberId, fields) => {
+    setMembers(m => m.map(x => x.id === memberId ? { ...x, ...fields } : x))
   }, [])
 
   const removeMember = useCallback((memberId) => {
@@ -442,6 +475,13 @@ export default function FamilyForm() {
         notes:          form.notes          || null,
         category_tags:  form.categories     || form.category_tags || [],
         economic_level: form.economic_level || null,
+        // الحقول الصحية التفصيلية لرب الأسرة — مخزّنة كنص JSON (text) في Supabase
+        head_orphan_status:    form.head_orphan_status || null,
+        head_orphan_cause:     form.head_orphan_status ? (form.head_orphan_cause || null) : null,
+        head_disabilities:     JSON.stringify(form.head_disabilities     || []),
+        head_injuries:         JSON.stringify(form.head_injuries         || []),
+        head_chronic_diseases: JSON.stringify(form.head_chronic_diseases || []),
+        head_female_status:    JSON.stringify(form.head_female_status    || []),
         version:        newVersion,
         created_at:     isEdit ? (form.created_at || now) : now,
         updated_at:     now,
@@ -462,6 +502,12 @@ export default function FamilyForm() {
         national_id: m.national_id || null,
         dob:         m.dob         || null,
         health:      m.health      || 'سليم',
+        orphan_status:    m.orphan_status || null,
+        orphan_cause:     m.orphan_status ? (m.orphan_cause || null) : null,
+        disabilities:     m.disabilities     || [],
+        injuries:         m.injuries         || [],
+        chronic_diseases: m.chronic_diseases || [],
+        female_status:    m.female_status    || [],
         updated_at:  now,
       }))
 
@@ -561,6 +607,9 @@ export default function FamilyForm() {
                 await supabase.from('family_members').update({
                   name:m.name, national_id:m.national_id, dob:m.dob,
                   gender:m.gender, relation:m.relation, health:m.health,
+                  orphan_status:m.orphan_status, orphan_cause:m.orphan_cause,
+                  disabilities:m.disabilities, injuries:m.injuries,
+                  chronic_diseases:m.chronic_diseases, female_status:m.female_status,
                   updated_at:now,
                 }).eq('id', m.id)
 
@@ -704,6 +753,18 @@ export default function FamilyForm() {
               />
               {errors.head_dob && <p className="text-red text-[11px] mt-1">{errors.head_dob}</p>}
             </div>
+
+            {/* الحالات الصحية التفصيلية */}
+            <button type="button" onClick={() => setHealthModalFor('head')}
+              className="w-full py-2.5 border border-accent/30 bg-accent/10 rounded-xl text-accent text-sm font-bold flex items-center justify-center gap-2">
+              🩺 الحالات الصحية التفصيلية
+              {(() => {
+                const n = (form.head_disabilities?.length||0) + (form.head_injuries?.length||0)
+                  + (form.head_chronic_diseases?.length||0) + (form.head_female_status?.length||0)
+                  + (form.head_orphan_status ? 1 : 0)
+                return n > 0 ? <span className="bg-accent text-bg text-[10px] font-black px-2 py-0.5 rounded-full">{n}</span> : null
+              })()}
+            </button>
           </div>
         </Card>
 
@@ -756,6 +817,7 @@ export default function FamilyForm() {
                   index={i}
                   onUpdate={updateMember}
                   onRemove={removeMember}
+                  onOpenHealth={setHealthModalFor}
                   errors={errors}
                 />
               ))
@@ -825,6 +887,57 @@ export default function FamilyForm() {
           </button>
         </div>
       </form>
+
+      {/* مودال الحالات الصحية التفصيلية — لرب الأسرة */}
+      {healthModalFor === 'head' && (
+        <HealthStatusModal
+          open
+          onClose={() => setHealthModalFor(null)}
+          subjectName={form.head_name || 'رب الأسرة'}
+          gender={form.head_gender}
+          dob={form.head_dob}
+          initial={{
+            orphan_status:    form.head_orphan_status,
+            orphan_cause:     form.head_orphan_cause,
+            disabilities:     form.head_disabilities,
+            injuries:         form.head_injuries,
+            chronic_diseases: form.head_chronic_diseases,
+            female_status:    form.head_female_status,
+          }}
+          onSave={(fields) => {
+            setF('head_orphan_status', fields.orphan_status)
+            setF('head_orphan_cause', fields.orphan_cause)
+            setF('head_disabilities', fields.disabilities)
+            setF('head_injuries', fields.injuries)
+            setF('head_chronic_diseases', fields.chronic_diseases)
+            setF('head_female_status', fields.female_status)
+          }}
+        />
+      )}
+
+      {/* مودال الحالات الصحية التفصيلية — لفرد محدد */}
+      {healthModalFor && healthModalFor !== 'head' && (() => {
+        const m = members.find(x => x.id === healthModalFor)
+        if (!m) return null
+        return (
+          <HealthStatusModal
+            open
+            onClose={() => setHealthModalFor(null)}
+            subjectName={m.name || 'الفرد'}
+            gender={m.gender}
+            dob={m.dob}
+            initial={{
+              orphan_status:    m.orphan_status,
+              orphan_cause:     m.orphan_cause,
+              disabilities:     m.disabilities,
+              injuries:         m.injuries,
+              chronic_diseases: m.chronic_diseases,
+              female_status:    m.female_status,
+            }}
+            onSave={(fields) => updateMemberFields(m.id, fields)}
+          />
+        )
+      })()}
     </div>
   )
 }
