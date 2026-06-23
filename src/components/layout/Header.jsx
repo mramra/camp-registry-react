@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
+import GlobalSearch from '../search/GlobalSearch'
 
 export default function Header({ onMenuClick }) {
+  const [searchOpen, setSearchOpen] = useState(false)
   const { online, syncing, syncStats } = useApp()
   const { profile } = useAuth()
   const navigate = useNavigate()
@@ -31,12 +34,21 @@ export default function Header({ onMenuClick }) {
         </div>
       </button>
 
-      {/* حالة الاتصال */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold text-muted">{statusLabel}</span>
-        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${syncing ? 'animate-pulse' : ''}`}
-          style={{ background: statusColor }} />
+      {/* البحث الشامل + حالة الاتصال */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setSearchOpen(true)}
+          className="w-9 h-9 bg-surface2 border border-border rounded-xl flex items-center justify-center text-base text-white"
+          aria-label="بحث شامل">
+          🔍
+        </button>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-muted">{statusLabel}</span>
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${syncing ? 'animate-pulse' : ''}`}
+            style={{ background: statusColor }} />
+        </div>
       </div>
+
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   )
 }
