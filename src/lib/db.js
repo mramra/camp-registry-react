@@ -14,6 +14,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { useCallback } from 'react'
+import { getDeviceFingerprint, getDeviceName, getDeviceType } from './utils'
 
 // ════════════════════════════════════════════════════════════
 // 1. العميل والاتصال
@@ -540,4 +541,80 @@ export async function fetchRecentFamilyActivity(limit = 5, allowedFamilyIds = nu
     console.warn('[fetchRecentFamilyActivity]', e.message)
     return []
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// 6. اعتماد الأجهزة (Device Approval) — تسلسل هرمي مطابق لموافقة الأسر
+//    مالك المنصة معفى تماماً من أي قيد جهاز. غيره يحتاج اعتماد جهازه أول مرة
+//    من المسؤول عنه مباشرة (نفس صلاحية canUserReviewRequest المستخدمة بالأسر).
+// ════════════════════════════════════════════════════════════
+
+/** تسمية المسؤول المعتمِد التالي حسب الدور — للعرض فقط بشاشة الدخول */
+export const NEXT_DEVICE_APPROVER = {
+  assistant:     'مندوبك أو مدير الإيواء',
+  camp_delegate: 'مدير الإيواء أو ملك المنصة',
+  super_admin:   'ملك المنصة',
+}
+
+/**
+ * يفحص/يسجّل جهاز هذا المستخدم عند الدخول.
+ * مالك المنصة: يُسجَّل الجهاز للعرض فقط (is_approved=true تلقائياً) ولا يُحجب أبداً.
+ * غيره: جهاز جديد → يُسجَّل "قيد الموافقة" ويُحجب؛ محظور → حجب نهائي؛ غير معتمد → حجب بانتظار المراجعة.
+ * عند أي عطل غير متوقع (شبكة، إلخ) لا نحجب الدخول — تجنباً لقفل المستخدمين بسبب خلل مؤقت.
+ * يُرجع: { ok, status: 'owner'|'approved'|'pending'|'blocked'|'error', role? }
+ */
+export async function checkDeviceApproval(userId, profile) {
+  try {
+    if (!profile) return { ok: true, status: 'no_profile' }
+    const isPlatformOwner = profile.role === 'platform_owner'
+    const fingerprint = getDeviceFingerprint()
+    const now = new Date().toISOString()
+
+    const { data: existing } = await supabase.from('devices')
+      .select('*').eq('user_id', userId).eq('fingerprint', fingerprint).limit(1)
+    const dev = existing?.[0]
+
+    if (!dev) {
+      await supabase.from('devices').insert({
+        id: crypto.randomUUID(), org_id: ORG_ID, user_id: userId, fingerprint,
+        device_name: getDeviceName(), device_type: getDeviceType(),
+        is_approved: isPlatformOwner, is_blocked: false,
+        last_seen: now, created_at: now,
+      })
+      return isPlatformOwner
+        ? { ok: true, status: 'owner' }
+        : { ok: false, status: 'pending', role: profile.role }
+    }
+
+    if (isPlatformOwner) return { ok: true, status: 'owner' } // معفى دائماً بصرف النظر عن حالة السجل
+
+    if (dev.is_blocked)   return { ok: false, status: 'blocked', role: profile.role }
+    if (!dev.is_approved) return { ok: false, status: 'pending', role: profile.role }
+
+    await supabase.from('devices').update({ last_seen: now }).eq('id', dev.id)
+    return { ok: true, status: 'approved' }
+  } catch (e) {
+    console.warn('[checkDeviceApproval]', e.message)
+    return { ok: true, status: 'error' }
+  }
+}
+
+/** اعتماد جهاز (يدوياً من المسؤول المخوَّل) */
+export async function approveDevice(deviceId) {
+  const { error } = await supabase.from('devices')
+    .update({ is_approved: true, is_blocked: false }).eq('id', deviceId)
+  if (error) throw error
+}
+
+/** حظر جهاز */
+export async function blockDevice(deviceId) {
+  const { error } = await supabase.from('devices')
+    .update({ is_blocked: true, is_approved: false }).eq('id', deviceId)
+  if (error) throw error
+}
+
+/** رفع الحظر عن جهاز (يبقى غير معتمد حتى تُؤكَّد الموافقة بشكل صريح) */
+export async function unblockDevice(deviceId) {
+  const { error } = await supabase.from('devices').update({ is_blocked: false }).eq('id', deviceId)
+  if (error) throw error
 }

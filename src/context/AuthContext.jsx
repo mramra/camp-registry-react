@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { ORG_ID, supabase } from '../lib/db'
+import { ORG_ID, supabase, checkDeviceApproval } from '../lib/db'
 import { hasPermission, hasPagePermission, loadPagePermissions, canAccessPageSync } from '../lib/permissions'
 
 const AuthContext = createContext(null)
@@ -112,6 +112,28 @@ export function AuthProvider({ children }) {
       'انتهت مهلة الاتصال (20 ثانية)\n\nتحقق من اتصالك بالإنترنت وحاول مرة أخرى'
     )
     if (error) throw error
+
+    // فحص اعتماد الجهاز فوراً بعد نجاح المصادقة — قبل أي انتقال للتطبيق.
+    // لو الجهاز محجوب (بانتظار موافقة أو محظور): سجّل خروج فوراً وأرمِ خطأ مخصصاً
+    // يحمل التفاصيل ليعرضها LoginPage برسالة واضحة بدل المتابعة للتطبيق.
+    try {
+      const { data: members } = await supabase.from('org_members')
+        .select('*').eq('user_id', data.user.id).eq('org_id', ORG_ID).limit(1)
+      const p = members?.[0]
+      if (p) {
+        const deviceCheck = await checkDeviceApproval(data.user.id, p)
+        if (!deviceCheck.ok) {
+          await supabase.auth.signOut().catch(() => {})
+          const err = new Error('DEVICE_NOT_APPROVED')
+          err.deviceStatus = { status: deviceCheck.status, role: deviceCheck.role }
+          throw err
+        }
+      }
+    } catch (e) {
+      if (e.deviceStatus) throw e // أعد رمي خطأ فحص الجهاز كما هو
+      console.warn('[auth] فحص اعتماد الجهاز فشل (غير حرج، نسمح بالدخول):', e.message)
+    }
+
     return data
   }
 

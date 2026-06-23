@@ -34,3 +34,32 @@ export function randomPassword(length = 10) {
     chars[Math.floor(Math.random() * chars.length)]
   ).join('')
 }
+
+// ════════════════════════════════════════════════════════════
+// بصمة الجهاز — مشتركة بين فحص الدخول (AuthContext) وصفحة الأجهزة (Devices.jsx)
+// ════════════════════════════════════════════════════════════
+
+/** بصمة ثابتة لهذا المتصفح/الجهاز — تُولَّد مرة واحدة وتبقى مخزَّنة محلياً */
+export function getDeviceFingerprint() {
+  const KEY = 'device_fingerprint'
+  let fp = localStorage.getItem(KEY)
+  if (!fp) {
+    fp = generateId()
+    localStorage.setItem(KEY, fp)
+  }
+  return fp
+}
+
+/** اسم وصفي لنظام الجهاز من user agent */
+export function getDeviceName(ua = navigator.userAgent) {
+  if (/Android/i.test(ua)) return '🤖 Android'
+  if (/iPhone|iPad|iPod/i.test(ua)) return '🍎 iOS'
+  if (/Windows/i.test(ua)) return '🖥️ Windows'
+  if (/Macintosh/i.test(ua)) return '💻 Mac'
+  return '🌐 جهاز غير معروف'
+}
+
+/** نوع الجهاز: mobile أو desktop */
+export function getDeviceType(ua = navigator.userAgent) {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ? 'mobile' : 'desktop'
+}

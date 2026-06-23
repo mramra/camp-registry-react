@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { NEXT_DEVICE_APPROVER } from '../../lib/db'
 
 const SUPA_URL = 'https://ojclpkenecicujkqhhlu.supabase.co'
 
@@ -46,12 +47,20 @@ export default function LoginPage() {
       navigate('/', { replace: true })
     } catch(err) {
       stopTimer()
-      const n = attempts + 1
-      setAttempts(n)
-      if (n >= 5) setLockUntil(Date.now() + 60000)
-      else if (n >= 3) setLockUntil(Date.now() + 15000)
-      const msg = err?.message || 'خطأ غير معروف'
-      setError('❌ ' + msg)
+      if (err?.deviceStatus) {
+        // جهاز محجوب (بانتظار موافقة أو محظور) — لا تُحتسَب كمحاولة فاشلة لرقم/كلمة المرور
+        const { status, role } = err.deviceStatus
+        setError(status === 'blocked'
+          ? '🚫 هذا الجهاز محظور. تواصل مع المسؤول.'
+          : `⏳ جهازك الجديد بانتظار الموافقة من: ${NEXT_DEVICE_APPROVER[role] || 'المسؤول عنك'}`)
+      } else {
+        const n = attempts + 1
+        setAttempts(n)
+        if (n >= 5) setLockUntil(Date.now() + 60000)
+        else if (n >= 3) setLockUntil(Date.now() + 15000)
+        const msg = err?.message || 'خطأ غير معروف'
+        setError('❌ ' + msg)
+      }
     } finally {
       setLoading(false)
     }
