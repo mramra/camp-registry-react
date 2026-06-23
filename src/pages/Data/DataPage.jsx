@@ -51,22 +51,27 @@ export default function DataPage() {
   // الجداول التي لها org_id مباشرة
   const TABLES_WITH_ORG = ['families','camps','org_members','family_movements','dist_rounds','camp_distributions']
 
-  const loadStats = useCallback(async () => {
-    try {
-      const results = {}
-      await Promise.all(TABLES.map(async ({ key }) => {
+  // كل جدول يُحدِّث رقمه في stats فور وصول نتيجته — لا ننتظر أبطأ جدول لعرض الباقي.
+  // هذا يجعل التحميل "بالخلفية" فعلياً: الصفحة تظهر فوراً والأرقام تتعبّى تدريجياً
+  // (الصف الذي لم تصل نتيجته بعد يبقى "…" كما هو، بقية الصفوف تتحدّث بشكل مستقل).
+  const loadStats = useCallback(() => {
+    TABLES.forEach(({ key }) => {
+      (async () => {
         try {
           let q = supabase.from(key).select('*', { count: 'exact', head: true })
           if (TABLES_WITH_ORG.includes(key)) q = q.eq('org_id', ORG_ID)
           const { count } = await q
-          results[key] = count ?? 0
-        } catch { results[key] = '—' }
-      }))
-      setStats(results)
-      const { data: campsData } = await supabase.from('camps')
-        .select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID)
-      if (campsData) setCamps(campsData)
-    } catch (e) { console.warn('[data] فشل تحميل إحصائيات المخيمات/المستخدمين:', e.message) }
+          setStats(prev => ({ ...prev, [key]: count ?? 0 }))
+        } catch {
+          setStats(prev => ({ ...prev, [key]: '—' }))
+        }
+      })()
+    })
+    // قائمة المخيمات (تُستخدم في تبويبات أخرى) — مستقلة تماماً عن إحصائيات الجداول
+    supabase.from('camps')
+      .select('id,name,latitude,longitude,address,manager_id').eq('org_id', ORG_ID)
+      .then(({ data }) => { if (data) setCamps(data) })
+      .catch(e => console.warn('[data] فشل تحميل قائمة المخيمات:', e.message))
   }, [])
 
   useEffect(() => {
