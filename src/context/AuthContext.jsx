@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { ORG_ID, supabase, checkDeviceApproval } from '../lib/db'
 import { hasPermission, hasPagePermission, loadPagePermissions, canAccessPageSync } from '../lib/permissions'
 
@@ -24,6 +24,10 @@ export function AuthProvider({ children }) {
   const [previewAs, setPreviewAs] = useState(null)
   const [pagePermRows, setPagePermRows] = useState([])
   const [pagePermLoaded, setPagePermLoaded] = useState(false)
+  // أثناء signIn نتولى تحديث user/profile يدوياً بعد اكتمال فحص الجهاز فقط — هذا الـ ref
+  // يجعل مستمع onAuthStateChange يتجاهل حدث "تم تسجيل الدخول" الذي يُطلقه Supabase تلقائياً
+  // فور نجاح المصادقة، فلا يُفتح التطبيق (ولو لجزء من الثانية) قبل أن نقرر اعتماد الجهاز.
+  const suppressAuthEvents = useRef(false)
 
   useEffect(() => { initAuth() }, [])
 
@@ -58,6 +62,7 @@ export function AuthProvider({ children }) {
 
     // ③ مراقبة تغييرات الجلسة
     supabase.auth.onAuthStateChange((_ev, session) => {
+      if (suppressAuthEvents.current) return // signIn تتولى تحديث الحالة يدوياً بعد فحص الجهاز
       if (session?.user) {
         setUser(session.user)
         fetchProfile(session.user.id)
@@ -105,36 +110,49 @@ export function AuthProvider({ children }) {
       )
     } catch (e) { console.warn('[auth] ping الإيقاظ فشل (غير حرج):', e.message) }
 
-    // تسجيل الدخول مع timeout 20 ثانية
-    const { data, error } = await withTimeout(
-      supabase.auth.signInWithPassword({ email, password }),
-      20000,
-      'انتهت مهلة الاتصال (20 ثانية)\n\nتحقق من اتصالك بالإنترنت وحاول مرة أخرى'
-    )
-    if (error) throw error
-
-    // فحص اعتماد الجهاز فوراً بعد نجاح المصادقة — قبل أي انتقال للتطبيق.
-    // لو الجهاز محجوب (بانتظار موافقة أو محظور): سجّل خروج فوراً وأرمِ خطأ مخصصاً
-    // يحمل التفاصيل ليعرضها LoginPage برسالة واضحة بدل المتابعة للتطبيق.
+    // عُلِّق مستمع الجلسة — لن يتفاعل مع حدث "تم الدخول" الذي يُطلقه Supabase تلقائياً
+    // الآن؛ نحن من سنقرر صراحة تثبيت user/profile، وفقط لو اعتُمد الجهاز.
+    suppressAuthEvents.current = true
     try {
-      const { data: members } = await supabase.from('org_members')
-        .select('*').eq('user_id', data.user.id).eq('org_id', ORG_ID).limit(1)
-      const p = members?.[0]
-      if (p) {
-        const deviceCheck = await checkDeviceApproval(data.user.id, p)
-        if (!deviceCheck.ok) {
-          await supabase.auth.signOut().catch(() => {})
-          const err = new Error('DEVICE_NOT_APPROVED')
-          err.deviceStatus = { status: deviceCheck.status, role: deviceCheck.role }
-          throw err
-        }
-      }
-    } catch (e) {
-      if (e.deviceStatus) throw e // أعد رمي خطأ فحص الجهاز كما هو
-      console.warn('[auth] فحص اعتماد الجهاز فشل (غير حرج، نسمح بالدخول):', e.message)
-    }
+      // تسجيل الدخول مع timeout 20 ثانية
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        20000,
+        'انتهت مهلة الاتصال (20 ثانية)\n\nتحقق من اتصالك بالإنترنت وحاول مرة أخرى'
+      )
+      if (error) throw error
 
-    return data
+      // فحص اعتماد الجهاز فوراً بعد نجاح المصادقة — قبل أي تحديث لحالة التطبيق.
+      // لو الجهاز محجوب (بانتظار موافقة أو محظور): سجّل خروج فوراً وأرمِ خطأ مخصصاً
+      // يحمل التفاصيل ليعرضها LoginPage برسالة واضحة — user/profile لم يُلمَسا بعد إطلاقاً.
+      let profileRow = null
+      try {
+        const { data: members } = await supabase.from('org_members')
+          .select('*').eq('user_id', data.user.id).eq('org_id', ORG_ID).limit(1)
+        profileRow = members?.[0] || null
+        if (profileRow) {
+          const deviceCheck = await checkDeviceApproval(data.user.id, profileRow)
+          if (!deviceCheck.ok) {
+            await supabase.auth.signOut().catch(() => {})
+            const err = new Error('DEVICE_NOT_APPROVED')
+            err.deviceStatus = { status: deviceCheck.status, role: deviceCheck.role }
+            throw err
+          }
+        }
+      } catch (e) {
+        if (e.deviceStatus) throw e // أعد رمي خطأ فحص الجهاز كما هو — يوقف الدخول
+        console.warn('[auth] فحص اعتماد الجهاز فشل (غير حرج، نسمح بالدخول):', e.message)
+      }
+
+      // الجهاز معتمَد (أو تعذّر الفحص لخلل مؤقت) — الآن فقط نُفعِّل حالة التطبيق فعلياً،
+      // عبر fetchProfile نفسها المستخدمة لاستعادة الجلسة (بدون تكرار منطق تثبيت البروفايل).
+      setUser(data.user)
+      await fetchProfile(data.user.id)
+
+      return data
+    } finally {
+      suppressAuthEvents.current = false
+    }
   }
 
   async function signOut() {
