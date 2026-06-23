@@ -218,3 +218,56 @@ export function arrLabel(val) {
     return String(v)
   }).join('، ')
 }
+
+// ════════════════════════════════════════════════════════════
+// 5. كشف الحمل والرضاعة التلقائي (مشترك بين WomenPage وHealthReport)
+// ════════════════════════════════════════════════════════════
+
+/** صلات تُعتبر "زوجة/أم" لحساب المرضعة تلقائياً */
+export const VALID_MOTHER_RELATIONS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
+
+/** الأسر التي فيها زوجة/أم مسجّلة بصلة محددة (Set من family_id) */
+export function buildFamHasNamedWife(members) {
+  const s = new Set()
+  ;(members || []).forEach(m => {
+    const rel = (m.relation || '').trim()
+    if (VALID_MOTHER_RELATIONS.includes(rel)) s.add(m.family_id)
+  })
+  return s
+}
+
+/** الأسر التي فيها رضيع (عمر أقل من سنتين) من الأفراد أو رب الأسرة (Set من family_id) */
+export function buildFamWithInfant(members, families) {
+  const s = new Set()
+  ;(members || []).forEach(m => {
+    const a = calcAge(m.dob)
+    if (a !== null && a < 2) s.add(m.family_id)
+  })
+  ;(families || []).forEach(f => {
+    const a = calcAge(f.head_dob)
+    if (a !== null && a < 2) s.add(f.id)
+  })
+  return s
+}
+
+/**
+ * هل هذا الشخص مرضعة تلقائياً (بدون تسجيل صريح بحقل female_status)؟
+ * مطابق لـ isNursingMother في النسخة القديمة: عمر 15-50 + صلة زوجة/أم
+ * (أو امرأة بلا صلة مسجّلة في أسرة بلا زوجة معروفة) + وجود رضيع بالأسرة.
+ * person: { relation, age, family_id, isHead }
+ */
+export function isAutoNursing(person, famHasNamedWife, famWithInfant) {
+  const relation = (person.relation || '').trim()
+  const age = person.age
+  const famId = person.family_id
+  const inAgeRange = age === null || (age >= 15 && age <= 50)
+  let relationOk = false
+  if (relation) {
+    relationOk = VALID_MOTHER_RELATIONS.includes(relation)
+  } else if (!person.isHead) {
+    relationOk = !famHasNamedWife.has(famId)
+  } else {
+    relationOk = true // رب أسرة أنثى بلا relation = أم الأسرة
+  }
+  return inAgeRange && relationOk && famWithInfant.has(famId)
+}

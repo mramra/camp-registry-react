@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { parseArr, calcAge, isAgeInRange } from '../../lib/helpers'
+import {
+  parseArr, calcAge, isAgeInRange,
+  buildFamHasNamedWife, buildFamWithInfant, isAutoNursing,
+} from '../../lib/helpers'
 import { useDataScope }   from '../../lib/useDataScope'
 import PageHeader         from '../../components/ui/PageHeader'
 import Card               from '../../components/ui/Card'
@@ -119,49 +122,12 @@ export default function WomenPage() {
     return list
   }, [families, members, campMap])
 
-  // صلات الأمومة المعتمدة لحساب المرضعة تلقائياً
-  const VALID_MOTHERS = ['زوجة','زوجة ثانية','زوجة ثالثة','زوجة رابعة','زوجه','أم','wife','mother']
+  // صلات الأمومة المعتمدة لحساب المرضعة تلقائياً (مشترك من helpers.js)
+  const famHasNamedWife = useMemo(() => buildFamHasNamedWife(members), [members])
+  const famWithInfant   = useMemo(() => buildFamWithInfant(members, families), [members, families])
 
-  // الأسر التي فيها زوجة/أم مسجّلة بصلة محددة
-  const famHasNamedWife = useMemo(() => {
-    const s = new Set()
-    members.forEach(m => {
-      const rel = (m.relation || '').trim()
-      if (VALID_MOTHERS.includes(rel)) s.add(m.family_id)
-    })
-    return s
-  }, [members])
-
-  // الأسر التي فيها رضيع (عمر 0-2 سنة) — بدون شرط على الصلة
-  const famWithInfant = useMemo(() => {
-    const s = new Set()
-    members.forEach(m => {
-      const a = calcAge(m.dob)
-      if (a !== null && a < 2) s.add(m.family_id)
-    })
-    families.forEach(f => {
-      const a = calcAge(f.head_dob)
-      if (a !== null && a < 2) s.add(f.id)
-    })
-    return s
-  }, [members, families])
-
-  // هل هذه المرأة مرضعة تلقائياً؟ (مطابقة isNursingMother في القديم بالضبط)
-  function isAutoNursing(w) {
-    const relation = (w.relation || '').trim()
-    const age = w.age
-    const famId = w.family_id
-    const inAgeRange = age === null || (age >= 15 && age <= 50)
-    let relationOk = false
-    if (relation) {
-      relationOk = VALID_MOTHERS.includes(relation)
-    } else if (!w.isHead) {
-      relationOk = !famHasNamedWife.has(famId)
-    } else {
-      relationOk = true // رب أسرة أنثى بلا relation = أم الأسرة
-    }
-    return inAgeRange && relationOk && famWithInfant.has(famId)
-  }
+  // هل هذه المرأة مرضعة تلقائياً؟
+  function isAutoNursingLocal(w) { return isAutoNursing(w, famHasNamedWife, famWithInfant) }
 
   // النتائج المفلترة
   const filtered = useMemo(() => {
@@ -180,7 +146,7 @@ export default function WomenPage() {
         if (statusFilter === 'حامل'   && !fs.includes('حامل'))  return false
         if (statusFilter === 'مرضع') {
           const explicit = fs.includes('مرضع') || w.marital === 'مرضع'
-          if (!explicit && !isAutoNursing(w)) return false
+          if (!explicit && !isAutoNursingLocal(w)) return false
         }
         if (statusFilter === 'أرملة'  && !['أرملة','أرمل'].includes(mar) && !['أرملة','أرمل'].includes(rel)) return false
         if (statusFilter === 'مطلقة'  && !['مطلقة','مطلق'].includes(mar) && !['مطلقة','مطلق'].includes(rel)) return false
@@ -204,7 +170,7 @@ export default function WomenPage() {
       nursing: base.filter(w => {
         const fs2 = parseArr(w.female_status)
         if (fs2.includes('مرضع')) return true
-        return isAutoNursing(w)
+        return isAutoNursingLocal(w)
       }).length,
       widows:   base.filter(w => ['أرملة','أرمل'].includes(w.marital) || ['أرملة','أرمل'].includes(w.relation)).length,
       divorced: base.filter(w => ['مطلقة','مطلق'].includes(w.marital) || ['مطلقة','مطلق'].includes(w.relation)).length,

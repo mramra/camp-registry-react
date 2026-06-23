@@ -38,6 +38,7 @@ const PermissionsAdmin = lazy(() => import('./pages/PermissionsAdmin/Permissions
 const PendingRequests   = lazy(() => import('./pages/PendingRequests/PendingRequests'))
 const WomenPage        = lazy(() => import('./pages/Women/WomenPage'))
 const ChildrenPage     = lazy(() => import('./pages/Children/ChildrenPage'))
+const HealthReport     = lazy(() => import('./pages/HealthReport/HealthReport'))
 
 // ── شاشة تحميل موحّدة ────────────────────────────────
 function PageLoader() {
@@ -138,7 +139,7 @@ function AppRoutes() {
           <Route path="pending-requests" element={<ProtectedRoute pageKey="pending_requests" pageLabel="الطلبات المعلّقة"><PendingRequests /></ProtectedRoute>} />
           <Route path="women"        element={<ProtectedRoute pageKey="women"        pageLabel="النساء"><WomenPage /></ProtectedRoute>} />
           <Route path="children"     element={<ProtectedRoute pageKey="children"     pageLabel="سجل الأطفال"><ChildrenPage /></ProtectedRoute>} />
-          <Route path="health-report" element={<Navigate to="/analysis" replace />} />
+          <Route path="health-report" element={<ProtectedRoute pageKey="health_report" pageLabel="كشف الحالات الصحية"><HealthReport /></ProtectedRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

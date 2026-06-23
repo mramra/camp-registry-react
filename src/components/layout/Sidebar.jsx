@@ -41,6 +41,7 @@ const NAV_GROUPS = [
       { icon: '📋', label: 'السجلات',         path: '/registers',    pageKey: 'registers' },
       { icon: '👩', label: 'النساء',          path: '/women',        pageKey: 'women' },
       { icon: '🧒', label: 'سجل الأطفال',     path: '/children',     pageKey: 'children' },
+      { icon: '⚕️', label: 'كشف الحالات الصحية', path: '/health-report', pageKey: 'health_report' },
       { icon: '📋', label: 'تقارير الاحتياجات', path: '/needs-report', pageKey: 'needs_report' },
     ],
   },
