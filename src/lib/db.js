@@ -398,6 +398,9 @@ export async function approveRequest(req, reviewer) {
     if (action === 'delete') {
       await supabase.from('family_members').delete().eq('family_id', family_id)
       await supabase.from('families').delete().eq('id', family_id)
+    } else if (action?.startsWith('movement_')) {
+      // الحركة لم تُنشأ أصلاً عند تقديم الطلب — تُنشأ الآن فقط عند الموافقة
+      await supabase.from('family_movements').insert(new_data)
     } else {
       await supabase.from('families').update({ review_status: 'approved' }).eq('id', family_id)
     }
@@ -430,6 +433,7 @@ export async function rejectRequest(req, reviewer, note) {
     } else if (action === 'delete') {
       await supabase.from('families').update({ pending_delete: false }).eq('id', family_id)
     }
+    // action يبدأ بـ movement_ → لا حاجة لأي إجراء استرجاع، الحركة لم تُنشأ أصلاً قبل الموافقة
 
     await supabase.from('family_history').update({
       status: 'rejected',

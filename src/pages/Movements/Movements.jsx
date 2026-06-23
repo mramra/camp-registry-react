@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
+import { ORG_ID, supabase, useLocalDB, visibleFamilies, isExemptFromApproval, recordApprovalRequest } from '../../lib/db'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { formatDate } from '../../lib/utils'
@@ -27,7 +27,7 @@ export default function Movements() {
   const [form,       setForm]       = useState({ family_id:'', type:'entry', from_camp:'', to_camp:'', date: new Date().toISOString().split('T')[0], reason:'', notes:'' })
   const [saving,     setSaving]     = useState(false)
 
-  const { canWrite, isOwner } = useAuth()
+  const { canWrite, isOwner, profile } = useAuth()
   const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
   const { query, upsert, remove, bulkUpsert } = useLocalDB()
   const { showToast } = useApp()
@@ -99,6 +99,12 @@ export default function Movements() {
     if (!form.date)       return showToast('التاريخ مطلوب', true)
     setSaving(true)
     try {
+      const actorId   = profile?.user_id || profile?.id || null
+      const actorName = profile?.full_name || profile?.name || '—'
+      // نظام موافقة platform_owner: من ليس معفى (bypass_approval) يحتاج موافقة
+      // قبل أي تسجيل دخول/خروج/نقل فعلي — خلافاً لإضافة/تعديل الأسرة، الحركة
+      // لا تُنشأ في family_movements إلا بعد الموافقة (لا يوجد عمود "قيد المراجعة" بهذا الجدول).
+      const exempt = isExemptFromApproval(profile)
       const data = {
         id:         crypto.randomUUID(),
         org_id:     ORG_ID,
@@ -109,10 +115,24 @@ export default function Movements() {
         date:       form.date,
         reason:     form.reason    || null,
         notes:      form.notes     || null,
+        created_by: actorId,
         created_at: new Date().toISOString(),
       }
-      await upsert('family_movements', data)
-      showToast('✅ تم تسجيل الحركة')
+      if (exempt) {
+        await upsert('family_movements', data)
+        showToast('✅ تم تسجيل الحركة')
+      } else {
+        await recordApprovalRequest({
+          familyId:  form.family_id,
+          action:    'movement_' + form.type,
+          oldData:   null,
+          newData:   data,
+          changes:   null,
+          actorId, actorName,
+          actorRole: profile?.role || null,
+        })
+        showToast('✅ تم إرسال طلب تسجيل الحركة — بانتظار موافقة ملك المنصة')
+      }
       setShowForm(false)
       await loadData()
     } catch(err) { showToast('خطأ: ' + err.message, true) }

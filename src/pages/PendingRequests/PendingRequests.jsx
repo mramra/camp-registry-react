@@ -14,6 +14,9 @@ const ACTION_LABEL = {
   insert: { icon: '➕', label: 'إضافة أسرة جديدة', color: '#10b981' },
   update: { icon: '✏️', label: 'تعديل بيانات أسرة', color: '#3b82f6' },
   delete: { icon: '🗑️', label: 'طلب حذف أسرة', color: '#ef4444' },
+  movement_entry:    { icon: '🟢', label: 'تسجيل دخول أسرة',     color: '#10b981' },
+  movement_exit:     { icon: '🔴', label: 'تسجيل خروج أسرة',     color: '#ef4444' },
+  movement_transfer: { icon: '🔵', label: 'نقل أسرة بين مخيمات', color: '#3b82f6' },
 }
 
 const ROLE_LABEL = {
@@ -41,9 +44,10 @@ function FieldDiff({ changes }) {
   )
 }
 
-function RequestHeader({ req, navigate }) {
+function RequestHeader({ req, navigate, campMap, famMap }) {
   const meta = ACTION_LABEL[req.action] || ACTION_LABEL.update
-  const famName = req.new_data?.head_name || req.old_data?.head_name || req.family_name || '—'
+  const isMovement = req.action?.startsWith('movement_')
+  const famName = req.new_data?.head_name || req.old_data?.head_name || famMap?.[req.family_id]?.head_name || req.family_name || '—'
   return (
     <>
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -68,6 +72,20 @@ function RequestHeader({ req, navigate }) {
       </div>
 
       {req.action === 'update' && <FieldDiff changes={req.changes} />}
+
+      {isMovement && (
+        <div className="bg-surface2 rounded-xl p-3 mt-2 text-[11px] text-muted space-y-1">
+          {req.new_data?.from_camp && (
+            <div>📤 من: <span className="text-white font-bold">{campMap?.[req.new_data.from_camp] || '—'}</span></div>
+          )}
+          {req.new_data?.to_camp && (
+            <div>📥 إلى: <span className="text-white font-bold">{campMap?.[req.new_data.to_camp] || '—'}</span></div>
+          )}
+          <div>📅 التاريخ: <span className="text-white font-bold">{req.new_data?.date || '—'}</span></div>
+          {req.new_data?.reason && <div>📝 السبب: <span className="text-white">{req.new_data.reason}</span></div>}
+          {req.new_data?.notes && <div>🗒️ ملاحظات: <span className="text-white">{req.new_data.notes}</span></div>}
+        </div>
+      )}
     </>
   )
 }
@@ -84,6 +102,8 @@ export default function PendingRequests() {
   const [busyId,   setBusyId]   = useState(null)
   const [rejectingId, setRejectingId] = useState(null)
   const [note, setNote] = useState('')
+  const [campMap, setCampMap] = useState({})
+  const [famMap,  setFamMap]  = useState({})
 
   const canReview = isOwner || profile?.can_review_approvals === true
 
@@ -92,8 +112,12 @@ export default function PendingRequests() {
   async function load() {
     setLoading(true)
     try {
-      const members = await query('org_members')
+      const [members, camps, fams] = await Promise.all([
+        query('org_members'), query('camps'), query('families'),
+      ])
       const byUserId = Object.fromEntries(members.map(m => [m.user_id, m]))
+      setCampMap(Object.fromEntries(camps.map(c => [c.id, c.name])))
+      setFamMap(Object.fromEntries(fams.map(f => [f.id, f])))
 
       if (tab === 'pending') {
         const rows = await fetchPendingRequests()
@@ -174,7 +198,7 @@ export default function PendingRequests() {
           <div className="flex flex-col gap-3">
             {requests.map(req => (
               <div key={req.id} className="bg-surface border border-border rounded-2xl p-4">
-                <RequestHeader req={req} navigate={navigate} />
+                <RequestHeader req={req} navigate={navigate} campMap={campMap} famMap={famMap} />
 
                 {req.action === 'delete' && req.old_data && (
                   <div className="bg-red/10 border border-red/20 rounded-xl px-3 py-2 text-[11px] text-muted">
@@ -223,7 +247,7 @@ export default function PendingRequests() {
           <div className="flex flex-col gap-3">
             {decisionLog.map(req => (
               <div key={req.id} className="bg-surface border border-border rounded-2xl p-4">
-                <RequestHeader req={req} navigate={navigate} />
+                <RequestHeader req={req} navigate={navigate} campMap={campMap} famMap={famMap} />
 
                 <div className={`rounded-xl px-3 py-2 text-xs font-bold flex items-center justify-between
                   ${req.status === 'approved' ? 'bg-green/10 text-green' : 'bg-red/10 text-red'}`}>
