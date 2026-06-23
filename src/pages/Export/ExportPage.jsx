@@ -75,7 +75,10 @@ export default function ExportPage() {
         supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
         supabase.from('org_members').select('id,user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
       ])
-      if (c?.length) setCamps(c)
+      if (c?.length) {
+        const allowedIds = getAllowedCampIds(c)
+        setCamps(allowedIds === null ? c : c.filter(x => allowedIds.includes(x.id)))
+      }
       if (m?.length) setOrgMembers(m)
     } catch (e) { console.warn('[export] فشل تحميل المخيمات/المستخدمين:', e.message) }
   }, [])

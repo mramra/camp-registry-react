@@ -5,6 +5,7 @@ import { calcAge, luhnCheck, validateName, validateDob, sortMembers } from '../.
 import { emptyHealthFields } from '../../lib/healthOptions'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import HealthStatusModal from './HealthStatusModal'
@@ -288,6 +289,7 @@ export default function FamilyForm() {
   const [healthModalFor, setHealthModalFor] = useState(null) // null | 'head' | memberId
   const { profile, canWrite, canEdit } = useAuth()
   const { showToast } = useApp()
+  const { getAllowedCampIds } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const navigate = useNavigate()
 
@@ -300,7 +302,7 @@ export default function FamilyForm() {
         if (f) {
           const parsed = parseJsonColumns('families', f)
           setForm({ ...EMPTY_FORM, ...parsed,
-            categories:    f.categories    || [],
+            categories:    parsed.category_tags || f.categories || [],
             economic_level:f.economic_level || '',
             num_orphans:   f.num_orphans   || 0,
             head_disabilities:     parsed.head_disabilities     || [],
@@ -320,7 +322,7 @@ export default function FamilyForm() {
             if (data) {
               const parsed = parseJsonColumns('families', data)
               setForm({ ...EMPTY_FORM, ...parsed,
-                categories:    data.categories    || [],
+                categories:    parsed.category_tags || data.categories || [],
                 economic_level:data.economic_level || '',
                 num_orphans:   data.num_orphans   || 0,
                 head_disabilities:     parsed.head_disabilities     || [],
@@ -653,6 +655,13 @@ export default function FamilyForm() {
     : form.head_id?.length > 0 ? `أدخل ${9-form.head_id.length} أرقام أخرى` : null
   const idOk      = form.head_id?.length >= 9 && luhnCheck(form.head_id)
 
+  // عزل المخيمات: لا تُظهر للمندوب/المساعد عند إضافة/تعديل أسرة إلا مخيماته المسموحة
+  // (يمنع تعيين أسرة لمخيم خارج نطاق صلاحيته، وليس فقط مشكلة عرض)
+  const allowedCampIdsForForm = getAllowedCampIds(camps)
+  const visibleCamps = allowedCampIdsForForm === null
+    ? camps
+    : camps.filter(c => allowedCampIdsForForm.includes(c.id))
+
   return (
     <div>
       <PageHeader icon={isEdit?'✏️':'➕'}
@@ -776,7 +785,7 @@ export default function FamilyForm() {
               <select value={form.camp_id} onChange={e => setF('camp_id', e.target.value)}
                 className={`w-full bg-surface2 border ${errors.camp_id?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}>
                 <option value="">— اختر المخيم —</option>
-                {camps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {visibleCamps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               {errors.camp_id && <p className="text-red text-[11px] mt-1">{errors.camp_id}</p>}
             </div>

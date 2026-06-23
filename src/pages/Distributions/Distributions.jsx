@@ -233,7 +233,10 @@ export default function Distributions() {
     } catch(err) { showToast('خطأ: ' + err.message, true) }
   }
 
-  const campsList = Object.entries(camps).map(([id, name]) => ({ id, name }))
+  const allowedDistCampIds = getAllowedCampIds(campsRaw)
+  const campsList = Object.entries(camps)
+    .map(([id, name]) => ({ id, name }))
+    .filter(c => allowedDistCampIds === null || allowedDistCampIds.includes(c.id))
   const filtered  = rounds.filter(r => !search || (r.name||'').toLowerCase().includes(search.toLowerCase()))
   const receivedCount = Object.keys(received).length
 

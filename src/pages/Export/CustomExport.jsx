@@ -12,8 +12,8 @@ import { styleSheet } from '../../lib/excelStyle'
 const FAM_COLS = [
   { key:'head_name',        label:'اسم رب الأسرة',     def:true  },
   { key:'head_id',          label:'رقم هوية رب الأسرة', def:true  },
-  { key:'wife_name',        label:'اسم الزوجة',         def:false },
-  { key:'wife_id',          label:'هوية الزوجة',         def:false },
+  { key:'wife_name',        label:'اسم الزوجة',         def:true  },
+  { key:'wife_id',          label:'هوية الزوجة',         def:true  },
   { key:'phone1',           label:'رقم الجوال',          def:true  },
   { key:'phone2',           label:'جوال بديل',           def:false },
   { key:'camp',             label:'المخيم',               def:true  },
@@ -80,6 +80,8 @@ export default function CustomExport({ families, members, camps, orgMembers }) {
   const [mode,       setMode]       = useState('families')
   const [filterCamp, setFilterCamp] = useState('')
   const [search,     setSearch]     = useState('')
+  const [ageMin,     setAgeMin]     = useState('')
+  const [ageMax,     setAgeMax]     = useState('')
   const [selected,   setSelected]   = useState(new Set())
   const [famCols,    setFamCols]    = useState(()=>FAM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
   const [memCols,    setMemCols]    = useState(()=>MEM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
@@ -128,12 +130,18 @@ export default function CustomExport({ families, members, camps, orgMembers }) {
       if(!fam) return false
       if(filterCamp&&fam.camp_id!==filterCamp) return false
       if(search&&!m.name?.includes(search)&&!fam.head_name?.includes(search)) return false
+      if(ageMin!==''||ageMax!==''){
+        const a = calcAge(m.dob)
+        if(a===null) return false
+        if(ageMin!==''&&a<parseInt(ageMin)) return false
+        if(ageMax!==''&&a>parseInt(ageMax)) return false
+      }
       return true
     }).map(m=>{
       const fam=families.find(f=>f.id===m.family_id)||{}
       return {...m, fam_name:fam.head_name||'—', head_id:fam.head_id||'—', phone1:fam.phone1||'—', tent:fam.tent||'—', camp_id:fam.camp_id, camp:campMap[fam.camp_id]||'—', age:calcAge(m.dob) }
     }).sort((a,b)=>(a.tent||'ٮ').localeCompare(b.tent||'ٮ','ar',{numeric:true}))
-  },[members,families,filterCamp,search,campMap,mode])
+  },[members,families,filterCamp,search,campMap,mode,ageMin,ageMax])
 
   // ── تحديد ────────────────────────────────────────────
   const list       = mode==='families' ? filteredFams : filteredMems
@@ -225,6 +233,22 @@ export default function CustomExport({ families, members, camps, orgMembers }) {
         )}
         {!filterCamp&&<p className="text-muted text-[10px] mt-1">عند اختيار مخيم: بانر + مندوب تلقائي</p>}
       </div>
+
+      {/* فلتر العمر — للأفراد فقط */}
+      {mode==='members' && (
+        <div className="flex items-center gap-2">
+          <span className="text-muted text-xs font-bold flex-shrink-0">العمر من</span>
+          <input type="number" min="0" max="120" value={ageMin} onChange={e=>setAgeMin(e.target.value)}
+            placeholder="—" className={SEL}/>
+          <span className="text-muted text-xs font-bold flex-shrink-0">إلى</span>
+          <input type="number" min="0" max="120" value={ageMax} onChange={e=>setAgeMax(e.target.value)}
+            placeholder="—" className={SEL}/>
+          {(ageMin!==''||ageMax!=='') && (
+            <button onClick={()=>{setAgeMin('');setAgeMax('')}}
+              className="text-[10px] px-2 py-1 rounded-lg border border-border text-muted flex-shrink-0">↺</button>
+          )}
+        </div>
+      )}
 
       {/* القائمة */}
       <div className="bg-surface border border-border rounded-xl p-3">

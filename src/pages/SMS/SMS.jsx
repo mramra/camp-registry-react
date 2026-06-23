@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
@@ -15,13 +16,16 @@ export default function SMS() {
   const [sending, setSending] = useState(false)
   const { showToast } = useApp()
   const { isOwner, isSuperAdmin } = useAuth()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
   const { query } = useLocalDB()
 
   useEffect(() => {
-    query('families').then(fams => {
-      setFamilies(visibleFamilies(fams, isOwner))
+    Promise.all([query('families'), query('camps')]).then(([fams, c]) => {
+      const vis = visibleFamilies(fams, isOwner)
+      const campIds = getAllowedCampIds(c)
+      setFamilies(filterLocal(vis, campIds))
+      setCamps(campIds === null ? c : c.filter(x => campIds.includes(x.id)))
     })
-    query('camps').then(setCamps)
   }, [])
 
   const filtered = families.filter(f => {

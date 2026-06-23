@@ -372,6 +372,13 @@ export default function FamiliesList() {
 
   const hasFilter = filterCamp || filterMiss || filterGender || ageMin || ageMax || search || filterApproval !== 'approved'
 
+  // عزل المخيمات في فلتر العرض: لا تُظهر للمندوب/المساعد إلا مخيماته المسموحة
+  // (campsList الكامل يبقى كما هو لاستخدامه في getAllowedCampIds الذي يحتاج كل المخيمات لحساب الفروع)
+  const visibleCampsList = useMemo(() => {
+    const campIds = getAllowedCampIds(campsList)
+    return campIds === null ? campsList : campsList.filter(c => campIds.includes(c.id))
+  }, [campsList, getAllowedCampIds])
+
   function resetFilters() {
     setFilterCamp(''); setFilterMiss(''); setFilterGender('')
     setAgeMin(''); setAgeMax(''); setSearch('')
@@ -423,7 +430,7 @@ export default function FamiliesList() {
         </select>
         <select value={filterCamp} onChange={e => setFilterCamp(e.target.value)} className={SEL}>
           <option value="">كل المخيمات ({families.length})</option>
-          {campsList.map(c => {
+          {visibleCampsList.map(c => {
             const cnt = families.filter(f => f.camp_id === c.id).length
             return <option key={c.id} value={c.id}>{c.name} ({cnt})</option>
           })}
