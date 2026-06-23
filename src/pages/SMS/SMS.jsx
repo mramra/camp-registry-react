@@ -16,7 +16,7 @@ export default function SMS() {
   const [sending, setSending] = useState(false)
   const { showToast } = useApp()
   const { isOwner, isSuperAdmin } = useAuth()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
   const { query } = useLocalDB()
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function SMS() {
       const vis = visibleFamilies(fams, isOwner)
       const campIds = getAllowedCampIds(c)
       setFamilies(filterLocal(vis, campIds))
-      setCamps(campIds === null ? c : c.filter(x => campIds.includes(x.id)))
+      setCamps(getVisibleCamps(c))
     })
   }, [])
 

@@ -45,7 +45,7 @@ export default function Distributions() {
   const [saving, setSaving] = useState(false)
   const { showToast, online } = useApp()
   const { isSuperAdmin, isOwner, canWrite } = useAuth()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
 
   useEffect(() => { loadData() }, [])
@@ -233,10 +233,7 @@ export default function Distributions() {
     } catch(err) { showToast('خطأ: ' + err.message, true) }
   }
 
-  const allowedDistCampIds = getAllowedCampIds(campsRaw)
-  const campsList = Object.entries(camps)
-    .map(([id, name]) => ({ id, name }))
-    .filter(c => allowedDistCampIds === null || allowedDistCampIds.includes(c.id))
+  const campsList = getVisibleCamps(campsRaw)
   const filtered  = rounds.filter(r => !search || (r.name||'').toLowerCase().includes(search.toLowerCase()))
   const receivedCount = Object.keys(received).length
 

@@ -289,7 +289,7 @@ export default function FamilyForm() {
   const [healthModalFor, setHealthModalFor] = useState(null) // null | 'head' | memberId
   const { profile, canWrite, canEdit } = useAuth()
   const { showToast } = useApp()
-  const { getAllowedCampIds } = useDataScope()
+  const { getVisibleCamps } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const navigate = useNavigate()
 
@@ -657,10 +657,7 @@ export default function FamilyForm() {
 
   // عزل المخيمات: لا تُظهر للمندوب/المساعد عند إضافة/تعديل أسرة إلا مخيماته المسموحة
   // (يمنع تعيين أسرة لمخيم خارج نطاق صلاحيته، وليس فقط مشكلة عرض)
-  const allowedCampIdsForForm = getAllowedCampIds(camps)
-  const visibleCamps = allowedCampIdsForForm === null
-    ? camps
-    : camps.filter(c => allowedCampIdsForForm.includes(c.id))
+  const visibleCamps = getVisibleCamps(camps)
 
   return (
     <div>

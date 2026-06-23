@@ -40,7 +40,7 @@ export default function ChildrenPage() {
   const { showToast } = useApp()
   const { canExport, isOwner }  = useAuth()
   const { query }      = useLocalDB()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
 
   useEffect(() => { loadData() }, [])
 
@@ -57,7 +57,7 @@ export default function ChildrenPage() {
       const scoped    = filterLocal(f, campIds)
       const scopedIds = new Set(scoped.map(x => x.id))
       const scopedMem = campIds === null ? m : m.filter(x => scopedIds.has(x.family_id))
-      const scopedCamps = campIds === null ? c : c.filter(x => campIds.includes(x.id))
+      const scopedCamps = getVisibleCamps(c)
       setFamilies(scoped); setCamps(scopedCamps); setMembers(scopedMem)
     } catch (err) {
       showToast('خطأ: ' + err.message, true)

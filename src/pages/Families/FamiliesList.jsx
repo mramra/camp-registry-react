@@ -32,7 +32,7 @@ export default function FamiliesList() {
   const [selMembers,  setSelMembers]  = useState([])
 
   const { canWrite, canEdit, canDelete, profile, isOwner } = useAuth()
-  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { getAllowedCampIds, applyScope, filterLocal, getVisibleCamps } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
   const { showToast } = useApp()
   const navigate = useNavigate()
@@ -373,11 +373,7 @@ export default function FamiliesList() {
   const hasFilter = filterCamp || filterMiss || filterGender || ageMin || ageMax || search || filterApproval !== 'approved'
 
   // عزل المخيمات في فلتر العرض: لا تُظهر للمندوب/المساعد إلا مخيماته المسموحة
-  // (campsList الكامل يبقى كما هو لاستخدامه في getAllowedCampIds الذي يحتاج كل المخيمات لحساب الفروع)
-  const visibleCampsList = useMemo(() => {
-    const campIds = getAllowedCampIds(campsList)
-    return campIds === null ? campsList : campsList.filter(c => campIds.includes(c.id))
-  }, [campsList, getAllowedCampIds])
+  const visibleCampsList = useMemo(() => getVisibleCamps(campsList), [campsList, getVisibleCamps])
 
   function resetFilters() {
     setFilterCamp(''); setFilterMiss(''); setFilterGender('')

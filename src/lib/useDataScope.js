@@ -61,5 +61,17 @@ export function useDataScope() {
     return items.filter(item => set.has(item[campField]))
   }
 
-  return { getAllowedCampIds, applyScope, filterLocal, effectiveProfile }
+  /**
+   * يُرجع فقط المخيمات المسموح للمستخدم رؤيتها من قائمة كل المخيمات.
+   * دالة مركزية واحدة — تُستخدم في كل قائمة/فلتر اختيار مخيم بالتطبيق
+   * بدل تكرار نفس منطق "campIds === null ? all : all.filter(...)" بكل صفحة.
+   * allCamps: يجب أن تكون كل المخيمات (لا المفلترة مسبقاً) لأن getAllowedCampIds
+   * تحتاج كل المخيمات لحساب الفروع (parent_camp_id) وفروع مدير الإيواء (manager_id).
+   */
+  function getVisibleCamps(allCamps) {
+    const campIds = getAllowedCampIds(allCamps)
+    return filterLocal(allCamps, campIds, 'id')
+  }
+
+  return { getAllowedCampIds, applyScope, filterLocal, getVisibleCamps, effectiveProfile }
 }

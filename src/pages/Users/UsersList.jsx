@@ -1,9 +1,10 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ORG_ID, callAdminAPI, supabase, useLocalDB } from '../../lib/db'
+import { ORG_ID, callAdminAPI, supabase, useLocalDB, visibleOrgMembers } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import { randomPassword } from '../../lib/utils'
 import { getCreatableRoles } from '../../lib/permissions'
 import PageHeader from '../../components/ui/PageHeader'
@@ -44,6 +45,7 @@ export default function UsersList() {
   const [previewUser, setPreviewUser] = useState(null)
 
   const { profile, isOwner, isSuperAdmin, setPreviewAs, realProfile } = useAuth()
+  const { getAllowedCampIds, getVisibleCamps } = useDataScope()
   const navigate = useNavigate()
   const { showToast, online } = useApp()
 
@@ -57,8 +59,11 @@ export default function UsersList() {
         query('camps'),
         query('org_members', { org_id: ORG_ID }),
       ])
-      setCamps(lCamps)
-      setUsers(lUsers)
+      // عزل حقيقي على مستوى البيانات: المندوب/مدير الإيواء يرى فقط مخيماته ومن ضمنها
+      // (وليس فلترة بصرية فقط — انظر visibleOrgMembers في db.js)
+      const allowedCampIds = getAllowedCampIds(lCamps)
+      setCamps(getVisibleCamps(lCamps))
+      setUsers(visibleOrgMembers(lUsers, profile, allowedCampIds))
     } catch(e) { console.warn(e) }
     finally { setLoading(false) }
   }

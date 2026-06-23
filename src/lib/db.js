@@ -292,6 +292,26 @@ export function visibleFamilies(fams, isOwner) {
 }
 
 /**
+ * يحدد قائمة org_members التي يحق لهذا المستخدم رؤيتها — فلترة مركزية واحدة
+ * تُستخدم في كل صفحة تعرض المستخدمين (UsersList وأي صفحة مستقبلية) بدل تكرار المنطق.
+ * مالك المنصة → الكل. غيره → نفسه + من ضمن مخيماته المسموحة (allowedCampIds) +
+ * المساعدون التابعون (supervisor_id) لمن هو ضمن نطاقه (لتغطية مساعد بلا camp_id خاص به).
+ * allowedCampIds: نتيجة useDataScope().getAllowedCampIds() — null تعني الكل.
+ */
+export function visibleOrgMembers(members, profile, allowedCampIds) {
+  if (!profile) return []
+  if (profile.role === 'platform_owner' || allowedCampIds === null) return members
+  const inScopeIds = new Set(
+    members.filter(m => allowedCampIds.includes(m.camp_id)).map(m => m.id)
+  )
+  return members.filter(m =>
+    m.id === profile.id ||
+    allowedCampIds.includes(m.camp_id) ||
+    inScopeIds.has(m.supervisor_id)
+  )
+}
+
+/**
  * هل هذا المستخدم (profile) مخوَّل لمراجعة طلب صادر عن مستخدم آخر (requesterUser)؟
  * يطابق منطق دالة _can_review_request في SQL، لاستخدامه في فلترة الواجهة فقط
  * (الحماية الحقيقية موجودة في RLS، هذا فقط لتجربة استخدام صحيحة).
