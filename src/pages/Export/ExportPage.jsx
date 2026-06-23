@@ -11,37 +11,7 @@ import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
 import { calcAge } from '../../lib/helpers'
-
-const FAM_COLS = [
-  { key:'head_name',        label:'اسم رب الأسرة',    def:true  },
-  { key:'head_id',          label:'رقم الهوية',        def:true  },
-  { key:'phone1',           label:'رقم الجوال',        def:true  },
-  { key:'phone2',           label:'جوال بديل',         def:false },
-  { key:'camp',             label:'المخيم',             def:true  },
-  { key:'tent',             label:'رقم الخيمة',        def:false },
-  { key:'head_dob',         label:'تاريخ الميلاد',     def:false },
-  { key:'head_gender',      label:'الجنس',             def:false },
-  { key:'head_marital',     label:'الحالة الاجتماعية', def:true  },
-  { key:'members_count',    label:'عدد الأفراد',       def:true  },
-  { key:'category_tags',    label:'الفئة الاجتماعية',  def:false },
-  { key:'original_address', label:'عنوان السكن الأصلي',def:false },
-  { key:'notes',            label:'ملاحظات',           def:false },
-]
-
-const MEM_COLS = [
-  { key:'tent',        label:'رقم الخيمة',      def:true  },
-  { key:'fam_name',    label:'اسم رب الأسرة',  def:true  },
-  { key:'head_id',     label:'هوية رب الأسرة', def:true  },
-  { key:'phone1',      label:'رقم الجوال',      def:true  },
-  { key:'camp',        label:'المخيم',           def:true  },
-  { key:'name',        label:'اسم الفرد',        def:true  },
-  { key:'national_id', label:'رقم الهوية',       def:true  },
-  { key:'relation',    label:'صلة القرابة',      def:true  },
-  { key:'dob',         label:'تاريخ الميلاد',    def:false },
-  { key:'age',         label:'العمر',            def:true  },
-  { key:'gender',      label:'الجنس',            def:false },
-  { key:'health',      label:'الحالة الصحية',    def:false },
-]
+import { FAM_COLS, MEM_COLS, buildWifeMap, resolveFamilyColumn, resolveMemberColumn } from '../../lib/exportColumns'
 
 export default function ExportPage() {
   const { profile, isOwner, isSuperAdmin, canExport, canImport } = useAuth()
@@ -56,6 +26,8 @@ export default function ExportPage() {
   const [exportModal,   setExportModal]   = useState(null)
   const [famCols,       setFamCols]       = useState(()=>FAM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
   const [memCols,       setMemCols]       = useState(()=>MEM_COLS.map((c,i)=>({...c,order:c.def?i+1:0})))
+  const [memAgeMin,     setMemAgeMin]     = useState('')
+  const [memAgeMax,     setMemAgeMax]     = useState('')
   const [importPreview, setImportPreview] = useState(null)
   const [importing,     setImporting]     = useState(false)
   const [showBanner,    setShowBanner]    = useState(true)
@@ -233,52 +205,20 @@ export default function ExportPage() {
       if (!selected.length) return showToast('اختر عموداً على الأقل',true)
       const data = await getFullData()
       const campInfo = getCampInfo(filterCamp)
-      const rows = data.map(f=>{
-        const mems = f.family_members||[]
-        const row = {}
-        selected.forEach(col=>{
-          switch(col.key){
-            case 'head_name':        row[col.label]=f.head_name||''; break
-            case 'head_id':          row[col.label]=f.head_id||''; break
-            case 'phone1':           row[col.label]=f.phone1||''; break
-            case 'phone2':           row[col.label]=f.phone2||''; break
-            case 'camp':             row[col.label]=f.camps?.name||''; break
-            case 'tent':             row[col.label]=f.tent||''; break
-            case 'head_dob':         row[col.label]=f.head_dob||''; break
-            case 'head_gender':      row[col.label]=f.head_gender||''; break
-            case 'head_marital':     row[col.label]=f.head_marital||''; break
-            case 'members_count':    row[col.label]=mems.length+1; break
-            case 'category_tags':    row[col.label]=(Array.isArray(f.category_tags)?f.category_tags:[]).join(', '); break
-            case 'original_address': row[col.label]=f.original_address||''; break
-            case 'notes':            row[col.label]=f.notes||''; break
-          }
-        })
-        return row
-      })
+      const wifeMap = buildWifeMap(data)
       // ترتيب حسب رقم الخيمة
       const sortedData = [...data].sort((a,b)=>{
         const tA=a.tent||'ٮ', tB=b.tent||'ٮ'
         return tA.localeCompare(tB,'ar',{numeric:true})
       })
       const sortedRows = sortedData.map(f=>{
-        const mems=f.family_members||[]
+        const mems = f.family_members||[]
         const row={}
         selected.forEach(col=>{
-          switch(col.key){
-            case 'head_name':        row[col.label]=f.head_name||''; break
-            case 'head_id':          row[col.label]=f.head_id||''; break
-            case 'phone1':           row[col.label]=f.phone1||''; break
-            case 'phone2':           row[col.label]=f.phone2||''; break
-            case 'camp':             row[col.label]=f.camps?.name||''; break
-            case 'tent':             row[col.label]=f.tent||''; break
-            case 'head_dob':         row[col.label]=f.head_dob||''; break
-            case 'head_gender':      row[col.label]=f.head_gender||''; break
-            case 'head_marital':     row[col.label]=f.head_marital||''; break
-            case 'members_count':    row[col.label]=mems.length+1; break
-            case 'category_tags':    row[col.label]=(Array.isArray(f.category_tags)?f.category_tags:[]).join(', '); break
-            case 'original_address': row[col.label]=f.original_address||''; break
-            case 'notes':            row[col.label]=f.notes||''; break
-          }
+          row[col.label] = resolveFamilyColumn(col.key, f, {
+            membersCount: mems.length+1,
+            wife: wifeMap[f.id],
+          })
         })
         return row
       })
@@ -306,6 +246,7 @@ export default function ExportPage() {
       if (!selected.length) return showToast('اختر عموداً على الأقل', true)
       const data     = await getFullData()
       const campInfo = getCampInfo(filterCamp)
+      const hasAgeFilter = memAgeMin !== '' || memAgeMax !== ''
 
       // ترتيب حسب الخيمة
       const sorted = [...data].sort((a,b)=>
@@ -321,23 +262,13 @@ export default function ExportPage() {
           ...mems
         ]
         all.forEach(m => {
-          dataRows.push(selected.map(col => {
-            switch(col.key){
-              case 'tent':        return f.tent||''
-              case 'fam_name':    return f.head_name||''
-              case 'head_id':     return f.head_id||''
-              case 'phone1':      return f.phone1||''
-              case 'camp':        return f.camps?.name||''
-              case 'name':        return m.name||''
-              case 'national_id': return m.national_id||''
-              case 'relation':    return m.relation||''
-              case 'dob':         return m.dob||''
-              case 'age':         return calcAge(m.dob)??''
-              case 'gender':      return m.gender||''
-              case 'health':      return m.health||''
-              default: return ''
-            }
-          }))
+          if (hasAgeFilter) {
+            const a = calcAge(m.dob)
+            if (a === null) return
+            if (memAgeMin !== '' && a < parseInt(memAgeMin)) return
+            if (memAgeMax !== '' && a > parseInt(memAgeMax)) return
+          }
+          dataRows.push(selected.map(col => resolveMemberColumn(col.key, m, f)))
         })
       })
 
@@ -574,6 +505,20 @@ export default function ExportPage() {
       <Modal open={!!exportModal} onClose={()=>setExportModal(null)}
         title={exportModal==='mem'?'📊 كشف أفراد الأسر':'📊 كشف رباب الأسر'}>
         <div className="flex flex-col gap-3">
+          {exportModal==='mem' && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted text-xs font-bold flex-shrink-0">العمر من</span>
+              <input type="number" min="0" max="120" value={memAgeMin} onChange={e=>setMemAgeMin(e.target.value)}
+                placeholder="—" className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none"/>
+              <span className="text-muted text-xs font-bold flex-shrink-0">إلى</span>
+              <input type="number" min="0" max="120" value={memAgeMax} onChange={e=>setMemAgeMax(e.target.value)}
+                placeholder="—" className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none"/>
+              {(memAgeMin!==''||memAgeMax!=='') && (
+                <button onClick={()=>{setMemAgeMin('');setMemAgeMax('')}}
+                  className="text-[10px] px-2 py-2 rounded-lg border border-border text-muted flex-shrink-0">↺</button>
+              )}
+            </div>
+          )}
           {(()=>{
             const isMem = exportModal==='mem'
             const cols = isMem?memCols:famCols

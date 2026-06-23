@@ -7,43 +7,7 @@ import { useState, useMemo } from 'react'
 import XLSX from 'xlsx-js-style'
 import { calcAge } from '../../lib/helpers'
 import { styleSheet } from '../../lib/excelStyle'
-
-// ── حقول رباب الأسر (مع الزوجة) ─────────────────────────
-const FAM_COLS = [
-  { key:'head_name',        label:'اسم رب الأسرة',     def:true  },
-  { key:'head_id',          label:'رقم هوية رب الأسرة', def:true  },
-  { key:'wife_name',        label:'اسم الزوجة',         def:true  },
-  { key:'wife_id',          label:'هوية الزوجة',         def:true  },
-  { key:'phone1',           label:'رقم الجوال',          def:true  },
-  { key:'phone2',           label:'جوال بديل',           def:false },
-  { key:'camp',             label:'المخيم',               def:true  },
-  { key:'tent',             label:'رقم الخيمة',          def:true  },
-  { key:'head_dob',         label:'تاريخ ميلاد رب الأسرة',def:false },
-  { key:'head_gender',      label:'الجنس',               def:false },
-  { key:'head_marital',     label:'الحالة الاجتماعية',   def:true  },
-  { key:'members_count',    label:'عدد الأفراد',         def:true  },
-  { key:'category_tags',    label:'الفئة الاجتماعية',    def:false },
-  { key:'original_address', label:'العنوان الأصلي',       def:false },
-  { key:'notes',            label:'ملاحظات',             def:false },
-]
-
-// ── حقول الأفراد ──────────────────────────────────────────
-const MEM_COLS = [
-  { key:'tent',        label:'رقم الخيمة',       def:true  },
-  { key:'fam_name',    label:'اسم رب الأسرة',    def:true  },
-  { key:'head_id',     label:'هوية رب الأسرة',   def:true  },
-  { key:'phone1',      label:'رقم الجوال',        def:true  },
-  { key:'camp',        label:'المخيم',             def:true  },
-  { key:'name',        label:'اسم الفرد',          def:true  },
-  { key:'national_id', label:'رقم هوية الفرد',    def:true  },
-  { key:'relation',    label:'صلة القرابة',        def:true  },
-  { key:'dob',         label:'تاريخ الميلاد',      def:false },
-  { key:'age',         label:'العمر',              def:true  },
-  { key:'gender',      label:'الجنس',              def:false },
-  { key:'health',      label:'الحالة الصحية',      def:false },
-  { key:'chronic_diseases', label:'أمراض مزمنة',  def:false },
-  { key:'disabilities',     label:'الإعاقات',      def:false },
-]
+import { FAM_COLS, MEM_COLS, findWife } from '../../lib/exportColumns'
 
 function ColPicker({ cols, onChange, label }) {
   return (
@@ -100,10 +64,15 @@ export default function CustomExport({ families, members, camps, orgMembers }) {
 
   // ── زوجة كل أسرة ─────────────────────────────────────
   const wifeMap = useMemo(()=>{
-    const m={}
+    const byFamily = {}
     members.forEach(mem=>{
-      if(['زوجة','زوجه'].includes(mem.relation||'') && !m[mem.family_id])
-        m[mem.family_id]=mem
+      if(!byFamily[mem.family_id]) byFamily[mem.family_id]=[]
+      byFamily[mem.family_id].push(mem)
+    })
+    const m={}
+    Object.keys(byFamily).forEach(famId=>{
+      const wife = findWife(byFamily[famId])
+      if (wife) m[famId]=wife
     })
     return m
   },[members])
