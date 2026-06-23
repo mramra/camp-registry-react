@@ -20,6 +20,7 @@ const Distributions  = lazy(() => import('./pages/Distributions/Distributions'))
 const Analysis       = lazy(() => import('./pages/Analysis/Analysis'))
 const DataPage        = lazy(() => import('./pages/Data/DataPage'))
 const DiagnosticsPage = lazy(() => import('./pages/Diagnostics/DiagnosticsPage'))
+const SecurityAudit = lazy(() => import('./pages/Diagnostics/SecurityAudit'))
 const ExportPage     = lazy(() => import('./pages/Export/ExportPage'))
 const Settings       = lazy(() => import('./pages/Settings/Settings'))
 const AuditLog       = lazy(() => import('./pages/Audit/AuditLog'))
@@ -121,6 +122,7 @@ function AppRoutes() {
           <Route path="needs-report"  element={<ProtectedRoute pageKey="needs_report" pageLabel="تقارير الاحتياجات"><NeedsReport /></ProtectedRoute>} />
           <Route path="data" element={<ProtectedRoute pageKey="data" pageLabel="إدارة البيانات"><DataPage /></ProtectedRoute>} />
           <Route path="diagnostics" element={<ProtectedRoute pageKey="diagnostics" pageLabel="تشخيص النظام"><DiagnosticsPage /></ProtectedRoute>} />
+          <Route path="security-audit" element={<ProtectedRoute pageKey="security_audit" pageLabel="الفحص الأمني"><SecurityAudit /></ProtectedRoute>} />
           <Route path="export"        element={<ProtectedRoute pageKey="export" pageLabel="الاستيراد والتصدير"><ExportPage /></ProtectedRoute>} />
           <Route path="settings"      element={<ProtectedRoute pageKey="settings" pageLabel="الإعدادات"><Settings /></ProtectedRoute>} />
           <Route path="audit"         element={<ProtectedRoute pageKey="audit" pageLabel="سجل التغييرات"><AuditLog /></ProtectedRoute>} />

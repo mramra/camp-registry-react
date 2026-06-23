@@ -105,6 +105,7 @@ export const PAGE_REGISTRY = {
   alerts:           { label: '🔔 التنبيهات',               path: '/alerts' },
   data:             { label: '🛠️ إدارة البيانات',          path: '/data' },
   diagnostics:      { label: '🩺 تشخيص النظام',            path: '/diagnostics' },
+  security_audit:   { label: '🛡️ الفحص الأمني',            path: '/security-audit' },
   devices:          { label: '📱 الأجهزة',                 path: '/devices' },
   sms:              { label: '✉️ الرسائل',                  path: '/sms' },
   settings:         { label: '⚙️ الإعدادات',               path: '/settings' },
@@ -128,7 +129,7 @@ const DEFAULT_ROLE_ACCESS = {
     registers:true,
     women:true, children:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
-    users:true, audit:true, alerts:true, data:false, diagnostics:true,
+    users:true, audit:true, alerts:true, data:false, diagnostics:true, security_audit:false,
     devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:true,
   },
   camp_delegate: {
@@ -136,7 +137,7 @@ const DEFAULT_ROLE_ACCESS = {
     registers:true,
     women:true, children:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
-    users:true, audit:true, alerts:true, data:false, diagnostics:true,
+    users:true, audit:true, alerts:true, data:false, diagnostics:true, security_audit:false,
     devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:true,
   },
   assistant: {
@@ -144,7 +145,7 @@ const DEFAULT_ROLE_ACCESS = {
     registers:false,
     women:false, children:false,
     analysis:false, needs_report:false, camp_compare:false, export:false,
-    users:false, audit:false, alerts:false, data:false, diagnostics:false,
+    users:false, audit:false, alerts:false, data:false, diagnostics:false, security_audit:false,
     devices:false, sms:false, settings:true, subscription:false, help:true, page_permissions:false, pending_requests:false,
   },
 }

@@ -63,6 +63,7 @@ const NAV_GROUPS = [
       { icon: '🔔', label: 'التنبيهات',       path: '/alerts',              pageKey: 'alerts' },
       { icon: '🛠️', label: 'إدارة البيانات',  path: '/data',                pageKey: 'data' },
       { icon: '🩺', label: 'تشخيص النظام',   path: '/diagnostics',         pageKey: 'diagnostics' },
+      { icon: '🛡️', label: 'الفحص الأمني',   path: '/security-audit',      pageKey: 'security_audit' },
       { icon: '📱', label: 'الأجهزة',        path: '/devices',             pageKey: 'devices' },
     ],
   },
