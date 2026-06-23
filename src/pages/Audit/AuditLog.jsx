@@ -1,100 +1,121 @@
 /**
  * AuditLog.jsx — سجل التغييرات
- * يعرض آخر العمليات: إضافة / تعديل / حذف
+ * يعرض السجل الحقيقي من family_activity_log (وليس تخميناً من updated_at):
+ * يشمل عمليات الحذف الفعلية، اسم الفاعل، والتغييرات الدقيقة لكل حقل.
+ * مفلتر حسب نطاق المخيمات المسموحة (useDataScope).
  */
 import { useState, useEffect } from 'react'
-import { ORG_ID, supabase } from '../../lib/db'
-import { useApp } from '../../context/AppContext'
-import PageHeader from '../../components/ui/PageHeader'
-import Spinner from '../../components/ui/Spinner'
-import EmptyState from '../../components/ui/EmptyState'
-import SearchBar from '../../components/ui/SearchBar'
+import { supabase, ORG_ID, TRACKED_FIELDS } from '../../lib/db'
+import { useAuth } from '../../context/AuthContext'
+import { useDataScope } from '../../lib/useDataScope'
+import { PageHeader, Spinner, EmptyState, SearchBar, FilterSelect } from '../../components/ui'
 
 const OP_STYLE = {
-  INSERT: { label:'➕ إضافة', color:'text-green',  bg:'bg-green/10'  },
-  UPDATE: { label:'✏️ تعديل', color:'text-accent', bg:'bg-accent/10' },
-  DELETE: { label:'🗑️ حذف',  color:'text-red',    bg:'bg-red/10'    },
-}
-
-const TABLE_LABELS = {
-  families:         '👨‍👩‍👧 الأسر',
-  family_members:   '👤 الأفراد',
-  camps:            '🏕️ المخيمات',
-  org_members:      '👥 المستخدمون',
-  family_movements: '🔄 الحركات',
-  dist_rounds:      '📦 التوزيعات',
+  insert: { label: '➕ إضافة', color: 'text-green',  bg: 'bg-green/10'  },
+  update: { label: '✏️ تعديل', color: 'text-accent', bg: 'bg-accent/10' },
+  delete: { label: '🗑️ حذف',  color: 'text-red',    bg: 'bg-red/10'    },
 }
 
 export default function AuditLog() {
-  const { online } = useApp()
-  const [logs,    setLogs]    = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
-  const [opFilter,setOpFilter]= useState('')
+  const { profile, isOwner } = useAuth()
+  const { getAllowedCampIds } = useDataScope()
+
+  const [logs,       setLogs]       = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState('')
+  const [actionFil,  setActionFil]  = useState('')
+  const [actorFil,   setActorFil]   = useState('')
+  const [expanded,   setExpanded]   = useState(null)
 
   useEffect(() => { loadLogs() }, [])
 
   async function loadLogs() {
     setLoading(true)
     try {
-      // استخدم جدول audit_logs إذا موجود، وإلا اصنع سجل من updated_at
-      const tables = ['families','family_members','family_movements','dist_rounds']
-      const all = []
+      // 1) جلب المخيمات لتحديد نطاق الرؤية المسموح
+      const { data: campsList } = await supabase.from('camps').select('id,parent_camp_id,manager_id').eq('org_id', ORG_ID)
+      const campIds = getAllowedCampIds(campsList || [])
 
-      await Promise.all(tables.map(async t => {
-        try {
-          let q = supabase.from(t).select('id,updated_at,created_at,head_name,name,type')
-            .order('updated_at', { ascending:false }).limit(20)
-          if (['families','family_movements','dist_rounds'].includes(t))
-            q = q.eq('org_id', ORG_ID)
-          const { data } = await q
-          if (data?.length) {
-            data.forEach(r => {
-              const isNew = r.created_at === r.updated_at || !r.updated_at
-              all.push({
-                id:        r.id + t,
-                table:     t,
-                op:        isNew ? 'INSERT' : 'UPDATE',
-                label:     r.head_name || r.name || r.type || r.id?.slice(0,8),
-                time:      r.updated_at || r.created_at,
-              })
-            })
-          }
-        } catch (e) { console.warn(`[audit] فشل جلب سجل جدول ${t}:`, e.message) }
-      }))
+      // 2) جلب الأسر ضمن النطاق المسموح فقط (لربط family_id بالمخيم)
+      const { data: fams } = await supabase.from('families').select('id,camp_id').eq('org_id', ORG_ID)
+      let allowedFamilyIds = null
+      if (campIds !== null) {
+        const set = new Set(campIds)
+        allowedFamilyIds = new Set((fams || []).filter(f => set.has(f.camp_id)).map(f => f.id))
+      }
 
-      // ترتيب حسب الوقت
-      all.sort((a,b) => new Date(b.time) - new Date(a.time))
-      setLogs(all.slice(0,100))
-    } catch (e) { console.warn('[audit] فشل تحميل السجل:', e.message) }
-    finally { setLoading(false) }
+      // 3) جلب السجل الحقيقي من family_activity_log
+      const { data, error } = await supabase
+        .from('family_activity_log')
+        .select('*')
+        .eq('org_id', ORG_ID)
+        .order('created_at', { ascending: false })
+        .limit(300)
+      if (error) throw error
+
+      let rows = data || []
+      if (allowedFamilyIds) {
+        rows = rows.filter(r => r.family_id && allowedFamilyIds.has(r.family_id))
+      }
+      setLogs(rows.slice(0, 150))
+    } catch (e) {
+      console.warn('[audit] فشل تحميل السجل:', e.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
+  // قائمة المستخدمين الفريدة الظاهرة في السجل الحالي (لتعبئة فلتر "كل المستخدمين")
+  const actorOptions = [...new Map(logs.map(l => [l.actor_name, l.actor_name])).keys()]
+    .filter(Boolean).sort().map(name => ({ value: name, label: name }))
+
   const filtered = logs.filter(l => {
-    if (opFilter && l.op !== opFilter) return false
-    if (search && !l.label?.includes(search) && !TABLE_LABELS[l.table]?.includes(search)) return false
+    if (actionFil && l.action !== actionFil) return false
+    if (actorFil && l.actor_name !== actorFil) return false
+    if (search && !l.family_name?.includes(search)) return false
     return true
   })
 
   function formatTime(t) {
     if (!t) return '—'
-    const d = new Date(t)
-    return d.toLocaleString('ar-EG', { dateStyle:'short', timeStyle:'short' })
+    return new Date(t).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })
+  }
+
+  function renderChanges(changes) {
+    const keys = Object.keys(changes || {})
+    if (!keys.length) return null
+    return (
+      <div className="mt-2 pt-2 border-t border-border flex flex-col gap-1">
+        {keys.map(k => (
+          <div key={k} className="text-[11px] text-muted flex gap-1 flex-wrap">
+            <span className="font-bold text-white">{TRACKED_FIELDS[k] || k}:</span>
+            <span className="line-through opacity-60">{changes[k].old ?? '—'}</span>
+            <span>←</span>
+            <span className="text-accent">{changes[k].new ?? '—'}</span>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
     <div>
-      <PageHeader icon="📝" title="سجل التغييرات" subtitle="آخر 100 عملية"/>
+      <PageHeader icon="📝" title="سجل التغييرات" subtitle="آخر 150 عملية حقيقية على الأسر"/>
 
-      <div className="flex gap-2 mb-3">
-        <SearchBar value={search} onChange={setSearch} placeholder="بحث باسم..." className="flex-1"/>
-        <select value={opFilter} onChange={e=>setOpFilter(e.target.value)}
-          className="bg-surface2 border border-border rounded-xl px-3 text-white text-sm focus:outline-none">
-          <option value="">الكل</option>
-          <option value="INSERT">إضافة</option>
-          <option value="UPDATE">تعديل</option>
-          <option value="DELETE">حذف</option>
-        </select>
+      <div className="flex flex-col gap-2 mb-3">
+        <SearchBar value={search} onChange={setSearch} placeholder="بحث باسم رب الأسرة..."/>
+        <div className="flex gap-2">
+          <FilterSelect value={actionFil} onChange={setActionFil} className="flex-1"
+            placeholder="كل الإجراءات"
+            options={[
+              { value: 'insert', label: '➕ إضافة' },
+              { value: 'update', label: '✏️ تعديل' },
+              { value: 'delete', label: '🗑️ حذف'  },
+            ]}/>
+          <FilterSelect value={actorFil} onChange={setActorFil} className="flex-1"
+            placeholder="كل المستخدمين"
+            options={actorOptions}/>
+        </div>
       </div>
 
       <button onClick={loadLogs} disabled={loading}
@@ -109,17 +130,26 @@ export default function AuditLog() {
       ) : (
         <div className="flex flex-col gap-1.5">
           {filtered.map(l => {
-            const op = OP_STYLE[l.op] || OP_STYLE.UPDATE
+            const op = OP_STYLE[l.action] || OP_STYLE.update
+            const isOpen = expanded === l.id
+            const hasChanges = l.changes && Object.keys(l.changes).length > 0
             return (
-              <div key={l.id} className="bg-surface border border-border rounded-xl p-3 flex items-center gap-3">
-                <span className={`text-xs font-bold px-2 py-1 rounded-lg ${op.color} ${op.bg}`}>
-                  {op.label}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-white text-xs font-bold truncate">{l.label || '—'}</div>
-                  <div className="text-muted text-[10px]">{TABLE_LABELS[l.table]||l.table}</div>
+              <div key={l.id} className="bg-surface border border-border rounded-xl p-3"
+                onClick={() => hasChanges && setExpanded(isOpen ? null : l.id)}>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0 ${op.color} ${op.bg}`}>
+                    {op.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-xs font-bold truncate">{l.family_name || '—'}</div>
+                    <div className="text-muted text-[10px]">👤 {l.actor_name || '—'}</div>
+                  </div>
+                  <div className="flex flex-col items-end flex-shrink-0">
+                    <span className="text-muted text-[10px]">{formatTime(l.created_at)}</span>
+                    {hasChanges && <span className="text-accent text-[10px]">{isOpen ? '▲' : `▼ ${Object.keys(l.changes).length} تغيير`}</span>}
+                  </div>
                 </div>
-                <span className="text-muted text-[10px] flex-shrink-0">{formatTime(l.time)}</span>
+                {isOpen && renderChanges(l.changes)}
               </div>
             )
           })}
