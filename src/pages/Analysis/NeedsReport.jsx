@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
 import { hasHealthData, getFamilyCategories, getOrphanCount } from '../../lib/helpers'
+import { exportXLSX } from '../../lib/excelExport'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -108,27 +109,25 @@ export default function NeedsReport() {
     return s
   },[families,members,memsByFamily])
 
-  async function exportCSV() {
+  function exportCSV() {
     if (!canExport) return showToast('ليس لديك صلاحية',true)
+    if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
     setExporting(true)
     try {
-      const headers = ['اسم الأسرة','رقم الهوية','الجوال','المخيم','عدد الأفراد','الفئات','المستوى الاقتصادي','الأيتام']
       const rows = filtered.map(f=>{
         const mems = memsByFamily[f.id]||[]
-        return [
-          f.head_name||'', f.head_id||'', f.phone1||'',
-          campMap[f.camp_id]||'',
-          mems.length+1,
-          getFamilyCategories(f, mems).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
-          ECON_LABELS[f.economic_level]?.replace(/^../,'')||'',
-          getOrphanCount(f, mems),
-        ]
+        return {
+          'اسم الأسرة':         f.head_name || '',
+          'رقم الهوية':         f.head_id || '',
+          'الجوال':             f.phone1 || '',
+          'المخيم':             campMap[f.camp_id] || '',
+          'عدد الأفراد':        mems.length + 1,
+          'الفئات':             getFamilyCategories(f, mems).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
+          'المستوى الاقتصادي':  ECON_LABELS[f.economic_level]?.replace(/^../,'') || '',
+          'الأيتام':            getOrphanCount(f, mems),
+        }
       })
-      const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
-      const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href=url; a.download=`needs_report_${new Date().toISOString().slice(0,10)}.csv`; a.click()
-      URL.revokeObjectURL(url)
+      exportXLSX(rows, 'تقرير الاحتياجات', `تقرير_الاحتياجات_${new Date().toISOString().slice(0,10)}`)
       showToast(`✅ تم تصدير ${filtered.length} أسرة`)
     } catch(err) { showToast('خطأ: '+err.message,true) }
     finally { setExporting(false) }
@@ -188,7 +187,7 @@ export default function NeedsReport() {
           </select>
           <button onClick={exportCSV} disabled={exporting||!filtered.length}
             className="w-full bg-green/15 border border-green/30 text-green font-bold py-2.5 rounded-xl text-sm disabled:opacity-60">
-            {exporting?'جاري التصدير...':'📥 تصدير النتائج CSV'}
+            {exporting?'جاري التصدير...':'📥 تصدير النتائج Excel'}
           </button>
         </div>
       </Card>

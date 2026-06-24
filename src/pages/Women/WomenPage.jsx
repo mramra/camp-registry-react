@@ -7,6 +7,7 @@ import {
   buildFamHasNamedWife, buildFamWithInfant, isAutoNursing,
 } from '../../lib/helpers'
 import { useDataScope }   from '../../lib/useDataScope'
+import { exportXLSX }     from '../../lib/excelExport'
 import PageHeader         from '../../components/ui/PageHeader'
 import Card               from '../../components/ui/Card'
 import Spinner            from '../../components/ui/Spinner'
@@ -179,6 +180,7 @@ export default function WomenPage() {
 
   function exportExcel() {
     try {
+      if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
       const rows = filtered.map(w => ({
         'الاسم': w.name,
         'رقم الهوية': w.national_id || '',
@@ -190,15 +192,7 @@ export default function WomenPage() {
         'الهاتف': w.phone || '',
         'اسم رب الأسرة': w.head_name,
       }))
-
-      // بناء CSV بسيط
-      const headers = Object.keys(rows[0])
-      const csv = [headers.join(','), ...rows.map(r => headers.map(h => `"${r[h]}"`).join(','))].join('\n')
-      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href = url; a.download = 'كشف_النساء.csv'; a.click()
-      URL.revokeObjectURL(url)
+      exportXLSX(rows, 'كشف النساء', 'كشف_النساء')
     } catch (err) {
       showToast('خطأ في التصدير: ' + err.message, true)
     }

@@ -3,6 +3,7 @@ import { useApp }       from '../../context/AppContext'
 import { useAuth }      from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
 import { parseArr, calcAge } from '../../lib/helpers'
+import { exportXLSX } from '../../lib/excelExport'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader       from '../../components/ui/PageHeader'
 import Card             from '../../components/ui/Card'
@@ -160,6 +161,7 @@ export default function ChildrenPage() {
 
   function exportExcel() {
     try {
+      if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
       const rows = filtered.map(c => ({
         'الاسم': c.name,
         'رقم الهوية': c.national_id || '',
@@ -171,13 +173,7 @@ export default function ChildrenPage() {
         'يتيم': c.orphan ? 'نعم' : '',
         'إعاقة': c.disabilities && (Array.isArray(c.disabilities) ? c.disabilities.length : c.disabilities) ? 'نعم' : '',
       }))
-      const headers = Object.keys(rows[0])
-      const csv = [headers.join(','), ...rows.map(r => headers.map(h => `"${r[h]}"`).join(','))].join('\n')
-      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href = url; a.download = 'سجل_الأطفال.csv'; a.click()
-      URL.revokeObjectURL(url)
+      exportXLSX(rows, 'سجل الأطفال', 'سجل_الأطفال')
     } catch (err) {
       showToast('خطأ في التصدير: ' + err.message, true)
     }
