@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
+import { hasHealthData } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -20,10 +21,19 @@ const ECON_LABELS = {
   worker:'🟡 عامل', employee:'🟢 موظف', well_off:'🔵 ميسور',
 }
 const HEALTH_TYPES = {
-  معاق:  { label:'معاق',       icon:'🦽' },
-  مصاب:  { label:'إصابة حرب', icon:'🩹' },
-  مزمن:  { label:'مرض مزمن',  icon:'💊' },
-  مريض:  { label:'مريض',       icon:'🤒' },
+  معاق: { label:'إعاقة',     icon:'🦽' },
+  مصاب: { label:'إصابة حرب', icon:'🩹' },
+  مزمن: { label:'مرض مزمن',  icon:'💊' },
+}
+// يطابق نفس منطق Analysis.jsx/HealthReport.jsx بالضبط: الحالات الصحية تُحسَب من
+// الحقول التفصيلية الحقيقية (disabilities/injuries/chronic_diseases) لا من عمود
+// health القديم البسيط — مركزياً عبر hasHealthData من helpers.js لكل الصفحات الثلاث.
+function memberHealthKeys(m) {
+  const keys = []
+  if (hasHealthData(m.disabilities))     keys.push('معاق')
+  if (hasHealthData(m.injuries))         keys.push('مصاب')
+  if (hasHealthData(m.chronic_diseases)) keys.push('مزمن')
+  return keys
 }
 
 export default function NeedsReport() {
@@ -69,11 +79,11 @@ export default function NeedsReport() {
   const filtered = useMemo(()=>{
     return families.filter(f=>{
       if (filterCamp && f.camp_id!==filterCamp) return false
-      if (filterCat  && !(f.categories||[]).includes(filterCat)) return false
+      if (filterCat  && !(f.category_tags||[]).includes(filterCat)) return false
       if (filterEcon && f.economic_level!==filterEcon) return false
       if (filterHealth) {
         const mems = memsByFamily[f.id]||[]
-        if (!mems.some(m=>m.health===filterHealth)) return false
+        if (!mems.some(m=>memberHealthKeys(m).includes(filterHealth))) return false
       }
       return true
     })
@@ -82,27 +92,30 @@ export default function NeedsReport() {
   // إحصائيات سريعة
   const quickStats = useMemo(()=>{
     const s={}
-    Object.keys(CAT_LABELS).forEach(k=>{ s[k]=families.filter(f=>(f.categories||[]).includes(k)).length })
-    s.orphans  = families.filter(f=>(f.num_orphans||0)>0).length
-    s.disabled = members.filter(m=>m.health==='معاق').length
-    s.injured  = members.filter(m=>m.health==='مصاب').length
-    s.chronic  = members.filter(m=>m.health==='مزمن').length
+    Object.keys(CAT_LABELS).forEach(k=>{ s[k]=families.filter(f=>(f.category_tags||[]).includes(k)).length })
+    s.orphans  = families.filter(f=>(memsByFamily[f.id]||[]).some(m=>m.orphan_status)).length
+    s.disabled = members.filter(m=>hasHealthData(m.disabilities)).length
+    s.injured  = members.filter(m=>hasHealthData(m.injuries)).length
+    s.chronic  = members.filter(m=>hasHealthData(m.chronic_diseases)).length
     return s
-  },[families,members])
+  },[families,members,memsByFamily])
 
   async function exportCSV() {
     if (!canExport) return showToast('ليس لديك صلاحية',true)
     setExporting(true)
     try {
       const headers = ['اسم الأسرة','رقم الهوية','الجوال','المخيم','عدد الأفراد','الفئات','المستوى الاقتصادي','الأيتام']
-      const rows = filtered.map(f=>[
-        f.head_name||'', f.head_id||'', f.phone1||'',
-        campMap[f.camp_id]||'',
-        (memsByFamily[f.id]?.length||0)+1,
-        (f.categories||[]).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
-        ECON_LABELS[f.economic_level]?.replace(/^../,'')||'',
-        f.num_orphans||0,
-      ])
+      const rows = filtered.map(f=>{
+        const mems = memsByFamily[f.id]||[]
+        return [
+          f.head_name||'', f.head_id||'', f.phone1||'',
+          campMap[f.camp_id]||'',
+          mems.length+1,
+          (f.category_tags||[]).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
+          ECON_LABELS[f.economic_level]?.replace(/^../,'')||'',
+          mems.filter(m=>m.orphan_status).length,
+        ]
+      })
       const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
       const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})
       const url = URL.createObjectURL(blob)
@@ -179,7 +192,8 @@ export default function NeedsReport() {
         <div className="flex flex-col gap-2">
           {filtered.slice(0,50).map(f=>{
             const mems = memsByFamily[f.id]||[]
-            const unhealthy = mems.filter(m=>m.health&&m.health!=='سليم')
+            const orphanCount = mems.filter(m=>m.orphan_status).length
+            const unhealthy = mems.flatMap(m=>memberHealthKeys(m).map(k=>({m,k})))
             return (
               <div key={f.id} className="bg-surface border border-border rounded-xl p-4">
                 <div className="flex items-start justify-between">
@@ -188,17 +202,17 @@ export default function NeedsReport() {
                     <div className="text-white text-xs" dir="ltr">{f.head_id}</div>
                     {campMap[f.camp_id] && <div className="text-blue text-xs mt-0.5">🏕️ {campMap[f.camp_id]}</div>}
                     <div className="flex gap-1 mt-1.5 flex-wrap">
-                      {(f.categories||[]).map(c=>(
+                      {(f.category_tags||[]).map(c=>(
                         <span key={c} className="text-[9px] bg-accent/15 text-accent border border-accent/20 px-1.5 py-0.5 rounded-full font-bold">
                           {CAT_LABELS[c]?.icon} {CAT_LABELS[c]?.label||c}
                         </span>
                       ))}
                       {f.economic_level && <span className="text-[9px] bg-surface2 text-muted border border-border px-1.5 py-0.5 rounded-full">{ECON_LABELS[f.economic_level]?.replace(/^../,'').trim()}</span>}
-                      {(f.num_orphans||0)>0 && <span className="text-[9px] bg-red/15 text-red border border-red/20 px-1.5 py-0.5 rounded-full font-bold">🕊️ {f.num_orphans} يتيم</span>}
+                      {orphanCount>0 && <span className="text-[9px] bg-red/15 text-red border border-red/20 px-1.5 py-0.5 rounded-full font-bold">🕊️ {orphanCount} يتيم</span>}
                     </div>
                     {unhealthy.length>0 && (
                       <div className="text-[10px] text-muted mt-1">
-                        {unhealthy.map(m=>`${HEALTH_TYPES[m.health]?.icon||'⚠️'} ${m.name}`).join(' · ')}
+                        {unhealthy.map(({m,k},i)=>`${HEALTH_TYPES[k]?.icon||'⚠️'} ${m.name}`).join(' · ')}
                       </div>
                     )}
                   </div>
