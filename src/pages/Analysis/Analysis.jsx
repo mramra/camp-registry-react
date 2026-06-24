@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
 import { parseArr, hasHealthData, calcAge } from '../../lib/helpers'
+import { exportStatsPDF } from '../../lib/pdfReport'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
@@ -119,6 +120,7 @@ function DrillDownModal({ title, items, campMap, onClose, onOpenFamily }) {
 
 export default function Analysis() {
   const [tab,        setTab]        = useState('overview')
+  const [pdfLoading, setPdfLoading] = useState(false)
   const [stats,      setStats]      = useState(null)
   const [loading,    setLoading]    = useState(true)
   const [filterCamp, setFilterCamp] = useState('all')
@@ -135,7 +137,7 @@ export default function Analysis() {
   const [allMembers,  setAllMembers]  = useState([])
 
   const { query, bulkUpsert } = useLocalDB()
-  const { isOwner } = useAuth()
+  const { isOwner, canExport } = useAuth()
   useEffect(() => { loadStats() }, [filterCamp])
 
   async function loadStats() {
@@ -309,6 +311,19 @@ export default function Analysis() {
 
   const campMap = stats.campMap
 
+  async function handleExportPDF() {
+    setPdfLoading(true)
+    try {
+      const scopeName = filterCamp === 'all' ? 'كل المخيمات' : (campMap[filterCamp] || 'تقرير')
+      await exportStatsPDF(stats, { scopeName })
+      showToast('✅ تم تصدير التقرير')
+    } catch (e) {
+      showToast('خطأ بالتصدير: ' + e.message, true)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader icon="📈" title="التقارير والتحليلات" />
@@ -320,6 +335,13 @@ export default function Analysis() {
           <option key={c.id} value={c.id}>{c.name} ({c.count})</option>
         ))}
       </select>
+
+      {canExport && (
+        <button onClick={handleExportPDF} disabled={pdfLoading}
+          className="w-full bg-surface2 border border-accent/30 text-accent font-bold text-sm rounded-xl px-4 py-2.5 mb-4 disabled:opacity-50 flex items-center justify-center gap-2">
+          {pdfLoading ? <>⏳ جارٍ توليد التقرير...</> : <>📄 تصدير تقرير PDF رسمي</>}
+        </button>
+      )}
 
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1 no-scrollbar">
         {TABS.map(t => (
