@@ -339,3 +339,6 @@ export function getExpectedGrade(age) {
 export function isSchoolAge(age) {
   return age != null && age >= 4 && age <= 17
 }
+
+/** خيارات المؤهل العلمي للبالغين (18+) — حقل اختياري، فاضي يعني غير مُسجَّل */
+export const QUALIFICATION_OPTIONS = ['دبلوم', 'بكالوريوس', 'ماجستير', 'دكتوراه']

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ORG_ID, diffFamilyFields, isExemptFromApproval, logFamilyActivity, parseJsonColumns, recordApprovalRequest, supabase, useLocalDB } from '../../lib/db'
-import { calcAge, luhnCheck, validateName, validateDob, sortMembers } from '../../lib/helpers'
+import { calcAge, luhnCheck, validateName, validateDob, sortMembers, QUALIFICATION_OPTIONS } from '../../lib/helpers'
 import { emptyHealthFields } from '../../lib/healthOptions'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -47,14 +47,14 @@ const EMPTY_FORM = {
   head_gender:'', head_marital:'', head_dob:'',
   camp_id:'', tent:'', tent2:'',
   original_address:'', address_details:'', notes:'',
-  categories:[], economic_level:'', num_orphans:0,
-  head_orphan_status:null, head_orphan_cause:null,
+  categories:[], economic_level:'',
+  head_orphan_status:null, head_orphan_cause:null, head_qualification:null,
   head_disabilities:[], head_injuries:[], head_chronic_diseases:[], head_female_status:[],
 }
 const newMember = () => ({
   id: crypto.randomUUID(),
   name:'', gender:'', relation:'',
-  national_id:'', dob:'', health:'سليم',
+  national_id:'', dob:'', health:'سليم', qualification:null,
   ...emptyHealthFields(),
 })
 
@@ -160,6 +160,19 @@ function MemberRow({ member, index, onUpdate, onRemove, onOpenHealth, errors }) 
           />
           {dobErr && <p className="text-red text-[10px] mt-0.5">{dobErr}</p>}
         </div>
+
+        {/* المؤهل العلمي — يظهر فقط للبالغين (18+) */}
+        {calcAge(member.dob) >= 18 && (
+          <div>
+            <label className="text-[10px] font-bold text-muted block mb-1">المؤهل العلمي</label>
+            <select value={member.qualification || ''}
+              onChange={e => onUpdate(member.id,'qualification', e.target.value || null)}
+              className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
+              <option value="">غير مُسجَّل</option>
+              {QUALIFICATION_OPTIONS.map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="text-[10px] font-bold text-muted block mb-1">الحالة الصحية</label>
@@ -304,7 +317,6 @@ export default function FamilyForm() {
           setForm({ ...EMPTY_FORM, ...parsed,
             categories:    parsed.category_tags || f.categories || [],
             economic_level:f.economic_level || '',
-            num_orphans:   f.num_orphans   || 0,
             head_disabilities:     parsed.head_disabilities     || [],
             head_injuries:         parsed.head_injuries         || [],
             head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -324,7 +336,6 @@ export default function FamilyForm() {
               setForm({ ...EMPTY_FORM, ...parsed,
                 categories:    parsed.category_tags || data.categories || [],
                 economic_level:data.economic_level || '',
-                num_orphans:   data.num_orphans   || 0,
                 head_disabilities:     parsed.head_disabilities     || [],
                 head_injuries:         parsed.head_injuries         || [],
                 head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -477,6 +488,7 @@ export default function FamilyForm() {
         notes:          form.notes          || null,
         category_tags:  form.categories     || form.category_tags || [],
         economic_level: form.economic_level || null,
+        head_qualification: form.head_qualification || null,
         // الحقول الصحية التفصيلية لرب الأسرة — مخزّنة كنص JSON (text) في Supabase
         head_orphan_status:    form.head_orphan_status || null,
         head_orphan_cause:     form.head_orphan_status ? (form.head_orphan_cause || null) : null,
@@ -504,6 +516,7 @@ export default function FamilyForm() {
         national_id: m.national_id || null,
         dob:         m.dob         || null,
         health:      m.health      || 'سليم',
+        qualification: m.qualification || null,
         orphan_status:    m.orphan_status || null,
         orphan_cause:     m.orphan_status ? (m.orphan_cause || null) : null,
         disabilities:     m.disabilities     || [],
@@ -760,6 +773,19 @@ export default function FamilyForm() {
               {errors.head_dob && <p className="text-red text-[11px] mt-1">{errors.head_dob}</p>}
             </div>
 
+            {/* المؤهل العلمي — يظهر فقط للبالغين (18+) */}
+            {calcAge(form.head_dob) >= 18 && (
+              <div>
+                <label className="text-xs font-bold text-muted block mb-1.5">المؤهل العلمي</label>
+                <select value={form.head_qualification || ''}
+                  onChange={e => setF('head_qualification', e.target.value || null)}
+                  className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                  <option value="">غير مُسجَّل</option>
+                  {QUALIFICATION_OPTIONS.map(q => <option key={q} value={q}>{q}</option>)}
+                </select>
+              </div>
+            )}
+
             {/* الحالات الصحية التفصيلية */}
             <button type="button" onClick={() => setHealthModalFor('head')}
               className="w-full py-2.5 border border-accent/30 bg-accent/10 rounded-xl text-accent text-sm font-bold flex items-center justify-center gap-2">
@@ -864,13 +890,6 @@ export default function FamilyForm() {
                 <option value="">— غير محدد —</option>
                 {ECONOMIC_LEVELS.map(l=><option key={l.key} value={l.key}>{l.label}</option>)}
               </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-muted block mb-1.5">عدد الأيتام في الأسرة</label>
-              <input type="number" min="0" max="20" dir="ltr"
-                value={form.num_orphans||0}
-                onChange={e=>setF('num_orphans',parseInt(e.target.value)||0)}
-                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent"/>
             </div>
           </div>
         </Card>
