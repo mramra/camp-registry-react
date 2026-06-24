@@ -316,3 +316,26 @@ export function getFamilyCategories(family, members) {
 export function getOrphanCount(family, members) {
   return isNoProviderFamily(family, members) ? (members || []).length : 0
 }
+
+// ════════════════════════════════════════════════════════════
+// 7. المرحلة الدراسية المتوقعة حسب العمر (نظام التعليم الفلسطيني)
+// ════════════════════════════════════════════════════════════
+
+const GRADE_BY_AGE = {
+  4: 'روضة أولى', 5: 'روضة ثانية',
+  6: 'الأول', 7: 'الثاني', 8: 'الثالث', 9: 'الرابع', 10: 'الخامس',
+  11: 'السادس', 12: 'السابع', 13: 'الثامن', 14: 'التاسع', 15: 'العاشر',
+  16: 'الحادي عشر', 17: 'الثاني عشر (توجيهي)',
+}
+
+/** المرحلة الدراسية المتوقعة لهذا العمر — null لو خارج نطاق سن الدراسة (أقل من 4) */
+export function getExpectedGrade(age) {
+  if (age == null) return null
+  if (age > 17) return 'بعد الثانوية'
+  return GRADE_BY_AGE[age] || null
+}
+
+/** هل هذا العمر بعمر الدراسة (روضة حتى توجيهي)؟ */
+export function isSchoolAge(age) {
+  return age != null && age >= 4 && age <= 17
+}

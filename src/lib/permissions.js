@@ -97,6 +97,7 @@ export const PAGE_REGISTRY = {
   women:            { label: '👩 النساء',                  path: '/women' },
   children:         { label: '🧒 سجل الأطفال',             path: '/children' },
   health_report:    { label: '⚕️ كشف الحالات الصحية',      path: '/health-report' },
+  education_status: { label: '🎒 الحالة الدراسية',          path: '/education-status' },
   analysis:         { label: '📊 التحليل',                path: '/analysis' },
   needs_report:     { label: '📋 تقارير الاحتياجات',       path: '/needs-report' },
   camp_compare:     { label: '🏕️ مقارنة المخيمات',        path: '/camp-compare' },
@@ -128,7 +129,7 @@ const DEFAULT_ROLE_ACCESS = {
   super_admin: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
     registers:true,
-    women:true, children:true, health_report:true,
+    women:true, children:true, health_report:true, education_status:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true, security_audit:false,
     devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:true,
@@ -136,7 +137,7 @@ const DEFAULT_ROLE_ACCESS = {
   camp_delegate: {
     dashboard:true, families:true, camps:true, movements:true, distributions:true,
     registers:true,
-    women:true, children:true, health_report:true,
+    women:true, children:true, health_report:true, education_status:true,
     analysis:true, needs_report:true, camp_compare:true, export:true,
     users:true, audit:true, alerts:true, data:false, diagnostics:true, security_audit:false,
     devices:true, sms:true, settings:true, subscription:true, help:true, page_permissions:false, pending_requests:true,
@@ -144,7 +145,7 @@ const DEFAULT_ROLE_ACCESS = {
   assistant: {
     dashboard:true, families:false, camps:false, movements:false, distributions:false,
     registers:false,
-    women:false, children:false, health_report:false,
+    women:false, children:false, health_report:false, education_status:false,
     analysis:false, needs_report:false, camp_compare:false, export:false,
     users:false, audit:false, alerts:false, data:false, diagnostics:false, security_audit:false,
     devices:false, sms:false, settings:true, subscription:false, help:true, page_permissions:false, pending_requests:false,
