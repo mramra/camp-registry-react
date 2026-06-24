@@ -271,3 +271,36 @@ export function isAutoNursing(person, famHasNamedWife, famWithInfant) {
   }
   return inAgeRange && relationOk && famWithInfant.has(famId)
 }
+
+// ════════════════════════════════════════════════════════════
+// 6. فئات الأسرة (تقارير الاحتياجات)
+// ════════════════════════════════════════════════════════════
+
+/**
+ * فئات الأسرة الكاملة: وسوم مُخزَّنة يدوياً (شهيد/أسير من family.category_tags)
+ * + فئات تلقائية تُحسَب دائماً عند كل استدعاء (لا تُخزَّن، لا تُعدَّل يدوياً):
+ *   - فاقد معيل: رب الأسرة أنثى + لا يوجد زوج/ابن بالغ (18+) مسجَّل بالأسرة
+ *   - أسرة كبيرة: أكثر من 7 أفراد (رب الأسرة + الأفراد)
+ *   - أسرة عادية: افتراضية لو لم تنطبق أي فئة أخرى
+ * family: صف من جدول families. members: أفراد هذه الأسرة فقط (بدون رب الأسرة).
+ */
+export function getFamilyCategories(family, members) {
+  const stored = parseArr(family?.category_tags) // شهيد/أسير فقط، كما اختارها المستخدم
+  const auto = []
+  const mems = members || []
+
+  const headIsFemale = family?.head_gender === 'أنثى' || family?.head_gender === 'female'
+  if (headIsFemale) {
+    const hasAdultMale = mems.some(m => {
+      if (!['زوج', 'ابن'].includes((m.relation || '').trim())) return false
+      const age = calcAge(m.dob)
+      return age === null || age >= 18 // بلا تاريخ ميلاد = نفترض بالغاً احتياطاً
+    })
+    if (!hasAdultMale) auto.push('no_provider')
+  }
+
+  if (1 + mems.length > 7) auto.push('large')
+
+  const all = [...stored, ...auto]
+  return all.length ? all : ['normal']
+}

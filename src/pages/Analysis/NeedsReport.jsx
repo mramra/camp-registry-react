@@ -2,18 +2,23 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { hasHealthData } from '../../lib/helpers'
+import { hasHealthData, getFamilyCategories } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
+import Badge from '../../components/ui/Badge'
+
+// ألوان نصية ثابتة (Tailwind لا يولّد classes من template literals ديناميكية —
+// يجب أن تظهر كنص حرفي كامل بالكود ليكتشفها الفحص الثابت عند البناء)
+const COLOR_TEXT = { muted:'text-muted', purple:'text-purple', blue:'text-blue', red:'text-red', green:'text-green', accent:'text-accent' }
 
 const CAT_LABELS = {
+  normal:      { label:'أسرة عادية', icon:'🏠', color:'muted'  },
   martyr:      { label:'أسر شهداء',  icon:'🕊️', color:'purple' },
   captive:     { label:'أسر أسرى',   icon:'⛓️', color:'blue'   },
   no_provider: { label:'فاقد معيل',  icon:'💔', color:'red'    },
-  destroyed:   { label:'بيت مهدم',   icon:'🏗️', color:'accent' },
   large:       { label:'أسرة كبيرة', icon:'👨‍👩‍👧‍👦', color:'green'  },
 }
 const ECON_LABELS = {
@@ -79,7 +84,7 @@ export default function NeedsReport() {
   const filtered = useMemo(()=>{
     return families.filter(f=>{
       if (filterCamp && f.camp_id!==filterCamp) return false
-      if (filterCat  && !(f.category_tags||[]).includes(filterCat)) return false
+      if (filterCat  && !getFamilyCategories(f, memsByFamily[f.id]).includes(filterCat)) return false
       if (filterEcon && f.economic_level!==filterEcon) return false
       if (filterHealth) {
         const mems = memsByFamily[f.id]||[]
@@ -92,7 +97,10 @@ export default function NeedsReport() {
   // إحصائيات سريعة
   const quickStats = useMemo(()=>{
     const s={}
-    Object.keys(CAT_LABELS).forEach(k=>{ s[k]=families.filter(f=>(f.category_tags||[]).includes(k)).length })
+    Object.keys(CAT_LABELS).forEach(k=>{ s[k]=0 })
+    families.forEach(f=>{
+      getFamilyCategories(f, memsByFamily[f.id]).forEach(c=>{ s[c]=(s[c]||0)+1 })
+    })
     s.orphans  = families.filter(f=>(memsByFamily[f.id]||[]).some(m=>m.orphan_status)).length
     s.disabled = members.filter(m=>hasHealthData(m.disabilities)).length
     s.injured  = members.filter(m=>hasHealthData(m.injuries)).length
@@ -111,7 +119,7 @@ export default function NeedsReport() {
           f.head_name||'', f.head_id||'', f.phone1||'',
           campMap[f.camp_id]||'',
           mems.length+1,
-          (f.category_tags||[]).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
+          getFamilyCategories(f, mems).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
           ECON_LABELS[f.economic_level]?.replace(/^../,'')||'',
           mems.filter(m=>m.orphan_status).length,
         ]
@@ -138,7 +146,7 @@ export default function NeedsReport() {
           <button key={k} onClick={()=>setFilterCat(f=>f===k?'':k)}
             className={`rounded-xl p-2 text-center border transition-all ${filterCat===k?'bg-accent/20 border-accent':'bg-surface border-border'}`}>
             <div className="text-base mb-0.5">{v.icon}</div>
-            <div className={`text-sm font-black text-${v.color}`}>{quickStats[k]}</div>
+            <div className={`text-sm font-black ${COLOR_TEXT[v.color]}`}>{quickStats[k]}</div>
             <div className="text-muted text-[9px]">{v.label}</div>
           </button>
         ))}
@@ -202,10 +210,8 @@ export default function NeedsReport() {
                     <div className="text-white text-xs" dir="ltr">{f.head_id}</div>
                     {campMap[f.camp_id] && <div className="text-blue text-xs mt-0.5">🏕️ {campMap[f.camp_id]}</div>}
                     <div className="flex gap-1 mt-1.5 flex-wrap">
-                      {(f.category_tags||[]).map(c=>(
-                        <span key={c} className="text-[9px] bg-accent/15 text-accent border border-accent/20 px-1.5 py-0.5 rounded-full font-bold">
-                          {CAT_LABELS[c]?.icon} {CAT_LABELS[c]?.label||c}
-                        </span>
+                      {getFamilyCategories(f, mems).map(c=>(
+                        <Badge key={c} color={CAT_LABELS[c]?.color}>{CAT_LABELS[c]?.icon} {CAT_LABELS[c]?.label||c}</Badge>
                       ))}
                       {f.economic_level && <span className="text-[9px] bg-surface2 text-muted border border-border px-1.5 py-0.5 rounded-full">{ECON_LABELS[f.economic_level]?.replace(/^../,'').trim()}</span>}
                       {orphanCount>0 && <span className="text-[9px] bg-red/15 text-red border border-red/20 px-1.5 py-0.5 rounded-full font-bold">🕊️ {orphanCount} يتيم</span>}
