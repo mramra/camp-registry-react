@@ -166,6 +166,9 @@ function MemberRow({ member, index, onUpdate, onRemove, onOpenHealth, errors }) 
         {isSchoolAge(calcAge(member.dob)) && (() => {
           const expected = getExpectedGrade(calcAge(member.dob))
           const current = member.actual_grade || expected
+          const expIdx = GRADE_OPTIONS.indexOf(expected)
+          // الخيارات: من المتوقع لعمره ونازلاً فقط (متأخر = صف أقل، لا معنى لصف أعلى من عمره)
+          const availableGrades = expIdx === -1 ? GRADE_OPTIONS : GRADE_OPTIONS.slice(0, expIdx + 1)
           return (
             <div>
               <label className="text-[10px] font-bold text-muted block mb-1">
@@ -174,7 +177,7 @@ function MemberRow({ member, index, onUpdate, onRemove, onOpenHealth, errors }) 
               <select value={current || ''}
                 onChange={e => onUpdate(member.id,'actual_grade', e.target.value)}
                 className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
-                {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                {availableGrades.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
               {member.actual_grade && member.actual_grade !== expected && (
                 <p className="text-accent text-[10px] mt-0.5">⚠️ يختلف عن المتوقع لعمره ({expected}) — سيُحسَب متأخراً دراسياً</p>
