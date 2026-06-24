@@ -15,7 +15,7 @@ export default function CampCompare() {
   const { showToast } = useApp()
   const { query } = useLocalDB()
   const { isOwner } = useAuth()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
 
   useEffect(() => { loadData() }, [])
 
@@ -48,7 +48,8 @@ export default function CampCompare() {
           campIncomplete[f.camp_id]=(campIncomplete[f.camp_id]||0)+1
       })
 
-      const rows = camps.map(c=>{
+      const visibleCamps = getVisibleCamps(camps)
+      const rows = visibleCamps.map(c=>{
         const fCount = campFams[c.id]||0
         const mCount = campMems[c.id]||0
         const cap    = c.capacity||0

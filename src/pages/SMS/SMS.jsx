@@ -130,14 +130,9 @@ export default function SMS() {
     navigator.clipboard.writeText(nums).then(() => showToast(`📋 تم نسخ ${selectedFamilies.length} رقم`))
   }
 
-  if (!(isOwner || isSuperAdmin)) {
-    return (
-      <div>
-        <PageHeader icon="💬" title="إرسال رسائل SMS" />
-        <EmptyState icon="🔒" title="غير مصرح" subtitle="هذه الخاصية للمديرين فقط" />
-      </div>
-    )
-  }
+  // ملاحظة: لا حاجة لفحص دور صلب هنا — ProtectedRoute بمستوى المسار (pageKey="sms")
+  // هو المخوَّل الوحيد للوصول، ويحترم استثناءات الصلاحيات الفردية لكل مستخدم. فحص
+  // صلب هنا كان يتناقض مع ذلك ويحجب أي مساعد/مندوب مُنح صلاحية صريحة لهذه الصفحة.
 
   return (
     <div className="space-y-4">

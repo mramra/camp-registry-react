@@ -37,7 +37,7 @@ export default function CampsList() {
   const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', coordinates:'', manager_id:'' })
   const [saving,      setSaving]      = useState(false)
 
-  const { isOwner, isSuperAdmin, isCampDelegate, isAssistant, canWrite, profile } = useAuth()
+  const { isOwner, isSuperAdmin, isCampDelegate, isAssistant, profile } = useAuth()
   const { showToast } = useApp()
   const { getVisibleCamps } = useDataScope()
 
@@ -133,7 +133,11 @@ export default function CampsList() {
     if (!form.name.trim()) return showToast('اسم المخيم مطلوب', true)
     // فحص الصلاحية الفعلي — نفس منطق canEdit المعروض بصرياً، يطبَّق هنا برمجياً أيضاً
     const allowedToEdit = isOwner || isSuperAdmin || (isCampDelegate && editCamp && profile?.camp_id === editCamp.id)
-    if (editCamp ? !allowedToEdit : !canWrite) {
+    // إنشاء/تعديل مخيم فعل هيكلي إداري — ليس "إضافة سجل" — لا يُقاس بـ canWrite العامة
+    // (تشمل أي مساعد لديه can_add=true، وهي صلاحية لإضافة أسر لا مخيمات). المساعد
+    // مُستثنى من هذا دائماً بصرف النظر عن صلاحياته الفردية.
+    const canManageCamps = isOwner || isSuperAdmin || isCampDelegate
+    if (editCamp ? !allowedToEdit : !canManageCamps) {
       showToast('⛔ لا تملك صلاحية ' + (editCamp ? 'تعديل' : 'إضافة') + ' المخيمات', true)
       return
     }
@@ -253,7 +257,7 @@ export default function CampsList() {
             {syncing && <span className="text-[10px] text-accent animate-pulse">🔄</span>}
           </span>
         }
-        action={canWrite && (
+        action={(isOwner || isSuperAdmin || isCampDelegate) && (
           <button onClick={openAdd}
             className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">➕ إضافة</button>
         )}
