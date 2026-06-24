@@ -340,5 +340,27 @@ export function isSchoolAge(age) {
   return age != null && age >= 4 && age <= 17
 }
 
+/** فئة المرحلة الواسعة لهذا العمر — لعرض الأيقونات (روضة/ابتدائي/اعدادي/ثانوي) */
+export function getStageGroup(age) {
+  if (age == null) return null
+  if (age >= 4  && age <= 5)  return 'روضة'
+  if (age >= 6  && age <= 11) return 'ابتدائي'
+  if (age >= 12 && age <= 14) return 'اعدادي'
+  if (age >= 15 && age <= 17) return 'ثانوي'
+  return null
+}
+
+/** الأيقونات الثماني الكاملة (مراحل الأطفال + مؤهلات البالغين) بترتيب العرض */
+export const STAGE_ICONS = [
+  { key: 'روضة',      icon: '🧸', label: 'روضة'      },
+  { key: 'ابتدائي',   icon: '✏️', label: 'ابتدائي'   },
+  { key: 'اعدادي',    icon: '📘', label: 'اعدادي'    },
+  { key: 'ثانوي',     icon: '📙', label: 'ثانوي'     },
+  { key: 'دبلوم',     icon: '📜', label: 'دبلوم'     },
+  { key: 'بكالوريوس', icon: '🎓', label: 'بكالوريوس' },
+  { key: 'ماجستير',   icon: '📚', label: 'ماجستير'   },
+  { key: 'دكتوراه',   icon: '👨‍🎓', label: 'دكتوراه'   },
+]
+
 /** خيارات المؤهل العلمي للبالغين (18+) — حقل اختياري، فاضي يعني غير مُسجَّل */
 export const QUALIFICATION_OPTIONS = ['دبلوم', 'بكالوريوس', 'ماجستير', 'دكتوراه']
