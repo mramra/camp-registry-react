@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
-import { parseArr, hasHealthData, calcAge } from '../../lib/helpers'
+import { parseArr, hasHealthData, calcAge, getOrphanCount } from '../../lib/helpers'
 import { exportStatsPDF } from '../../lib/pdfReport'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -240,7 +240,11 @@ export default function Analysis() {
 
       const children = allPersons.filter(p => { const a = calcAge(p.dob); return a !== null && a < 18 })
       const childPersons = children
-      const orphans  = mems.filter(m => m.orphan_status).length
+      // نفس منطق getOrphanCount المركزي بـ helpers.js (أسرة فاقدة معيل → كل أفرادها يتامى
+      // تلقائياً) — لضمان تطابق هذا الرقم مع "تقارير الاحتياجات" بدل تناقضهما
+      const memsByFamForOrphans = {}
+      mems.forEach(m => { (memsByFamForOrphans[m.family_id] ||= []).push(m) })
+      const orphans = fams.reduce((sum, f) => sum + getOrphanCount(f, memsByFamForOrphans[f.id]), 0)
 
       const REQUIRED = ['head_name', 'head_id', 'phone1', 'camp_id']
       const incomplete = fams.filter(f => REQUIRED.some(k => !f[k]?.toString().trim())).length

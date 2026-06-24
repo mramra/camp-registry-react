@@ -276,6 +276,18 @@ export function isAutoNursing(person, famHasNamedWife, famWithInfant) {
 // 6. فئات الأسرة (تقارير الاحتياجات)
 // ════════════════════════════════════════════════════════════
 
+/** هل هذه الأسرة "فاقدة معيل"؟ رب الأسرة أنثى + لا يوجد زوج/ابن بالغ (18+) مسجَّل بالأسرة */
+function isNoProviderFamily(family, members) {
+  const headIsFemale = family?.head_gender === 'أنثى' || family?.head_gender === 'female'
+  if (!headIsFemale) return false
+  const hasAdultMale = (members || []).some(m => {
+    if (!['زوج', 'ابن'].includes((m.relation || '').trim())) return false
+    const age = calcAge(m.dob)
+    return age === null || age >= 18 // بلا تاريخ ميلاد = نفترض بالغاً احتياطاً
+  })
+  return !hasAdultMale
+}
+
 /**
  * فئات الأسرة الكاملة: وسوم مُخزَّنة يدوياً (شهيد/أسير من family.category_tags)
  * + فئات تلقائية تُحسَب دائماً عند كل استدعاء (لا تُخزَّن، لا تُعدَّل يدوياً):
@@ -289,18 +301,18 @@ export function getFamilyCategories(family, members) {
   const auto = []
   const mems = members || []
 
-  const headIsFemale = family?.head_gender === 'أنثى' || family?.head_gender === 'female'
-  if (headIsFemale) {
-    const hasAdultMale = mems.some(m => {
-      if (!['زوج', 'ابن'].includes((m.relation || '').trim())) return false
-      const age = calcAge(m.dob)
-      return age === null || age >= 18 // بلا تاريخ ميلاد = نفترض بالغاً احتياطاً
-    })
-    if (!hasAdultMale) auto.push('no_provider')
-  }
-
+  if (isNoProviderFamily(family, mems)) auto.push('no_provider')
   if (1 + mems.length > 7) auto.push('large')
 
   const all = [...stored, ...auto]
   return all.length ? all : ['normal']
+}
+
+/**
+ * عدد اليتامى بالأسرة — تلقائي بالكامل (بدون تدخل بشري، بدون تخزين):
+ * أسرة "فاقدة معيل" (رب الأسرة أنثى + لا زوج/ابن بالغ) → كل الأفراد (الأبناء) يتامى
+ * تلقائياً لأنهم فقدوا الأب وهذا ما جعل الأم رب الأسرة. غير ذلك: صفر.
+ */
+export function getOrphanCount(family, members) {
+  return isNoProviderFamily(family, members) ? (members || []).length : 0
 }

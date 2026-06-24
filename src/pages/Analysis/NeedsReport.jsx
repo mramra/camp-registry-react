@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { hasHealthData, getFamilyCategories } from '../../lib/helpers'
+import { hasHealthData, getFamilyCategories, getOrphanCount } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
@@ -101,7 +101,7 @@ export default function NeedsReport() {
     families.forEach(f=>{
       getFamilyCategories(f, memsByFamily[f.id]).forEach(c=>{ s[c]=(s[c]||0)+1 })
     })
-    s.orphans  = families.filter(f=>(memsByFamily[f.id]||[]).some(m=>m.orphan_status)).length
+    s.orphans  = families.filter(f=>getOrphanCount(f, memsByFamily[f.id])>0).length
     s.disabled = members.filter(m=>hasHealthData(m.disabilities)).length
     s.injured  = members.filter(m=>hasHealthData(m.injuries)).length
     s.chronic  = members.filter(m=>hasHealthData(m.chronic_diseases)).length
@@ -121,7 +121,7 @@ export default function NeedsReport() {
           mems.length+1,
           getFamilyCategories(f, mems).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
           ECON_LABELS[f.economic_level]?.replace(/^../,'')||'',
-          mems.filter(m=>m.orphan_status).length,
+          getOrphanCount(f, mems),
         ]
       })
       const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
@@ -200,7 +200,7 @@ export default function NeedsReport() {
         <div className="flex flex-col gap-2">
           {filtered.slice(0,50).map(f=>{
             const mems = memsByFamily[f.id]||[]
-            const orphanCount = mems.filter(m=>m.orphan_status).length
+            const orphanCount = getOrphanCount(f, mems)
             const unhealthy = mems.flatMap(m=>memberHealthKeys(m).map(k=>({m,k})))
             return (
               <div key={f.id} className="bg-surface border border-border rounded-xl p-4">
