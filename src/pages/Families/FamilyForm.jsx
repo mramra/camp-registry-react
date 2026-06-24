@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ORG_ID, diffFamilyFields, isExemptFromApproval, logFamilyActivity, parseJsonColumns, recordApprovalRequest, supabase, useLocalDB } from '../../lib/db'
-import { calcAge, luhnCheck, validateName, validateDob, sortMembers, QUALIFICATION_OPTIONS } from '../../lib/helpers'
+import { calcAge, luhnCheck, validateName, validateDob, sortMembers, QUALIFICATION_OPTIONS, GRADE_OPTIONS, getExpectedGrade, isSchoolAge } from '../../lib/helpers'
 import { emptyHealthFields } from '../../lib/healthOptions'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
@@ -54,7 +54,7 @@ const EMPTY_FORM = {
 const newMember = () => ({
   id: crypto.randomUUID(),
   name:'', gender:'', relation:'',
-  national_id:'', dob:'', health:'سليم', qualification:null,
+  national_id:'', dob:'', health:'سليم', qualification:null, actual_grade:null,
   ...emptyHealthFields(),
 })
 
@@ -160,6 +160,28 @@ function MemberRow({ member, index, onUpdate, onRemove, onOpenHealth, errors }) 
           />
           {dobErr && <p className="text-red text-[10px] mt-0.5">{dobErr}</p>}
         </div>
+
+        {/* الصف الدراسي الفعلي — يظهر فقط لمن بعمر الدراسة (4-17)، معبّأ تلقائياً
+            بالمتوقع حسب العمر؛ غيّره فقط لو الطفل متأخر دراسياً عن صفه الفعلي */}
+        {isSchoolAge(calcAge(member.dob)) && (() => {
+          const expected = getExpectedGrade(calcAge(member.dob))
+          const current = member.actual_grade || expected
+          return (
+            <div>
+              <label className="text-[10px] font-bold text-muted block mb-1">
+                الصف الدراسي الفعلي {!member.actual_grade && <span className="text-muted">(تلقائي حسب العمر)</span>}
+              </label>
+              <select value={current || ''}
+                onChange={e => onUpdate(member.id,'actual_grade', e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
+                {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              {member.actual_grade && member.actual_grade !== expected && (
+                <p className="text-accent text-[10px] mt-0.5">⚠️ يختلف عن المتوقع لعمره ({expected}) — سيُحسَب متأخراً دراسياً</p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* المؤهل العلمي — يظهر فقط للبالغين (18+) */}
         {calcAge(member.dob) >= 18 && (
@@ -517,6 +539,7 @@ export default function FamilyForm() {
         dob:         m.dob         || null,
         health:      m.health      || 'سليم',
         qualification: m.qualification || null,
+        actual_grade:  m.actual_grade  || null,
         orphan_status:    m.orphan_status || null,
         orphan_cause:     m.orphan_status ? (m.orphan_cause || null) : null,
         disabilities:     m.disabilities     || [],

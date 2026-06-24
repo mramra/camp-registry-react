@@ -340,6 +340,28 @@ export function isSchoolAge(age) {
   return age != null && age >= 4 && age <= 17
 }
 
+/** كل الصفوف الدراسية مرتَّبة (روضة أولى ← الثاني عشر) — لقائمة اختيار الصف الفعلي */
+export const GRADE_OPTIONS = [
+  'روضة أولى', 'روضة ثانية',
+  'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس',
+  'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر',
+  'الحادي عشر', 'الثاني عشر (توجيهي)',
+]
+
+/**
+ * مقدار التأخر الدراسي بالصفوف: الفرق بين الصف المتوقَّع لعمره الآن والصف الفعلي
+ * المُسجَّل له. 0 يعني غير متأخر (أو لا صف فعلي مسجَّل — يُعتبر مطابقاً للمتوقع).
+ */
+export function getGradeDelay(age, actualGrade) {
+  if (!actualGrade) return 0
+  const expected = getExpectedGrade(age)
+  if (!expected) return 0
+  const expIdx = GRADE_OPTIONS.indexOf(expected)
+  const actIdx = GRADE_OPTIONS.indexOf(actualGrade)
+  if (expIdx === -1 || actIdx === -1) return 0
+  return Math.max(0, expIdx - actIdx)
+}
+
 /** فئة المرحلة الواسعة لهذا العمر — لعرض الأيقونات (روضة/ابتدائي/اعدادي/ثانوي) */
 export function getStageGroup(age) {
   if (age == null) return null

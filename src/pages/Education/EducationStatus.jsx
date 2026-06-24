@@ -3,14 +3,19 @@
  * (روضة/ابتدائي/اعدادي/ثانوي للأطفال 4-17 حسب العمر تلقائياً، ودبلوم/بكالوريوس/
  * ماجستير/دكتوراه للبالغين 18+ من المؤهل المُسجَّل فعلياً بنموذج الأسرة).
  * الضغط على أيقونة يفلتر القائمة لتلك الفئة فقط، مع بحث بالاسم أو رقم الهوية.
+ *
+ * التأخر الدراسي: يُحسَب تلقائياً بمقارنة الصف الفعلي المُسجَّل (actual_grade، يُدخَل
+ * من نموذج إضافة/تعديل الأسرة فقط، معبّأ تلقائياً بالمتوقع حسب العمر) بالصف المتوقع
+ * لعمره الآن — لا تعديل مباشر هنا، هذه الصفحة للعرض والبحث والتصدير فقط.
+ *
  * تصديران Excel: قائمة الطلاب التفصيلية، وبانر المخيمات (مندوب/جوال/إحداثيات).
  * كلا التصديرين يحترمان فلتر المخيم + الفئة المختارة حالياً (الكل لو لا شيء محدَّد).
  */
 import { useState, useEffect, useMemo } from 'react'
 import { useApp }  from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
-import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
-import { calcAge, getStageGroup, STAGE_ICONS } from '../../lib/helpers'
+import { useLocalDB, visibleFamilies } from '../../lib/db'
+import { calcAge, getStageGroup, getGradeDelay, STAGE_ICONS } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import { exportXLSX } from '../../lib/excelExport'
 import PageHeader from '../../components/ui/PageHeader'
@@ -28,14 +33,13 @@ export default function EducationStatus() {
   const [camps,       setCamps]       = useState([])
   const [orgMembers,  setOrgMembers]  = useState([]) // لمندوبي المخيمات (تصدير البانر)
   const [loading,     setLoading]     = useState(true)
-  const [busyId,      setBusyId]      = useState(null)
   const [campFilter,  setCampFilter]  = useState('')
   const [stageFilter, setStageFilter] = useState('') // مفتاح من STAGE_ICONS أو '' = الكل
   const [search,      setSearch]      = useState('')
 
-  const { showToast }       = useApp()
-  const { canWrite, canExport, isOwner } = useAuth()
-  const { query }            = useLocalDB()
+  const { showToast }    = useApp()
+  const { canExport, isOwner } = useAuth()
+  const { query }         = useLocalDB()
   const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
 
   useEffect(() => { loadData() }, [])
@@ -62,7 +66,8 @@ export default function EducationStatus() {
   const campMap = useMemo(() => Object.fromEntries(camps.map(c => [c.id, c.name])), [camps])
   const famMap  = useMemo(() => Object.fromEntries(families.map(f => [f.id, f])), [families])
 
-  // قائمة موحَّدة: أطفال بمرحلتهم حسب العمر تلقائياً + بالغون بمؤهلهم المُسجَّل فعلياً فقط
+  // قائمة موحَّدة: أطفال بمرحلتهم حسب العمر تلقائياً (+ مقدار تأخرهم الدراسي المحسوب
+  // من actual_grade) + بالغون بمؤهلهم المُسجَّل فعلياً فقط
   const people = useMemo(() => {
     const list = []
     families.forEach(f => {
@@ -70,7 +75,7 @@ export default function EducationStatus() {
       const stage = age != null && age >= 18 ? (f.head_qualification || null) : getStageGroup(age)
       if (stage) list.push({
         id: f.id + '_head', isHead: true, family_id: f.id,
-        name: f.head_name, national_id: f.head_id, age, stage,
+        name: f.head_name, national_id: f.head_id, age, stage, delay: 0,
       })
     })
     members.forEach(m => {
@@ -79,7 +84,7 @@ export default function EducationStatus() {
       if (stage) list.push({
         id: m.id, isHead: false, family_id: m.family_id,
         name: m.name, national_id: m.national_id, age, stage,
-        education_delayed: m.education_delayed,
+        delay: getGradeDelay(age, m.actual_grade),
       })
     })
     return list
@@ -96,6 +101,8 @@ export default function EducationStatus() {
     return c
   }, [scoped])
 
+  const delayedCount = useMemo(() => scoped.filter(p => p.delay > 0).length, [scoped])
+
   const byStage = useMemo(() => {
     return stageFilter ? scoped.filter(p => p.stage === stageFilter) : scoped
   }, [scoped, stageFilter])
@@ -105,23 +112,6 @@ export default function EducationStatus() {
     const q = search.trim().toLowerCase()
     return byStage.filter(p => (p.name || '').toLowerCase().includes(q) || (p.national_id || '').includes(q))
   }, [byStage, search])
-
-  async function toggleDelayed(p) {
-    if (!canWrite) return showToast('⛔ لا تملك صلاحية التعديل', true)
-    if (p.isHead) return
-    setBusyId(p.id)
-    try {
-      const next = !p.education_delayed
-      const { error } = await supabase.from('family_members').update({ education_delayed: next }).eq('id', p.id)
-      if (error) throw error
-      setMembers(ms => ms.map(m => m.id === p.id ? { ...m, education_delayed: next } : m))
-      showToast(next ? '✅ تم وضع علامة متأخر دراسياً' : '✅ تم إلغاء العلامة')
-    } catch (err) {
-      showToast('خطأ: ' + err.message, true)
-    } finally {
-      setBusyId(null)
-    }
-  }
 
   function exportStudents() {
     if (!canExport) return showToast('⛔ لا تملك صلاحية التصدير', true)
@@ -135,6 +125,7 @@ export default function EducationStatus() {
         'رقم هوية رب الأسرة': f.head_id || '',
         'رقم التواصل':       f.phone1 || '',
         'المرحلة / المؤهل':  p.stage || '',
+        'متأخر دراسياً':     p.delay > 0 ? `نعم (${p.delay} صف)` : 'لا',
       }
     })
     exportXLSX(rows, 'الحالة الدراسية', stageFilter ? `طلاب_${stageFilter}` : 'طلاب_الكل')
@@ -162,7 +153,8 @@ export default function EducationStatus() {
 
   return (
     <div className="space-y-4">
-      <PageHeader icon="🎓" title="الحالة الدراسية" subtitle={`${filtered.length} نتيجة`} />
+      <PageHeader icon="🎓" title="الحالة الدراسية"
+        subtitle={`${filtered.length} نتيجة${delayedCount ? ` — ⚠️ ${delayedCount} متأخر دراسياً` : ''}`} />
 
       <Card>
         <select value={campFilter} onChange={e => setCampFilter(e.target.value)}
@@ -213,7 +205,6 @@ export default function EducationStatus() {
           {filtered.slice(0, 100).map(p => {
             const f = famMap[p.family_id] || {}
             const stageMeta = STAGE_ICONS.find(s => s.key === p.stage)
-            const isChild = CHILD_STAGES.includes(p.stage)
             const isAdult = ADULT_STAGES.includes(p.stage)
             return (
               <Card key={p.id} className="p-3">
@@ -224,19 +215,11 @@ export default function EducationStatus() {
                       {p.age} سنة · {campMap[f.camp_id] || '—'} · 👨‍👩‍👧 {f.head_name || '—'}
                     </p>
                     {p.national_id && <p className="text-muted text-[10px] mt-0.5" dir="ltr">🪪 {p.national_id}</p>}
-                    <div className="mt-1.5">
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
                       <Badge color={isAdult ? 'green' : 'blue'}>{stageMeta?.icon} {p.stage}</Badge>
+                      {p.delay > 0 && <Badge color="red">⚠️ متأخر {p.delay} صف</Badge>}
                     </div>
                   </div>
-                  {isChild && !p.isHead && (
-                    <div className="flex-shrink-0">
-                      <button onClick={() => toggleDelayed(p)} disabled={busyId === p.id}
-                        className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border disabled:opacity-50 ${
-                          p.education_delayed ? 'bg-red/15 border-red text-red' : 'bg-surface2 border-border text-muted'}`}>
-                        {p.education_delayed ? '⚠️ متأخر' : 'وضع علامة تأخر'}
-                      </button>
-                    </div>
-                  )}
                 </div>
               </Card>
             )
