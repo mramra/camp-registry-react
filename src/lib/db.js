@@ -599,22 +599,59 @@ export async function checkDeviceApproval(userId, profile) {
   }
 }
 
-/** اعتماد جهاز (يدوياً من المسؤول المخوَّل) */
-export async function approveDevice(deviceId) {
+/**
+ * يسجّل إجراء على جهاز في audit_logs — سجل محاسبة (من اعتمد/حظر، ومتى).
+ * جدول audit_logs كان غير مستخدَم بالكلية وله عمود device_id مخصَّص لهذا الغرض تماماً —
+ * لا حاجة لأي عمود/جدول جديد.
+ */
+async function logDeviceAudit(action, device, reviewer) {
+  try {
+    await supabase.from('audit_logs').insert({
+      org_id:      ORG_ID,
+      user_id:     reviewer?.user_id || reviewer?.id || null,
+      user_name:   reviewer?.full_name || '—',
+      user_role:   reviewer?.role || null,
+      device_id:   device.id,
+      action,
+      target_id:   device.user_id,
+      target_name: device.owner_name || null,
+      details:     { device_name: device.device_name, device_type: device.device_type },
+    })
+  } catch (e) { console.warn('[logDeviceAudit]', e.message) }
+}
+
+/** اعتماد جهاز (يدوياً من المسؤول المخوَّل) — device: الصف الكامل، reviewer: بروفايل من اتخذ القرار */
+export async function approveDevice(device, reviewer) {
   const { error } = await supabase.from('devices')
-    .update({ is_approved: true, is_blocked: false }).eq('id', deviceId)
+    .update({ is_approved: true, is_blocked: false }).eq('id', device.id)
   if (error) throw error
+  logDeviceAudit('device_approved', device, reviewer)
 }
 
 /** حظر جهاز */
-export async function blockDevice(deviceId) {
+export async function blockDevice(device, reviewer) {
   const { error } = await supabase.from('devices')
-    .update({ is_blocked: true, is_approved: false }).eq('id', deviceId)
+    .update({ is_blocked: true, is_approved: false }).eq('id', device.id)
   if (error) throw error
+  logDeviceAudit('device_blocked', device, reviewer)
 }
 
 /** رفع الحظر عن جهاز (يبقى غير معتمد حتى تُؤكَّد الموافقة بشكل صريح) */
-export async function unblockDevice(deviceId) {
-  const { error } = await supabase.from('devices').update({ is_blocked: false }).eq('id', deviceId)
+export async function unblockDevice(device, reviewer) {
+  const { error } = await supabase.from('devices').update({ is_blocked: false }).eq('id', device.id)
   if (error) throw error
+  logDeviceAudit('device_unblocked', device, reviewer)
+}
+
+/** يجلب آخر إجراء مُسجَّل لكل جهاز من audit_logs — Map: device_id → آخر سجل */
+export async function fetchDeviceAuditMap(deviceIds) {
+  if (!deviceIds?.length) return {}
+  try {
+    const { data } = await supabase.from('audit_logs')
+      .select('*').eq('org_id', ORG_ID).in('device_id', deviceIds)
+      .order('created_at', { ascending: false })
+    const map = {}
+    ;(data || []).forEach(row => { if (!map[row.device_id]) map[row.device_id] = row })
+    return map
+  } catch (e) { console.warn('[fetchDeviceAuditMap]', e.message); return {} }
 }

@@ -4,12 +4,13 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { calcAge, isIncomplete } from '../../lib/helpers'
-import { TRACKED_FIELDS as FIELD_LABELS, canUserReviewRequest, fetchPendingRequests, fetchRecentFamilyActivity, useLocalDB, visibleFamilies } from '../../lib/db'
+import { ORG_ID, supabase, TRACKED_FIELDS as FIELD_LABELS, canUserReviewRequest, fetchPendingRequests, fetchRecentFamilyActivity, useLocalDB, visibleFamilies } from '../../lib/db'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
   const [pendingCount, setPendingCount] = useState(0)
+  const [pendingDeviceCount, setPendingDeviceCount] = useState(0)
   const [recent,     setRecent]     = useState([])
   const [activity,   setActivity]   = useState([])
   const [activityDetail, setActivityDetail] = useState(null) // عنصر النشاط المختار لعرض تفاصيله
@@ -25,6 +26,7 @@ export default function Dashboard() {
   useEffect(() => { loadStats() }, [])
   useEffect(() => { loadActivity() }, [])
   useEffect(() => { if (isOwner || profile?.can_review_approvals) loadPendingCount() }, [isOwner, profile?.can_review_approvals])
+  useEffect(() => { if (isOwner || profile?.can_review_approvals) loadPendingDeviceCount() }, [isOwner, profile?.can_review_approvals])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {
     const handler = () => { loadStats(); loadActivity() }
@@ -57,6 +59,22 @@ export default function Dashboard() {
       const visible = rows.filter(r => canUserReviewRequest(profile, byUserId[r.changed_by]))
       setPendingCount(visible.length)
     } catch (e) { console.warn('[loadPendingCount]', e.message) }
+  }
+
+  // عدد الأجهزة بانتظار الاعتماد المرئية لهذا المستخدم — نفس منطق رؤية الطلبات الهرمي
+  // (مصدر بيانات مختلف عن family_history: devices.is_approved مباشرة)
+  async function loadPendingDeviceCount() {
+    if (!navigator.onLine) return
+    try {
+      const { data: devs } = await supabase.from('devices')
+        .select('user_id').eq('org_id', ORG_ID).eq('is_approved', false).eq('is_blocked', false)
+      if (!devs?.length) { setPendingDeviceCount(0); return }
+      if (isOwner) { setPendingDeviceCount(devs.length); return }
+      const members = await query('org_members')
+      const byUserId = Object.fromEntries((members||[]).map(m => [m.user_id, m]))
+      const visible = devs.filter(d => canUserReviewRequest(profile, byUserId[d.user_id]))
+      setPendingDeviceCount(visible.length)
+    } catch (e) { console.warn('[loadPendingDeviceCount]', e.message) }
   }
 
 
@@ -156,6 +174,24 @@ export default function Dashboard() {
           </div>
           <div className="bg-yellow-500/20 text-yellow-400 font-black text-lg rounded-full w-9 h-9 flex items-center justify-center">
             {pendingCount}
+          </div>
+        </div>
+      )}
+
+      {/* أجهزة بانتظار الاعتماد — مصدر بيانات مستقل عن طلبات الأسر/الحركات أعلاه */}
+      {(isOwner || profile?.can_review_approvals) && pendingDeviceCount > 0 && (
+        <div
+          className="bg-accent/10 border border-accent/30 rounded-xl p-3 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all"
+          onClick={() => navigate('/devices')}>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📱</span>
+            <div>
+              <div className="text-accent font-bold text-sm">أجهزة تحتاج اعتمادك</div>
+              <div className="text-muted text-[11px]">جهاز جديد بانتظار الموافقة قبل السماح بالدخول</div>
+            </div>
+          </div>
+          <div className="bg-accent/20 text-accent font-black text-lg rounded-full w-9 h-9 flex items-center justify-center">
+            {pendingDeviceCount}
           </div>
         </div>
       )}
