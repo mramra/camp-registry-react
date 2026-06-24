@@ -15,7 +15,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp }  from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { calcAge, getStageGroup, getGradeDelay, STAGE_ICONS } from '../../lib/helpers'
+import { calcAge, getStageGroup, getGradeDelay, getExpectedGrade, STAGE_ICONS } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import { exportXLSX } from '../../lib/excelExport'
 import PageHeader from '../../components/ui/PageHeader'
@@ -66,8 +66,8 @@ export default function EducationStatus() {
   const campMap = useMemo(() => Object.fromEntries(camps.map(c => [c.id, c.name])), [camps])
   const famMap  = useMemo(() => Object.fromEntries(families.map(f => [f.id, f])), [families])
 
-  // قائمة موحَّدة: أطفال بمرحلتهم حسب العمر تلقائياً (+ مقدار تأخرهم الدراسي المحسوب
-  // من actual_grade) + بالغون بمؤهلهم المُسجَّل فعلياً فقط
+  // قائمة موحَّدة: أطفال بمرحلتهم حسب العمر تلقائياً (+ صفهم الفعلي المحدَّد + مقدار
+  // تأخرهم الدراسي المحسوب من actual_grade) + بالغون بمؤهلهم المُسجَّل فعلياً فقط
   const people = useMemo(() => {
     const list = []
     families.forEach(f => {
@@ -75,15 +75,18 @@ export default function EducationStatus() {
       const stage = age != null && age >= 18 ? (f.head_qualification || null) : getStageGroup(age)
       if (stage) list.push({
         id: f.id + '_head', isHead: true, family_id: f.id,
-        name: f.head_name, national_id: f.head_id, age, stage, delay: 0,
+        name: f.head_name, national_id: f.head_id, age, dob: f.head_dob,
+        stage, specificGrade: null, delay: 0,
       })
     })
     members.forEach(m => {
       const age = calcAge(m.dob)
-      const stage = age != null && age >= 18 ? (m.qualification || null) : getStageGroup(age)
+      const isAdult = age != null && age >= 18
+      const stage = isAdult ? (m.qualification || null) : getStageGroup(age)
       if (stage) list.push({
         id: m.id, isHead: false, family_id: m.family_id,
-        name: m.name, national_id: m.national_id, age, stage,
+        name: m.name, national_id: m.national_id, age, dob: m.dob,
+        stage, specificGrade: isAdult ? null : (m.actual_grade || getExpectedGrade(age)),
         delay: getGradeDelay(age, m.actual_grade),
       })
     })
@@ -116,15 +119,19 @@ export default function EducationStatus() {
   function exportStudents() {
     if (!canExport) return showToast('⛔ لا تملك صلاحية التصدير', true)
     if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
-    const rows = filtered.map(p => {
+    // من الأصغر للأكبر = تاريخ الميلاد الأحدث أولاً (تنازلياً)
+    const sorted = [...filtered].sort((a, b) => (b.dob || '').localeCompare(a.dob || ''))
+    const rows = sorted.map(p => {
       const f = famMap[p.family_id] || {}
       return {
         'اسم الطالب':        p.name || '',
         'رقم الهوية':        p.national_id || '',
+        'تاريخ الميلاد':     p.dob || '',
+        'العمر':             p.age ?? '',
         'اسم رب الأسرة':     f.head_name || '',
         'رقم هوية رب الأسرة': f.head_id || '',
         'رقم التواصل':       f.phone1 || '',
-        'المرحلة / المؤهل':  p.stage || '',
+        'المرحلة / المؤهل':  p.specificGrade || p.stage || '',
         'متأخر دراسياً':     p.delay > 0 ? `نعم (${p.delay} صف)` : 'لا',
       }
     })
@@ -216,7 +223,7 @@ export default function EducationStatus() {
                     </p>
                     {p.national_id && <p className="text-muted text-[10px] mt-0.5" dir="ltr">🪪 {p.national_id}</p>}
                     <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                      <Badge color={isAdult ? 'green' : 'blue'}>{stageMeta?.icon} {p.stage}</Badge>
+                      <Badge color={isAdult ? 'green' : 'blue'}>{stageMeta?.icon} {p.specificGrade || p.stage}</Badge>
                       {p.delay > 0 && <Badge color="red">⚠️ متأخر {p.delay} صف</Badge>}
                     </div>
                   </div>
