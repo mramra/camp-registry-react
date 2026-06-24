@@ -44,7 +44,7 @@ export default function ExportPage() {
   const loadCamps = useCallback(async () => {
     try {
       const [{ data: c }, { data: m }] = await Promise.all([
-        supabase.from('camps').select('id,name,latitude,longitude,address,manager_id').eq('org_id',ORG_ID),
+        supabase.from('camps').select('id,name,latitude,longitude,address,manager_id,parent_camp_id,camp_type').eq('org_id',ORG_ID),
         supabase.from('org_members').select('id,user_id,full_name,phone,camp_id,role').eq('org_id',ORG_ID),
       ])
       if (c?.length) setCamps(getVisibleCamps(c))
