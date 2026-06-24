@@ -44,7 +44,7 @@ export default function UsersList() {
   const [collapsed, setCollapsed] = useState({})
   const [previewUser, setPreviewUser] = useState(null)
 
-  const { profile, isOwner, isSuperAdmin, setPreviewAs, realProfile } = useAuth()
+  const { profile, isOwner, isSuperAdmin, isCampDelegate, setPreviewAs, realProfile } = useAuth()
   const { getAllowedCampIds, getVisibleCamps } = useDataScope()
   const navigate = useNavigate()
   const { showToast, online } = useApp()
@@ -79,6 +79,7 @@ export default function UsersList() {
     if (!form.national_id.trim()) errs.national_id = 'رقم الهوية مطلوب'
     if (form.national_id.trim().length < 9) errs.national_id = 'رقم هوية غير صالح'
     if (!form.role) errs.role = 'الدور مطلوب'
+    else if (!getCreatableRoles(profile).includes(form.role)) errs.role = '⛔ لا تملك صلاحية إنشاء هذا الدور'
     if (form.role === 'camp_delegate' && !form.camp_id) errs.camp_id = 'اختر المخيم'
     if (form.role === 'assistant' && !form.supervisor_id) errs.supervisor_id = 'اختر المندوب التابع له'
     return errs
@@ -271,8 +272,15 @@ export default function UsersList() {
   return (
     <div>
       <PageHeader icon="👥" title="إدارة المستخدمين" subtitle={`${users.length} مستخدم`}
-        action={(isOwner || isSuperAdmin) && (
-          <button onClick={() => { setForm(EMPTY_FORM); setErrors({}); setShowAdd(true) }}
+        action={(isOwner || isSuperAdmin || isCampDelegate) && (
+          <button onClick={() => {
+            // مندوب: دوره الوحيد القابل للإنشاء هو "مساعد" — يُعبَّأ تلقائياً بدل
+            // الافتراضي العام (camp_delegate) الذي لا يحق له إنشاؤه أصلاً
+            setForm(isCampDelegate && !isOwner && !isSuperAdmin
+              ? { ...EMPTY_FORM, role: 'assistant', supervisor_id: profile?.id || '' }
+              : EMPTY_FORM)
+            setErrors({}); setShowAdd(true)
+          }}
             className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">＋ إضافة</button>
         )}
       />
@@ -460,6 +468,12 @@ export default function UsersList() {
             </div>
           )}
           {/* تابع لمندوب — للمساعد فقط */}
+          {form.role === 'assistant' && isCampDelegate && !isOwner && !isSuperAdmin && (
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب</label>
+              <div className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-muted text-sm">👤 تابع لك مباشرة</div>
+            </div>
+          )}
           {form.role === 'assistant' && (isOwner || isSuperAdmin) && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب *</label>

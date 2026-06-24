@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Modal from '../../components/ui/Modal'
 import EmptyState from '../../components/ui/EmptyState'
@@ -36,8 +37,9 @@ export default function CampsList() {
   const [form,        setForm]        = useState({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', coordinates:'', manager_id:'' })
   const [saving,      setSaving]      = useState(false)
 
-  const { isOwner, isSuperAdmin, isCampDelegate, canWrite, profile } = useAuth()
+  const { isOwner, isSuperAdmin, isCampDelegate, isAssistant, canWrite, profile } = useAuth()
   const { showToast } = useApp()
+  const { getVisibleCamps } = useDataScope()
 
   const { query, upsert, remove } = useLocalDB()
   useEffect(() => { loadData() }, [])
@@ -101,18 +103,22 @@ export default function CampsList() {
     setManagerMap(gm)
   }
 
-  // فلتر حسب الدور
+  // فلتر حسب الدور — مركزياً عبر useDataScope (كانت دالة محلية تنقصها حالة المساعد
+  // فيرى كل المخيمات بلا تقييد؛ الدالة المركزية تغطي كل الأدوار بشكل صحيح وموحَّد)
   function visibleCamps() {
     if (isOwner || isSuperAdmin) return camps
-    if (isCampDelegate && profile?.camp_id) {
-      return camps.filter(c => c.id===profile.camp_id || c.parent_camp_id===profile.camp_id)
-    }
-    return camps
+    return getVisibleCamps(camps)
   }
 
   function openAdd() {
     setEditCamp(null)
-    setForm({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', notes:'', manager_id:'' })
+    // مندوب (ليس مالكاً ولا مدير إيواء): يقدر فقط يضيف فرعاً تحت مخيمه — لا مخيماً رئيسياً
+    // جديداً، ولا فرعاً تحت مخيم مندوب آخر. القيم مفروضة هنا ومُتحقَّق منها أيضاً بالحفظ.
+    if (isCampDelegate && !isOwner && !isSuperAdmin) {
+      setForm({ name:'', camp_type:'sub', parent_camp_id: profile?.camp_id || '', address:'', capacity:'', status:'active', notes:'', manager_id:'' })
+    } else {
+      setForm({ name:'', camp_type:'main', parent_camp_id:'', address:'', capacity:'', status:'active', notes:'', manager_id:'' })
+    }
     setShowForm(true)
   }
 
@@ -130,6 +136,14 @@ export default function CampsList() {
     if (editCamp ? !allowedToEdit : !canWrite) {
       showToast('⛔ لا تملك صلاحية ' + (editCamp ? 'تعديل' : 'إضافة') + ' المخيمات', true)
       return
+    }
+    // مندوب يُنشئ (لا يعدّل): يُقبَل فقط فرع تحت مخيمه — لا مخيم رئيسي جديد، لا فرع
+    // تحت مخيم آخر (حتى لو لُمست قيم الفورم برمجياً بأي طريقة).
+    if (!editCamp && isCampDelegate && !isOwner && !isSuperAdmin) {
+      if (form.camp_type !== 'sub' || form.parent_camp_id !== profile?.camp_id) {
+        showToast('⛔ يمكنك فقط إضافة فرع تحت مخيمك', true)
+        return
+      }
     }
     setSaving(true)
     try {
@@ -297,11 +311,15 @@ export default function CampsList() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">النوع</label>
-              <select value={form.camp_type} onChange={e=>setForm(f=>({...f,camp_type:e.target.value,parent_camp_id:''}))}
-                className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
-                <option value="main">🏕️ رئيسي</option>
-                <option value="sub">🏕️ فرعي</option>
-              </select>
+              {!editCamp && isCampDelegate && !isOwner && !isSuperAdmin ? (
+                <div className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-muted text-sm">🏕️ فرعي (تحت مخيمك)</div>
+              ) : (
+                <select value={form.camp_type} onChange={e=>setForm(f=>({...f,camp_type:e.target.value,parent_camp_id:''}))}
+                  className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                  <option value="main">🏕️ رئيسي</option>
+                  <option value="sub">🏕️ فرعي</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">الحالة</label>
@@ -316,11 +334,17 @@ export default function CampsList() {
           {form.camp_type === 'sub' && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">المخيم الرئيسي</label>
+              {!editCamp && isCampDelegate && !isOwner && !isSuperAdmin ? (
+                <div className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-muted text-sm">
+                  🏕️ {camps.find(c => c.id === profile?.camp_id)?.name || 'مخيمك'}
+                </div>
+              ) : (
               <select value={form.parent_camp_id} onChange={e=>setForm(f=>({...f,parent_camp_id:e.target.value}))}
                 className="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
                 <option value="">— اختر —</option>
                 {mainCamps.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              )}
             </div>
           )}
           {isOwner && (
