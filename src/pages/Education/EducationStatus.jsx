@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp }  from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
-import { calcAge, getStageGroup, STAGE_ICONS, QUALIFICATION_OPTIONS } from '../../lib/helpers'
+import { calcAge, getStageGroup, STAGE_ICONS } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import { exportXLSX } from '../../lib/excelExport'
 import PageHeader from '../../components/ui/PageHeader'
@@ -123,27 +123,6 @@ export default function EducationStatus() {
     }
   }
 
-  async function setQualification(p, value) {
-    if (!canWrite) return showToast('⛔ لا تملك صلاحية التعديل', true)
-    setBusyId(p.id)
-    try {
-      if (p.isHead) {
-        const { error } = await supabase.from('families').update({ head_qualification: value || null }).eq('id', p.family_id)
-        if (error) throw error
-        setFamilies(fs => fs.map(f => f.id === p.family_id ? { ...f, head_qualification: value || null } : f))
-      } else {
-        const { error } = await supabase.from('family_members').update({ qualification: value || null }).eq('id', p.id)
-        if (error) throw error
-        setMembers(ms => ms.map(m => m.id === p.id ? { ...m, qualification: value || null } : m))
-      }
-      showToast('✅ تم الحفظ')
-    } catch (err) {
-      showToast('خطأ: ' + err.message, true)
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   function exportStudents() {
     if (!canExport) return showToast('⛔ لا تملك صلاحية التصدير', true)
     if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
@@ -249,23 +228,15 @@ export default function EducationStatus() {
                       <Badge color={isAdult ? 'green' : 'blue'}>{stageMeta?.icon} {p.stage}</Badge>
                     </div>
                   </div>
-                  <div className="flex-shrink-0">
-                    {isChild && !p.isHead && (
+                  {isChild && !p.isHead && (
+                    <div className="flex-shrink-0">
                       <button onClick={() => toggleDelayed(p)} disabled={busyId === p.id}
                         className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border disabled:opacity-50 ${
                           p.education_delayed ? 'bg-red/15 border-red text-red' : 'bg-surface2 border-border text-muted'}`}>
                         {p.education_delayed ? '⚠️ متأخر' : 'وضع علامة تأخر'}
                       </button>
-                    )}
-                    {isAdult && (
-                      <select value={p.stage || ''} disabled={busyId === p.id}
-                        onChange={e => setQualification(p, e.target.value)}
-                        className="bg-surface2 border border-border rounded-lg px-2 py-1.5 text-white text-xs outline-none disabled:opacity-50">
-                        <option value="">غير مُسجَّل</option>
-                        {QUALIFICATION_OPTIONS.map(q => <option key={q} value={q}>{q}</option>)}
-                      </select>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             )
