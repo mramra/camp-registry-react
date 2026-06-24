@@ -54,7 +54,7 @@ export default function NeedsReport() {
   const { showToast } = useApp()
   const { canExport, isOwner } = useAuth()
   const { query } = useLocalDB()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
 
   useEffect(() => { loadData() }, [])
 
@@ -71,7 +71,7 @@ export default function NeedsReport() {
       const scopedFams = filterLocal(f, campIds)
       const scopedFamIds = new Set(scopedFams.map(x => x.id))
       const scopedMems = campIds === null ? m : m.filter(x => scopedFamIds.has(x.family_id))
-      setFamilies(scopedFams); setCamps(c); setMembers(scopedMems)
+      setFamilies(scopedFams); setCamps(getVisibleCamps(c)); setMembers(scopedMems)
     } catch(err) { showToast('خطأ: '+err.message,true) }
     finally { setLoading(false) }
   }

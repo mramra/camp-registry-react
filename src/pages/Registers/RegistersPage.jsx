@@ -494,7 +494,7 @@ export default function RegistersPage() {
   const { showToast } = useApp()
   const { isOwner } = useAuth()
   const { query } = useLocalDB()
-  const { getAllowedCampIds, filterLocal } = useDataScope()
+  const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
   const [tab,        setTab]        = useState('children')
   const [loading,    setLoading]    = useState(true)
   const [families,   setFamilies]   = useState([])
@@ -515,7 +515,7 @@ export default function RegistersPage() {
       const f = filterLocal(famVisible, campIds)
       const famIdSet = new Set(f.map(x => x.id))
       const m = campIds === null ? membersRaw : membersRaw.filter(x => famIdSet.has(x.family_id))
-      setFamilies(f); setMembers(m); setCamps(c)
+      setFamilies(f); setMembers(m); setCamps(getVisibleCamps(c))
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }, [])

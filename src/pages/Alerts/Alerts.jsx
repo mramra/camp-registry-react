@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
 import { isIncomplete } from '../../lib/helpers'
 import { useApp } from '../../context/AppContext'
+import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
 import Spinner from '../../components/ui/Spinner'
 import EmptyState from '../../components/ui/EmptyState'
@@ -21,6 +22,7 @@ export default function Alerts() {
   const { isOwner, isSuperAdmin, isCampDelegate, profile } = useAuth()
   const { online } = useApp()
   const { query } = useLocalDB()
+  const { getAllowedCampIds, filterLocal } = useDataScope()
   const navigate = useNavigate()
 
   useEffect(() => { loadAlerts() }, [])
@@ -39,12 +41,10 @@ export default function Alerts() {
       const mByFam  = {}
       members.forEach(m => { if(!mByFam[m.family_id]) mByFam[m.family_id]=[]; mByFam[m.family_id].push(m) })
 
-      // فلتر حسب الدور
-      let myFams = fams
-      if (isCampDelegate && profile?.camp_id) {
-        const myCamps = new Set([profile.camp_id, ...camps.filter(c=>c.parent_camp_id===profile.camp_id).map(c=>c.id)])
-        myFams = fams.filter(f => myCamps.has(f.camp_id))
-      }
+      // فلتر حسب الدور — مركزياً عبر useDataScope (كانت محلية تغطي المندوب فقط
+      // وتنسى المساعد، فيرى الأخير تنبيهات كل الأسر بلا تقييد)
+      const campIds = getAllowedCampIds(camps)
+      const myFams = filterLocal(fams, campIds)
 
       const list = []
 

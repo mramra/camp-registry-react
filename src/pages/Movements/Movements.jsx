@@ -28,7 +28,7 @@ export default function Movements() {
   const [saving,     setSaving]     = useState(false)
 
   const { canWrite, isOwner, profile } = useAuth()
-  const { getAllowedCampIds, applyScope, filterLocal } = useDataScope()
+  const { getAllowedCampIds, applyScope, filterLocal, getVisibleCamps } = useDataScope()
   const { query, upsert, remove, bulkUpsert } = useLocalDB()
   const { showToast } = useApp()
 
@@ -46,12 +46,12 @@ export default function Movements() {
     try {
       // مخيمات
       const lCamps = await query('camps')
-      setCamps(lCamps)
+      setCamps(getVisibleCamps(lCamps))
 
       // حركات — Dexie أولاً
       let movs = await query('family_movements', {org_id: ORG_ID})
       movs.sort((a,b) => (b.date||'').localeCompare(a.date||''))
-      const campIds = getAllowedCampIds(camps)
+      const campIds = getAllowedCampIds(lCamps)
       if (campIds !== null && campIds.length > 0 && !filterCamp) {
         const cSet = new Set(campIds)
         movs = movs.filter(m => cSet.has(m.from_camp) || cSet.has(m.to_camp))
