@@ -4,13 +4,14 @@ import { useAuth } from '../../context/AuthContext'
 import { useDataScope } from '../../lib/useDataScope'
 import { useApp } from '../../context/AppContext'
 import { calcAge, isIncomplete } from '../../lib/helpers'
-import { ORG_ID, supabase, TRACKED_FIELDS as FIELD_LABELS, canUserReviewRequest, fetchPendingRequests, fetchRecentFamilyActivity, useLocalDB, visibleFamilies } from '../../lib/db'
+import { ORG_ID, supabase, TRACKED_FIELDS as FIELD_LABELS, canUserReviewRequest, fetchPendingRequests, fetchRecentFamilyActivity, fetchLastBackupDate, useLocalDB, visibleFamilies } from '../../lib/db'
 
 const REQUIRED = ['head_name','head_id','phone1','camp_id']
 export default function Dashboard() {
   const [stats,    setStats]    = useState(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingDeviceCount, setPendingDeviceCount] = useState(0)
+  const [backupReminder, setBackupReminder] = useState(false)
   const [recent,     setRecent]     = useState([])
   const [activity,   setActivity]   = useState([])
   const [activityDetail, setActivityDetail] = useState(null) // عنصر النشاط المختار لعرض تفاصيله
@@ -27,6 +28,7 @@ export default function Dashboard() {
   useEffect(() => { loadActivity() }, [])
   useEffect(() => { if (isOwner || profile?.can_review_approvals) loadPendingCount() }, [isOwner, profile?.can_review_approvals])
   useEffect(() => { if (isOwner || profile?.can_review_approvals) loadPendingDeviceCount() }, [isOwner, profile?.can_review_approvals])
+  useEffect(() => { if (isOwner) checkBackupReminder() }, [isOwner])
   // Delta Sync — يحدّث الصفحة عند وصول تغييرات من مستخدمين آخرين
   useEffect(() => {
     const handler = () => { loadStats(); loadActivity() }
@@ -75,6 +77,22 @@ export default function Dashboard() {
       const visible = devs.filter(d => canUserReviewRequest(profile, byUserId[d.user_id]))
       setPendingDeviceCount(visible.length)
     } catch (e) { console.warn('[loadPendingDeviceCount]', e.message) }
+  }
+
+  // تذكير أسبوعي بأخذ نسخة احتياطية — لملك المنصة فقط. يبدأ من آخر خميس مضى ويستمر
+  // كل يوم حتى تُؤخَذ نسخة (لا يختفي لو فات يوم الخميس نفسه بلا فتح التطبيق).
+  async function checkBackupReminder() {
+    if (!navigator.onLine) return
+    try {
+      const now = new Date()
+      const daysSinceThu = (now.getDay() - 4 + 7) % 7 // الخميس=4 بتوقيت JS (الأحد=0)
+      const lastThursday = new Date(now)
+      lastThursday.setDate(now.getDate() - daysSinceThu)
+      lastThursday.setHours(0, 0, 0, 0)
+
+      const lastBackup = await fetchLastBackupDate()
+      setBackupReminder(!lastBackup || new Date(lastBackup) < lastThursday)
+    } catch (e) { console.warn('[checkBackupReminder]', e.message) }
   }
 
 
@@ -193,6 +211,22 @@ export default function Dashboard() {
           <div className="bg-accent/20 text-accent font-black text-lg rounded-full w-9 h-9 flex items-center justify-center">
             {pendingDeviceCount}
           </div>
+        </div>
+      )}
+
+      {/* تذكير أسبوعي بالنسخة الاحتياطية — لملك المنصة فقط، يبدأ الخميس ويستمر حتى تُؤخَذ نسخة */}
+      {isOwner && backupReminder && (
+        <div
+          className="bg-red/10 border border-red/30 rounded-xl p-3 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all"
+          onClick={() => navigate('/data')}>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">💾</span>
+            <div>
+              <div className="text-red font-bold text-sm">حان وقت النسخة الاحتياطية الأسبوعية</div>
+              <div className="text-muted text-[11px]">لم تُؤخَذ نسخة منذ آخر خميس — مهم لمنع فقدان البيانات</div>
+            </div>
+          </div>
+          <span className="text-xl">←</span>
         </div>
       )}
 

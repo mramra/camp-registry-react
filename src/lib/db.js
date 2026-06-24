@@ -655,3 +655,69 @@ export async function fetchDeviceAuditMap(deviceIds) {
     return map
   } catch (e) { console.warn('[fetchDeviceAuditMap]', e.message); return {} }
 }
+
+// ════════════════════════════════════════════════════════════
+// 8. نسخة احتياطية شاملة (بيانات + هيكلية) — لملك المنصة فقط
+// ════════════════════════════════════════════════════════════
+
+/** كل الجداول الحقيقية بقاعدة البيانات (27 جدولاً) — لا يُستثنى أي جدول من النسخة */
+export const ALL_TABLES = [
+  'families', 'family_members', 'camps', 'org_members', 'family_movements',
+  'dist_rounds', 'camp_distributions', 'camp_dist_families', 'distributions', 'distribution_families',
+  'family_history', 'devices', 'audit_logs', 'family_activity_log', 'page_permissions',
+  'assistant_camps', 'delegate_camps', 'member_camps', 'civil_registry', 'duplicate_alerts',
+  'notifications', 'push_subscriptions', 'sms_logs', 'subscriptions', 'sync_queue',
+  'user_preferences', 'organizations',
+]
+
+/** جداول بلا عمود org_id — تُجلب كاملة بلا فلترة (الباقي يُفلتر بـ org_id) */
+const TABLES_WITHOUT_ORG_ID = ['family_members', 'member_camps', 'distribution_families', 'organizations']
+
+/**
+ * يجلب كل صفوف كل الجداول الـ27 — مصدر الحقيقة الكاملة للبيانات (لا يستثني شيئاً).
+ * يُرجع: { tableName: rows[] }
+ */
+export async function fetchAllTablesData() {
+  const result = {}
+  await Promise.all(ALL_TABLES.map(async (t) => {
+    try {
+      let q = supabase.from(t).select('*')
+      if (!TABLES_WITHOUT_ORG_ID.includes(t)) q = q.eq('org_id', ORG_ID)
+      const { data, error } = await q
+      result[t] = error ? { error: error.message } : (data || [])
+    } catch (e) { result[t] = { error: e.message } }
+  }))
+  return result
+}
+
+/**
+ * يستدعي دالة قاعدة البيانات export_full_schema() — تُرجع وصف الهيكلية الكامل
+ * (أعمدة/أنواع/مفاتيح أجنبية/فهارس/سياسات RLS) لكل جدول. SECURITY DEFINER، محمية
+ * داخل قاعدة البيانات نفسها لملك المنصة فقط — لا حاجة لأي مفتاح حسّاس بكود الواجهة.
+ */
+export async function fetchFullSchema() {
+  const { data, error } = await supabase.rpc('export_full_schema')
+  if (error) throw error
+  return data
+}
+
+/** يسجّل أن نسخة احتياطية أُخذت الآن — عبر audit_logs (نفس النمط المستخدم لقرارات الأجهزة) */
+export async function logBackupCreated(actor) {
+  try {
+    await supabase.from('audit_logs').insert({
+      org_id: ORG_ID, user_id: actor?.user_id || null, user_name: actor?.full_name || '—',
+      user_role: actor?.role || null, action: 'backup_created',
+      target_id: null, target_name: null, details: { source: 'data_page' },
+    })
+  } catch (e) { console.warn('[logBackupCreated]', e.message) }
+}
+
+/** آخر مرة أُخذت نسخة احتياطية — لمنطق تنبيه الخميس الأسبوعي */
+export async function fetchLastBackupDate() {
+  try {
+    const { data } = await supabase.from('audit_logs')
+      .select('created_at').eq('org_id', ORG_ID).eq('action', 'backup_created')
+      .order('created_at', { ascending: false }).limit(1)
+    return data?.[0]?.created_at || null
+  } catch (e) { console.warn('[fetchLastBackupDate]', e.message); return null }
+}

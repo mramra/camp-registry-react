@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ORG_ID, supabase } from '../../lib/db'
+import { ORG_ID, supabase, fetchAllTablesData, fetchFullSchema, logBackupCreated } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import PageHeader from '../../components/ui/PageHeader'
@@ -130,44 +130,38 @@ export default function DataPage() {
   }, [loadStats])
 
   async function createBackup() {
+    if (!isOwner) { showToast('⛔ النسخة الاحتياطية لملك المنصة فقط', true); return }
     setLoading(true)
     try {
-      const [
-        { data: fams },
-        { data: mems },
-        { data: campsD },
-        { data: rounds },
-        { data: distFams },
-        { data: dists },
-      ] = await Promise.all([
-        supabase.from('families').select('*').eq('org_id', ORG_ID),
-        supabase.from('family_members').select('*'),
-        supabase.from('camps').select('*').eq('org_id', ORG_ID),
-        supabase.from('dist_rounds').select('*').eq('org_id', ORG_ID),
-        supabase.from('camp_dist_families').select('*'),
-        supabase.from('camp_distributions').select('*').eq('org_id', ORG_ID),
+      // كل الـ27 جدولاً بلا استثناء + الهيكلية الكاملة (أعمدة/أنواع/مفاتيح/فهارس/RLS)
+      const [tablesData, schema] = await Promise.all([
+        fetchAllTablesData(),
+        fetchFullSchema().catch(e => { console.warn('[schema export]', e.message); return null }),
       ])
 
+      const counts = {}
+      Object.entries(tablesData).forEach(([t, rows]) => { counts[t] = Array.isArray(rows) ? rows.length : 0 })
+
       const backup = {
-        version: 2,
+        version: 3, // شاملة: كل الجداول + الهيكلية الكاملة (v2 كانت 6 جداول فقط بدون هيكلية)
         org_id: ORG_ID,
         created_at: new Date().toISOString(),
         created_by: profile?.full_name,
         source: 'supabase',
-        counts: {
-          families: fams?.length||0,
-          family_members: mems?.length||0,
-          camps: campsD?.length||0,
-        },
-        data: { families:fams, family_members:mems, camps:campsD, dist_rounds:rounds, camp_dist_families:distFams, camp_distributions:dists }
+        counts,
+        schema, // null لو فشل جلبها (لن يوقف النسخة الاحتياطية للبيانات)
+        data: tablesData,
       }
 
       const blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'})
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href=url; a.download=`backup_supabase_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.json`; a.click()
+      a.href=url; a.download=`backup_full_${new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')}.json`; a.click()
       URL.revokeObjectURL(url)
-      showToast(`✅ نسخة احتياطية كاملة: ${fams?.length||0} أسرة`)
+
+      await logBackupCreated(profile)
+      const totalRows = Object.values(counts).reduce((s,n)=>s+n, 0)
+      showToast(`✅ نسخة احتياطية شاملة: ${Object.keys(tablesData).length} جدولاً، ${totalRows} صفاً${schema ? ' + الهيكلية الكاملة' : ' (تعذّر جلب الهيكلية)'}`)
     } catch(e) { showToast('خطأ: '+e.message, true) }
     finally { setLoading(false) }
   }
@@ -300,7 +294,7 @@ export default function DataPage() {
         {[
           {id:'stats',   label:'📊 الإحصائيات'},
           {id:'monitor', label:'🔭 المراقبة'},
-          {id:'backup',  label:'💾 نسخ احتياطية'},
+          ...(isOwner ? [{id:'backup', label:'💾 نسخ احتياطية'}] : []),
           {id:'danger',  label:'⚠️ خطر'},
         ].map(t => (
           <button key={t.id} onClick={()=>setActiveTab(t.id)}
@@ -356,8 +350,8 @@ export default function DataPage() {
 
 
 
-      {/* ═══ نسخ احتياطية ═══ */}
-      {activeTab==='backup' && (
+      {/* ═══ نسخ احتياطية — لملك المنصة فقط، حماية صريحة بصرف النظر عن أي استثناء صلاحيات صفحة ═══ */}
+      {activeTab==='backup' && isOwner && (
         <div className="flex flex-col gap-3">
           <Card title="💾 نسخة احتياطية من Supabase" icon="">
             <div className="flex flex-col gap-2">
