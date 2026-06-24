@@ -23,7 +23,7 @@ const ROLE_CONFIG = {
 
 const EMPTY_FORM = {
   full_name:'', national_id:'', phone:'', role:'camp_delegate', camp_id:'',
-  supervisor_id:'',
+  supervisor_id:'', assistant_camp_id:'',
   can_add:true, can_edit:true, can_delete:false, can_export:false, can_import:false, allowed_pages:{},
   bypass_approval:false,
   can_review_approvals:true,
@@ -85,11 +85,12 @@ export default function UsersList() {
     return errs
   }
 
-  // المخيم الفعلي الذي سيُحفظ — يُستنتج تلقائياً للمساعد من مندوبه
+  // المخيم الفعلي الذي سيُحفظ — للمساعد: اختيار صريح (رئيسي أو فرع محدد من مخيمات
+  // مندوبه) إن وُجد، وإلا يرث مخيم مندوبه الرئيسي كاملاً (الفروع تتبع تلقائياً)
   function resolveCampId() {
     if (form.role === 'assistant') {
       const sup = users.find(u => u.id === form.supervisor_id)
-      return sup?.camp_id || null
+      return form.assistant_camp_id || sup?.camp_id || null
     }
     if (form.role === 'super_admin') return null
     return form.camp_id || null
@@ -412,7 +413,7 @@ export default function UsersList() {
             <label className="text-xs font-bold text-muted block mb-1.5">الدور *</label>
             <div className="flex flex-col gap-1.5">
               {getCreatableRoles(profile).map(r => (
-                <button key={r} type="button" onClick={() => setF('role',r)}
+                <button key={r} type="button" onClick={() => { setF('role',r); setF('assistant_camp_id','') }}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold border text-right transition-all
                     ${form.role===r?'bg-accent/15 text-accent border-accent':'bg-surface2 border-border text-muted'}`}>
                   <span>{ROLE_CONFIG[r]?.icon}</span>{ROLE_CONFIG[r]?.label}
@@ -477,7 +478,7 @@ export default function UsersList() {
           {form.role === 'assistant' && (isOwner || isSuperAdmin) && (
             <div>
               <label className="text-xs font-bold text-muted block mb-1.5">🟠 تابع لمندوب *</label>
-              <select value={form.supervisor_id} onChange={e=>setF('supervisor_id',e.target.value)}
+              <select value={form.supervisor_id} onChange={e=>{ setF('supervisor_id',e.target.value); setF('assistant_camp_id','') }}
                 className={`w-full bg-surface2 border ${errors.supervisor_id?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`}>
                 <option value="">— اختر المندوب —</option>
                 {users.filter(u=>u.role==='camp_delegate').map(u=>(
@@ -485,16 +486,26 @@ export default function UsersList() {
                 ))}
               </select>
               {errors.supervisor_id && <p className="text-red text-xs mt-1">{errors.supervisor_id}</p>}
-              {form.supervisor_id && (
-                <div className="mt-2 p-3 rounded-xl bg-surface2 border border-border">
-                  <p className="text-muted text-[11px]">⛺ المخيم (تلقائي حسب المندوب)</p>
-                  <p className="text-white text-sm font-bold mt-0.5">
-                    {campMap[users.find(u=>u.id===form.supervisor_id)?.camp_id] || '— لم يُحدَّد مخيم للمندوب —'}
-                  </p>
-                </div>
-              )}
             </div>
           )}
+          {/* مخيم المساعد — رئيسي (شامل كل فروعه) أو فرع محدد من مخيمات مندوبه فقط */}
+          {form.role === 'assistant' && (() => {
+            const supCampId = isCampDelegate && !isOwner && !isSuperAdmin
+              ? profile?.camp_id
+              : users.find(u => u.id === form.supervisor_id)?.camp_id
+            if (!supCampId) return null
+            const subCamps = camps.filter(c => c.parent_camp_id === supCampId)
+            return (
+              <div>
+                <label className="text-xs font-bold text-muted block mb-1.5">⛺ مخيم المساعد *</label>
+                <select value={form.assistant_camp_id || supCampId} onChange={e=>setF('assistant_camp_id', e.target.value)}
+                  className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                  <option value={supCampId}>🏕️ {campMap[supCampId]} (شامل كل الفروع)</option>
+                  {subCamps.map(c => <option key={c.id} value={c.id}>↳ {c.name} (فرع محدد فقط)</option>)}
+                </select>
+              </div>
+            )
+          })()}
           <div className="flex gap-3">
             <button type="submit" disabled={saving} className="flex-1 bg-accent text-bg font-black py-3 rounded-xl text-sm disabled:opacity-60">
               {saving?'جاري الإنشاء...':'✅ إنشاء المستخدم'}
