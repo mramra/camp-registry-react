@@ -406,6 +406,12 @@ export async function approveRequest(req, reviewer) {
       await supabase.from('camps').update(new_data).eq('id', new_data.id)
     } else if (action === 'camp_delete') {
       await supabase.from('camps').delete().eq('id', old_data.id)
+    } else if (action === 'user_insert') {
+      await callAdminAPI('create_user', new_data)
+    } else if (action === 'user_update') {
+      await supabase.from('org_members').update(new_data).eq('id', new_data.id)
+    } else if (action === 'user_delete') {
+      await callAdminAPI('delete_user', { user_id: old_data.user_id, member_id: old_data.id })
     } else if (action?.startsWith('movement_')) {
       // الحركة لم تُنشأ أصلاً عند تقديم الطلب — تُنشأ الآن فقط عند الموافقة
       await supabase.from('family_movements').insert(new_data)
@@ -441,8 +447,8 @@ export async function rejectRequest(req, reviewer, note) {
     } else if (action === 'delete') {
       await supabase.from('families').update({ pending_delete: false }).eq('id', family_id)
     }
-    // camp_insert/camp_update/camp_delete وmovement_* → لا حاجة لأي إجراء استرجاع،
-    // العملية الفعلية لم تُطبَّق أصلاً على camps/family_movements قبل الموافقة
+    // camp_insert/camp_update/camp_delete/user_insert/user_update/user_delete وmovement_*
+    // → لا حاجة لأي إجراء استرجاع، العملية الفعلية لم تُطبَّق أصلاً قبل الموافقة
 
     await supabase.from('family_history').update({
       status: 'rejected',

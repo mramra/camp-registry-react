@@ -20,6 +20,9 @@ const ACTION_LABEL = {
   camp_insert: { icon: '🏕️', label: 'طلب إضافة مخيم', color: '#10b981' },
   camp_update: { icon: '🏕️', label: 'طلب تعديل مخيم', color: '#3b82f6' },
   camp_delete: { icon: '🏕️', label: 'طلب حذف مخيم',   color: '#ef4444' },
+  user_insert: { icon: '👤', label: 'طلب إضافة مستخدم', color: '#10b981' },
+  user_update: { icon: '👤', label: 'طلب تعديل مستخدم', color: '#3b82f6' },
+  user_delete: { icon: '👤', label: 'طلب حذف مستخدم',   color: '#ef4444' },
 }
 
 const ROLE_LABEL = {
@@ -51,9 +54,12 @@ function RequestHeader({ req, navigate, campMap, famMap }) {
   const meta = ACTION_LABEL[req.action] || ACTION_LABEL.update
   const isMovement = req.action?.startsWith('movement_')
   const isCamp = req.action?.startsWith('camp_')
+  const isUser = req.action?.startsWith('user_')
   const famName = req.new_data?.head_name || req.old_data?.head_name || famMap?.[req.family_id]?.head_name || req.family_name || '—'
   const campData = req.new_data || req.old_data || {}
   const campName = campData.name || '—'
+  const userData = req.new_data || req.old_data || {}
+  const userName = userData.full_name || '—'
   return (
     <>
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -67,7 +73,7 @@ function RequestHeader({ req, navigate, campMap, famMap }) {
             • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
           </div>
         </div>
-        {!isCamp && (
+        {!isCamp && !isUser && (
           <button onClick={() => navigate(`/families/edit/${req.family_id}`)}
             className="text-accent text-[11px] font-bold whitespace-nowrap">
             عرض الأسرة ←
@@ -76,10 +82,21 @@ function RequestHeader({ req, navigate, campMap, famMap }) {
       </div>
 
       <div className="bg-surface2 rounded-xl px-3 py-2 mb-2">
-        <span className="text-white font-bold text-sm">{isCamp ? campName : famName}</span>
+        <span className="text-white font-bold text-sm">{isCamp ? campName : isUser ? userName : famName}</span>
       </div>
 
       {req.action === 'update' && <FieldDiff changes={req.changes} />}
+
+      {isUser && (
+        <div className="bg-surface2 rounded-xl p-3 mt-2 text-[11px] text-muted space-y-1">
+          <div>🏷️ الدور المطلوب: <span className="text-white font-bold">{ROLE_LABEL[userData.role] || userData.role || '—'}</span></div>
+          {userData.phone && <div>📱 الجوال: <span className="text-white">{userData.phone}</span></div>}
+          {userData.camp_id && (
+            <div>🏕️ المخيم: <span className="text-white font-bold">{campMap?.[userData.camp_id] || '—'}</span></div>
+          )}
+          {req.action === 'user_insert' && <div className="text-amber-400">⚠️ كلمة المرور ستُعرَض لك بعد الموافقة — شاركها مع المستخدم</div>}
+        </div>
+      )}
 
       {isCamp && (
         <div className="bg-surface2 rounded-xl p-3 mt-2 text-[11px] text-muted space-y-1">

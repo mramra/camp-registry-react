@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ORG_ID, callAdminAPI, supabase, useLocalDB, visibleOrgMembers } from '../../lib/db'
+import { ORG_ID, callAdminAPI, supabase, useLocalDB, visibleOrgMembers, isExemptFromApproval, recordApprovalRequest } from '../../lib/db'
 import { useAuth } from '../../context/AuthContext'
 import { useApp } from '../../context/AppContext'
 import { useDataScope } from '../../lib/useDataScope'
@@ -105,7 +105,7 @@ export default function UsersList() {
     try {
       const pass = randomPassword()
       const reviewVal = form.role !== 'assistant' ? form.can_review_approvals : false
-      await callAdminAPI('create_user', {
+      const payload = {
         email: `${form.national_id.trim()}@c.co`, password: pass,
         full_name: form.full_name.trim(), national_id: form.national_id.trim(),
         phone: form.phone.trim(), role: form.role,
@@ -116,7 +116,22 @@ export default function UsersList() {
         allowed_pages: JSON.stringify(form.allowed_pages), created_by: profile?.id,
         bypass_approval: form.bypass_approval,
         can_review_approvals: reviewVal,
-      })
+      }
+
+      if (!isExemptFromApproval(profile)) {
+        await recordApprovalRequest({
+          familyId: null, action: 'user_insert',
+          oldData: null, newData: payload, changes: null,
+          actorId: profile?.user_id || profile?.id || null,
+          actorName: profile?.full_name || profile?.name || '—',
+          actorRole: profile?.role || null,
+        })
+        showToast('✅ تم إرسال طلب الإضافة للمراجعة')
+        setShowAdd(false); setForm(EMPTY_FORM)
+        return
+      }
+
+      await callAdminAPI('create_user', payload)
       // حل احتياطي: لو Edge Function تجاهلت الحقول الجديدة (دالة خلفية قديمة لا تعرفها بعد)،
       // نضبطها مباشرة بتحديث صريح بعد الإنشاء — فقط لو فُعِّلت صراحة أو خرجت عن الافتراضي.
       if (form.bypass_approval || !reviewVal) {
@@ -158,6 +173,19 @@ export default function UsersList() {
       }
       if (isOwner) updates.role = form.role
 
+      if (!isExemptFromApproval(profile)) {
+        await recordApprovalRequest({
+          familyId: null, action: 'user_update',
+          oldData: editUser, newData: updates, changes: null,
+          actorId: profile?.user_id || profile?.id || null,
+          actorName: profile?.full_name || profile?.name || '—',
+          actorRole: profile?.role || null,
+        })
+        showToast('✅ تم إرسال طلب التعديل للمراجعة')
+        setEditUser(null)
+        return
+      }
+
       // حفظ محلي فوراً
       await upsert('org_members', updates)
       setUsers(u => u.map(x => x.id === editUser.id ? updates : x))
@@ -198,7 +226,22 @@ export default function UsersList() {
   }
 
   async function handleDelete(user) {
-    if (!window.confirm(`حذف "${user.full_name}"؟`)) return
+    if (!window.confirm(isExemptFromApproval(profile) ? `حذف "${user.full_name}"؟` : `طلب حذف "${user.full_name}"؟ (بانتظار موافقة)`)) return
+
+    if (!isExemptFromApproval(profile)) {
+      try {
+        await recordApprovalRequest({
+          familyId: null, action: 'user_delete',
+          oldData: user, newData: null, changes: null,
+          actorId: profile?.user_id || profile?.id || null,
+          actorName: profile?.full_name || profile?.name || '—',
+          actorRole: profile?.role || null,
+        })
+        showToast('✅ تم إرسال طلب الحذف للمراجعة')
+      } catch(err) { showToast('خطأ: ' + err.message, true) }
+      return
+    }
+
     try {
       // محلي فوراً
       await remove('org_members', user.id)
