@@ -3,7 +3,7 @@ import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies, supabase, ORG_ID } from '../../lib/db'
 import {
-  parseArr, calcAge, isAgeInRange, hasHealthData,
+  parseArr, calcAge, isAgeInRange, hasHealthData, getCampDelegateInfo,
   buildFamHasNamedWife, buildFamWithInfant, isAutoNursing,
 } from '../../lib/helpers'
 import { useDataScope }   from '../../lib/useDataScope'
@@ -210,12 +210,12 @@ export default function WomenPage() {
         const camp = camps.find(c => c.id === campFilter)
         if (camp) {
           const { data: orgMembers } = await supabase.from('org_members')
-            .select('id,full_name,phone').eq('org_id', ORG_ID)
-          const mgr = (orgMembers || []).find(m => m.id === camp.manager_id)
+            .select('id,full_name,phone,national_id,role,camp_id').eq('org_id', ORG_ID)
+          const delegate = getCampDelegateInfo(camp, orgMembers)
           campInfo = {
             campName: camp.name,
-            delegateName: mgr?.full_name,
-            delegatePhone: mgr?.phone,
+            delegateName: delegate?.name,
+            delegatePhone: delegate?.phone,
             latitude: camp.latitude,
             longitude: camp.longitude,
           }

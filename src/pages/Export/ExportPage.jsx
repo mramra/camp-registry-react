@@ -10,7 +10,7 @@ import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
-import { calcAge, isAgeInRange } from '../../lib/helpers'
+import { calcAge, isAgeInRange, getCampDelegateInfo } from '../../lib/helpers'
 import { FAM_COLS, MEM_COLS, buildWifeMap, resolveFamilyColumn, resolveMemberColumn } from '../../lib/exportColumns'
 
 export default function ExportPage() {
@@ -78,18 +78,13 @@ export default function ExportPage() {
     if (!campId) return null
     const camp = camps.find(c=>c.id===campId)
     if (!camp) return null
-    // 1. مندوب المخيم مباشرة
-    let delegate = orgMembers.find(m=>m.camp_id===campId&&m.role==='camp_delegate')
-    // 2. مدير المخيم (manager_id)
-    if (!delegate) delegate = orgMembers.find(m=>m.user_id===camp.manager_id)
-    // 3. أي عضو مرتبط بهذا المخيم
-    if (!delegate) delegate = orgMembers.find(m=>m.camp_id===campId)
+    const delegate = getCampDelegateInfo(camp, orgMembers)
     return {
       name: camp.name,
       lat: camp.latitude, lng: camp.longitude,
       address: camp.address,
-      delegateName: delegate?.full_name||'',
-      delegatePhone: delegate?.phone || delegate?.national_id || '',
+      delegateName: delegate?.name||'',
+      delegatePhone: delegate?.phone || '',
     }
   }
 

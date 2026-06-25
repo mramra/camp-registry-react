@@ -313,6 +313,25 @@ export function getFamilyCategories(family, members) {
  * أسرة "فاقدة معيل" (رب الأسرة أنثى + لا زوج/ابن بالغ) → كل الأفراد (الأبناء) يتامى
  * تلقائياً لأنهم فقدوا الأب وهذا ما جعل الأم رب الأسرة. غير ذلك: صفر.
  */
+/**
+ * يحدد بيانات المسؤول عن مخيم معيّن لعرضها في بانر التصدير — بترتيب أولوية:
+ * 1. المندوب المباشر (role='camp_delegate', camp_id=هذا المخيم) — الأولوية دائماً
+ * 2. مدير الإيواء المسؤول (camps.manager_id → org_members.id) — احتياط فقط
+ * 3. أي عضو آخر مرتبط بهذا المخيم — احتياط أخير
+ * مركزية: كانت هذه المفاضلة مكرَّرة بثلاث صفحات (الاستيراد والتصدير، النساء،
+ * الأطفال) — بعضها يقفز مباشرة لمدير الإيواء فيعرضه خطأً بدل المندوب الحقيقي.
+ */
+export function getCampDelegateInfo(camp, orgMembers) {
+  if (!camp) return null
+  let person = (orgMembers || []).find(m => m.camp_id === camp.id && m.role === 'camp_delegate')
+  if (!person) person = (orgMembers || []).find(m => m.id === camp.manager_id)
+  if (!person) person = (orgMembers || []).find(m => m.camp_id === camp.id)
+  return {
+    name:  person?.full_name || '',
+    phone: person?.phone || person?.national_id || '',
+  }
+}
+
 export function getOrphanCount(family, members) {
   return isNoProviderFamily(family, members) ? (members || []).length : 0
 }
