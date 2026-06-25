@@ -137,7 +137,6 @@ export default function Dashboard() {
     const campCount = {}
     fams.forEach(f => { campCount[f.camp_id] = (campCount[f.camp_id]||0)+1 })
     const campBars = camps
-      .filter(c => campCount[c.id] > 0)
       .sort((a,b) => (campCount[b.id]||0) - (campCount[a.id]||0))
       .map(c => ({ name:c.name, count:campCount[c.id]||0, pct:Math.round((campCount[c.id]||0)/Math.max(fams.length,1)*100) }))
     setStats({ families:fams.length, members:fams.length+members.length, camps:camps.length, incomplete, children, adults, elderly, noAge, total, campBars })
@@ -236,7 +235,7 @@ export default function Dashboard() {
           {/* توزيع المخيمات */}
           <div className="bg-surface border border-border rounded-xl p-3">
             <div className="text-accent text-xs font-bold mb-3">📊 توزيع المخيمات</div>
-            {stats.campBars.slice(0,5).map(c => (
+            {stats.campBars.slice(0,10).map(c => (
               <div key={c.name} className="mb-2">
                 <div className="flex justify-between text-[10px] mb-1">
                   <span className="text-white truncate max-w-[70px]">{c.name}</span>
