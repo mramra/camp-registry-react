@@ -317,6 +317,24 @@ export function getOrphanCount(family, members) {
   return isNoProviderFamily(family, members) ? (members || []).length : 0
 }
 
+/**
+ * أولوية الأسرة بالتوزيعات — مُستنتَجة تلقائياً من الفئات الموجودة فعلياً، لا تُخزَّن
+ * ولا تحتاج إدخالاً يدوياً (النظام القديم استخدم عمود families.status اليدوي، وهو
+ * غير موجود بالمخطط الحالي). نقاط تراكمية: شهيد/أسير +3، فاقد معيل/فقر مدقع +2،
+ * أسرة كبيرة +1. tier للعرض فقط (نفس لغة الألوان بالنظام القديم: عاجل/يحتاج/عادي).
+ */
+export function getFamilyPriority(family, members) {
+  const cats = getFamilyCategories(family, members)
+  let score = 0
+  if (cats.includes('martyr'))       score += 3
+  if (cats.includes('captive'))      score += 3
+  if (cats.includes('no_provider'))  score += 2
+  if (family?.economic_level === 'extreme_poverty') score += 2
+  if (cats.includes('large'))        score += 1
+  const tier = score >= 3 ? 'urgent' : score >= 1 ? 'need' : 'ok'
+  return { score, tier }
+}
+
 // ════════════════════════════════════════════════════════════
 // 7. المرحلة الدراسية المتوقعة حسب العمر (نظام التعليم الفلسطيني)
 // ════════════════════════════════════════════════════════════

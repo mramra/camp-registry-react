@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
 import { useDataScope } from '../../lib/useDataScope'
 import { formatDate } from '../../lib/utils'
+import { getFamilyPriority } from '../../lib/helpers'
+import { exportXLSX } from '../../lib/excelExport'
 import PageHeader from '../../components/ui/PageHeader'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -36,7 +38,14 @@ export default function Distributions() {
   const [batches,   setBatches]   = useState([])
   const [batchLoad, setBatchLoad] = useState(false)
   const [families,  setFamilies]  = useState([])
+  const [members,   setMembers]   = useState([])
   const [received,  setReceived]  = useState({}) // familyId → true
+  const [recvTab,    setRecvTab]    = useState('pending') // 'pending' | 'received'
+  const [sortMode,   setSortMode]   = useState('priority')
+  const [recvSearch, setRecvSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkNote,    setBulkNote]    = useState('')
+  const [bulkSaving,  setBulkSaving]  = useState(false)
   const [selBatch,  setSelBatch]  = useState(null)
   const [showAddRound, setShowAddRound] = useState(false)
   const [showAddBatch, setShowAddBatch] = useState(false)
@@ -105,6 +114,7 @@ export default function Distributions() {
     setSelBatch(batch)
     setView('receive')
     setBatchLoad(true)
+    setRecvTab('pending'); setRecvSearch(''); setSelectedIds(new Set()); setBulkNote('')
     try {
       // أسر المخيم
       const campId = batch.camp_id || selected?.camp_id
@@ -117,6 +127,10 @@ export default function Distributions() {
       // حماية مضاعفة: حتى لو الدفعة بلا camp_id محدد، لا تتجاوز نطاق صلاحية المستخدم
       allFams = filterLocal(allFams, campIds)
       setFamilies(allFams)
+
+      const famIds = new Set(allFams.map(f => f.id))
+      const allMems = await query('family_members')
+      setMembers(allMems.filter(m => famIds.has(m.family_id)))
 
       // من استلم بالفعل
       const distFams = await query('camp_dist_families', { distribution_id: batch.id })
@@ -220,6 +234,43 @@ export default function Distributions() {
     } catch(err) { showToast('خطأ: ' + err.message, true) }
   }
 
+  // ─── تسجيل استلام جماعي ──────────────────────────────
+  async function bulkMarkReceived() {
+    if (!canWrite) { showToast('⛔ لا تملك صلاحية تسجيل الاستلام', true); return }
+    if (!selectedIds.size) { showToast('⚠️ لم تُحدد أي أسرة', true); return }
+    setBulkSaving(true)
+    try {
+      const ids = [...selectedIds]
+      for (const famId of ids) {
+        const rec = {
+          id: crypto.randomUUID(), distribution_id: selBatch.id, family_id: famId,
+          org_id: ORG_ID, received_at: new Date().toISOString(), notes: bulkNote || null,
+        }
+        await upsert('camp_dist_families', rec)
+      }
+      setReceived(r => { const n = {...r}; ids.forEach(id => { n[id] = true }); return n })
+      showToast(`✅ تم تسجيل استلام ${ids.length} أسرة`)
+      setSelectedIds(new Set()); setBulkNote('')
+    } catch(err) { showToast('خطأ: ' + err.message, true) }
+    finally { setBulkSaving(false) }
+  }
+
+  function exportBatchExcel() {
+    if (!families.length) return showToast('لا توجد بيانات للتصدير', true)
+    const rows = families.map(fam => {
+      const pri = getFamilyPriority(fam, memsByFamily[fam.id] || [])
+      return {
+        'اسم رب الأسرة': fam.head_name || '',
+        'رقم الهوية': fam.head_id || '',
+        'رقم الخيمة': fam.tent || '',
+        'عدد الأفراد': (memsByFamily[fam.id]?.length || 0) + 1,
+        'الأولوية': pri.tier === 'urgent' ? 'عاجل' : pri.tier === 'need' ? 'يحتاج' : 'عادي',
+        'الحالة': received[fam.id] ? 'استلم' : 'لم يستلم',
+      }
+    })
+    exportXLSX(rows, 'كشف التوزيع', `توزيع_${selBatch?.name || ''}`)
+  }
+
   // ─── تغيير حالة الجولة ───────────────────────────────
   async function updateRoundStatus(id, status) {
     if (!isOwner && !isSuperAdmin) { showToast('⛔ لا تملك صلاحية تغيير حالة الجولة', true); return }
@@ -237,48 +288,155 @@ export default function Distributions() {
   const filtered  = rounds.filter(r => !search || (r.name||'').toLowerCase().includes(search.toLowerCase()))
   const receivedCount = Object.keys(received).length
 
+  // ─── حسابات شاشة الاستلام: فرز + بحث + أولوية ────────
+  const memsByFamily = {}
+  members.forEach(m => { (memsByFamily[m.family_id] ||= []).push(m) })
+
+  function sortRecvList(list) {
+    const withPri = list.map(f => ({ f, pri: getFamilyPriority(f, memsByFamily[f.id] || []) }))
+    withPri.sort((a, b) => {
+      const am = memsByFamily[a.f.id]?.length || 0, bm = memsByFamily[b.f.id]?.length || 0
+      switch (sortMode) {
+        case 'alpha':     return (a.f.head_name||'').localeCompare(b.f.head_name||'', 'ar')
+        case 'size_desc': return bm - am
+        case 'size_asc':  return am - bm
+        case 'tent_asc':  return (a.f.tent||'').localeCompare(b.f.tent||'', 'ar', { numeric: true })
+        case 'tent_desc': return (b.f.tent||'').localeCompare(a.f.tent||'', 'ar', { numeric: true })
+        default:          return b.pri.score - a.pri.score // priority
+      }
+    })
+    return withPri
+  }
+
+  const recvQ = recvSearch.trim().toLowerCase()
+  const searchedFams = !recvQ ? families
+    : families.filter(f => (f.head_name||'').toLowerCase().includes(recvQ) || (f.head_id||'').includes(recvQ))
+
+  const pendingList  = sortRecvList(searchedFams.filter(f => !received[f.id]))
+  const receivedList = sortRecvList(searchedFams.filter(f => received[f.id]))
+
+  const PRI_STYLE = {
+    urgent: { border: '#ef4444', label: '🔴 عاجل' },
+    need:   { border: '#f59e0b', label: '🟠 يحتاج' },
+    ok:     { border: '#10b981', label: '' },
+  }
+
+  function toggleSelect(famId) {
+    setSelectedIds(s => {
+      const n = new Set(s)
+      n.has(famId) ? n.delete(famId) : n.add(famId)
+      return n
+    })
+  }
+
   // ─── عرض استلام الأسر ────────────────────────────────
   if (view === 'receive') {
+    const list = recvTab === 'pending' ? pendingList : receivedList
     return (
       <div>
         <PageHeader icon="🎁" title="استلام التوزيع"
           subtitle={`${selBatch?.name} — ${receivedCount}/${families.length} أسرة`}
           action={
-            <button onClick={() => setView('batches')}
-              className="bg-surface2 border border-border text-white font-bold px-3 py-2 rounded-xl text-sm">
-              ← رجوع
-            </button>
+            <div className="flex gap-2">
+              <button onClick={exportBatchExcel}
+                className="bg-blue/10 border border-blue/30 text-blue font-bold px-3 py-2 rounded-xl text-sm">
+                📤 تصدير
+              </button>
+              <button onClick={() => setView('batches')}
+                className="bg-surface2 border border-border text-white font-bold px-3 py-2 rounded-xl text-sm">
+                ← رجوع
+              </button>
+            </div>
           }
         />
+
+        {/* تبويبان */}
+        <div className="flex gap-2 mb-3">
+          <button onClick={() => { setRecvTab('pending'); setSelectedIds(new Set()) }}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${recvTab==='pending' ? 'bg-accent text-bg border-accent' : 'bg-surface border-border text-muted'}`}>
+            ⏳ لم يستلموا ({pendingList.length})
+          </button>
+          <button onClick={() => { setRecvTab('received'); setSelectedIds(new Set()) }}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${recvTab==='received' ? 'bg-green text-bg border-green' : 'bg-surface border-border text-muted'}`}>
+            ✅ استلموا ({receivedList.length})
+          </button>
+        </div>
+
         {batchLoad ? <div className="flex justify-center py-16"><Spinner /></div>
         : families.length === 0
           ? <EmptyState icon="👨‍👩‍👧‍👦" title="لا توجد أسر نشطة في هذا المخيم" />
           : (
-            <div className="flex flex-col gap-2">
-              <div className="bg-surface border border-accent/30 rounded-xl p-3 mb-2 text-center">
-                <span className="text-accent font-black text-lg">{receivedCount}</span>
-                <span className="text-muted text-sm"> / {families.length} أسرة استلمت</span>
+            <>
+              {/* فرز + بحث */}
+              <div className="flex gap-2 mb-3">
+                <select value={sortMode} onChange={e => setSortMode(e.target.value)}
+                  className="bg-surface2 border border-border rounded-xl px-2.5 py-2 text-white text-xs focus:outline-none focus:border-accent">
+                  <option value="priority">🎯 الأولوية أولاً</option>
+                  <option value="alpha">🔤 أبجدي</option>
+                  <option value="size_desc">👨‍👩‍👧‍👦 أكبر أسرة أولاً</option>
+                  <option value="size_asc">👤 أصغر أسرة أولاً</option>
+                  <option value="tent_asc">⛺ رقم خيمة (تصاعدي)</option>
+                  <option value="tent_desc">⛺ رقم خيمة (تنازلي)</option>
+                </select>
+                <input value={recvSearch} onChange={e => setRecvSearch(e.target.value)}
+                  placeholder="بحث بالاسم أو الهوية..."
+                  className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent" />
               </div>
-              {families.map(fam => {
-                const done = !!received[fam.id]
-                return (
-                  <div key={fam.id}
-                    onClick={() => toggleReceive(fam)}
-                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all
-                      ${done
-                        ? 'bg-green/10 border-green/30'
-                        : 'bg-surface border-border hover:border-accent/40'}`}>
-                    <div>
-                      <div className="font-bold text-white text-sm">{fam.head_name}</div>
-                      <div className="text-muted text-xs">{fam.head_id} · {fam.members_count || 0} فرد</div>
-                    </div>
-                    <div className={`text-2xl transition-all ${done ? 'scale-110' : 'opacity-30'}`}>
-                      {done ? '✅' : '⬜'}
-                    </div>
+
+              {list.length === 0
+                ? <EmptyState icon="🔍" title="لا نتائج" />
+                : (
+                  <div className="flex flex-col gap-2 mb-3">
+                    {list.map(({ f: fam, pri }) => {
+                      const done = recvTab === 'received'
+                      const sel = selectedIds.has(fam.id)
+                      const mc = (memsByFamily[fam.id]?.length || 0) + 1
+                      return (
+                        <div key={fam.id}
+                          onClick={() => done ? toggleReceive(fam) : toggleSelect(fam.id)}
+                          className={`flex items-center justify-between p-3 rounded-xl border-r-[3px] border cursor-pointer transition-all
+                            ${done ? 'bg-green/10 border-green/30' : sel ? 'bg-accent/10 border-accent/40' : 'bg-surface border-border hover:border-accent/30'}`}
+                          style={{ borderRightColor: PRI_STYLE[pri.tier].border }}>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-white text-sm truncate">{fam.head_name}</span>
+                              {!done && PRI_STYLE[pri.tier].label && (
+                                <span className="text-[9px] font-bold whitespace-nowrap">{PRI_STYLE[pri.tier].label}</span>
+                              )}
+                            </div>
+                            <div className="text-muted text-xs">
+                              {fam.head_id} · {mc} فرد {fam.tent && <>· ⛺ {fam.tent}</>}
+                            </div>
+                          </div>
+                          <div className={`text-2xl transition-all ${done || sel ? 'scale-110' : 'opacity-30'}`}>
+                            {done ? '↩️' : sel ? '✅' : '⬜'}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
-            </div>
+                )}
+
+              {/* شريط الإجراء الجماعي */}
+              {recvTab === 'pending' && selectedIds.size > 0 && (
+                <div className="bg-surface border border-accent/40 rounded-xl p-3 sticky bottom-2 flex flex-col gap-2">
+                  <div className="text-accent font-bold text-sm">✅ {selectedIds.size} أسرة محددة</div>
+                  <input value={bulkNote} onChange={e => setBulkNote(e.target.value)}
+                    placeholder="ملاحظة (اختياري)..."
+                    className="bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent" />
+                  <div className="flex gap-2">
+                    <button onClick={bulkMarkReceived} disabled={bulkSaving}
+                      className="flex-1 bg-accent text-bg font-black py-2.5 rounded-xl text-sm disabled:opacity-60">
+                      {bulkSaving ? 'جاري التسجيل...' : `🎁 تسجيل استلام ${selectedIds.size}`}
+                    </button>
+                    <button onClick={() => setSelectedIds(new Set())}
+                      className="bg-surface2 border border-border text-white font-bold px-4 py-2.5 rounded-xl text-sm">
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )
         }
       </div>
