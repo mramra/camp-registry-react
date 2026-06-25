@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useApp }       from '../../context/AppContext'
 import { useAuth }      from '../../context/AuthContext'
-import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { parseArr, calcAge } from '../../lib/helpers'
+import { useLocalDB, visibleFamilies, supabase, ORG_ID } from '../../lib/db'
+import { parseArr, calcAge, isAgeInRange } from '../../lib/helpers'
 import { exportXLSX } from '../../lib/excelExport'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader       from '../../components/ui/PageHeader'
@@ -37,6 +37,8 @@ export default function ChildrenPage() {
   const [campFilter,  setCampFilter]  = useState('')
   const [groupFilter, setGroupFilter] = useState('')
   const [genderFilter,setGenderFilter]= useState('')
+  const [ageFrom, setAgeFrom] = useState('')
+  const [ageTo,   setAgeTo]   = useState('')
 
   const { showToast } = useApp()
   const { canExport, isOwner }  = useAuth()
@@ -129,20 +131,25 @@ export default function ChildrenPage() {
     return allChildren.filter(c => {
       if (campFilter   && c.camp_id !== campFilter) return false
       if (genderFilter && c.gender  !== genderFilter) return false
+      // فلتر الفئة الجاهزة — بدقة فعلية بالأيام (لا بالعمر المقرَّب لأسفل)، فطفل
+      // عمره سنتان ويوم واحد يُستثنى فعلياً من "رضيع (0-2)" ولا يُحسب ضمنها
       if (groupFilter) {
         const g = AGE_GROUPS.find(x => x.label === groupFilter)
-        if (g && (c.age < g.min || c.age > g.max)) return false
+        if (g && !isAgeInRange(c.dob, g.min, g.max)) return false
       }
+      // فلتر العمر المخصص (من/إلى) — بنفس الدقة، مستقل عن الفئة الجاهزة
+      if (ageFrom !== '' && !isAgeInRange(c.dob, ageFrom, '')) return false
+      if (ageTo   !== '' && !isAgeInRange(c.dob, '', ageTo))   return false
       return true
     })
-  }, [allChildren, campFilter, groupFilter, genderFilter])
+  }, [allChildren, campFilter, groupFilter, genderFilter, ageFrom, ageTo])
 
-  // إحصاءات الفئات العمرية
+  // إحصاءات الفئات العمرية — بدقة فعلية بالأيام (نفس منطق الفلتر)
   const groupStats = useMemo(() => {
     const base = campFilter ? allChildren.filter(c => c.camp_id === campFilter) : allChildren
     return AGE_GROUPS.map(g => ({
       ...g,
-      count: base.filter(c => c.age >= g.min && c.age <= g.max).length,
+      count: base.filter(c => isAgeInRange(c.dob, g.min, g.max)).length,
     }))
   }, [allChildren, campFilter])
 
@@ -159,7 +166,7 @@ export default function ChildrenPage() {
     }
   }, [allChildren, campFilter])
 
-  function exportExcel() {
+  async function exportExcel() {
     try {
       if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
       const rows = filtered.map(c => ({
@@ -173,7 +180,26 @@ export default function ChildrenPage() {
         'يتيم': c.orphan ? 'نعم' : '',
         'إعاقة': c.disabilities && (Array.isArray(c.disabilities) ? c.disabilities.length : c.disabilities) ? 'نعم' : '',
       }))
-      exportXLSX(rows, 'سجل الأطفال', 'سجل_الأطفال')
+
+      // بانر المخيم — فقط لو اختير مخيم محدد، نفس تنسيق صفحة النساء/الاستيراد والتصدير
+      let campInfo = null
+      if (campFilter) {
+        const camp = camps.find(c => c.id === campFilter)
+        if (camp) {
+          const { data: orgMembers } = await supabase.from('org_members')
+            .select('id,full_name,phone').eq('org_id', ORG_ID)
+          const mgr = (orgMembers || []).find(m => m.id === camp.manager_id)
+          campInfo = {
+            campName: camp.name,
+            delegateName: mgr?.full_name,
+            delegatePhone: mgr?.phone,
+            latitude: camp.latitude,
+            longitude: camp.longitude,
+          }
+        }
+      }
+
+      exportXLSX(rows, 'سجل الأطفال', 'سجل_الأطفال', campInfo)
     } catch (err) {
       showToast('خطأ في التصدير: ' + err.message, true)
     }
@@ -258,6 +284,19 @@ export default function ChildrenPage() {
               <option value="ذكر">👦 ذكور</option>
               <option value="أنثى">👧 إناث</option>
             </select>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="number" placeholder="العمر من"
+              value={ageFrom} onChange={e => setAgeFrom(e.target.value)}
+              className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+            />
+            <input
+              type="number" placeholder="إلى"
+              value={ageTo} onChange={e => setAgeTo(e.target.value)}
+              className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+            />
           </div>
         </div>
       </Card>
