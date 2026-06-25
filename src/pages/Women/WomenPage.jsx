@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
-import { useLocalDB, visibleFamilies } from '../../lib/db'
+import { useLocalDB, visibleFamilies, supabase, ORG_ID } from '../../lib/db'
 import {
-  parseArr, calcAge, isAgeInRange,
+  parseArr, calcAge, isAgeInRange, hasHealthData,
   buildFamHasNamedWife, buildFamWithInfant, isAutoNursing,
 } from '../../lib/helpers'
 import { useDataScope }   from '../../lib/useDataScope'
@@ -133,7 +133,10 @@ export default function WomenPage() {
   // النتائج المفلترة
   const filtered = useMemo(() => {
     return allWomen.filter(w => {
-      if (campFilter && !w.camp.includes(campMap[campFilter] || campFilter)) {
+      // مطابقة دقيقة بـ camp_id فقط — لا مطابقة نصية جزئية (كانت تطابق خطأً أي فرع
+      // يحتوي اسم المخيم الرئيسي كجزء من اسمه، مثل "معلمات السلام الأولمبي" عند
+      // اختيار "السلام الأولمبي")
+      if (campFilter) {
         const f = families.find(x => x.id === w.family_id)
         if (!f || f.camp_id !== campFilter) return false
       }
@@ -181,20 +184,54 @@ export default function WomenPage() {
   function exportExcel() {
     try {
       if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
-      const rows = filtered.map(w => ({
-        'الاسم': w.name,
-        'رقم الهوية': w.national_id || '',
-        'العمر': w.age ?? '',
-        'الصلة': w.relation,
-        'الحالة الاجتماعية': w.marital || '',
-        'المخيم': w.camp,
-        'الحالة الصحية': Array.isArray(w.female_status) ? w.female_status.join('،') : '',
-        'الهاتف': w.phone || '',
-        'اسم رب الأسرة': w.head_name,
-      }))
+      const rows = filtered.map(w => {
+        const healthParts = []
+        if (hasHealthData(w.disabilities)) healthParts.push('إعاقة')
+        if (hasHealthData(w.chronic))       healthParts.push('مرض مزمن')
+        return {
+          'الاسم': w.name,
+          'رقم الهوية': w.national_id || '',
+          'تاريخ الميلاد': w.dob || '',
+          'العمر': w.age ?? '',
+          'الصلة': w.relation,
+          'الحالة الاجتماعية': w.marital || '',
+          'المخيم': w.camp,
+          'عدد أفراد الأسرة': (w._mems?.length || 0) + 1,
+          'الحالة الصحية (نسائية)': Array.isArray(w.female_status) ? w.female_status.join('،') : '',
+          'الإعاقة / المرض المزمن': healthParts.join('،'),
+          'الهاتف': w.phone || '',
+        }
+      })
       exportXLSX(rows, 'كشف النساء', 'كشف_النساء')
     } catch (err) {
       showToast('خطأ في التصدير: ' + err.message, true)
+    }
+  }
+
+  async function exportBanner() {
+    try {
+      const { data: orgMembers } = await supabase.from('org_members').select('id,full_name,phone').eq('org_id', ORG_ID)
+      const byMemberId = Object.fromEntries((orgMembers || []).map(m => [m.id, m]))
+      const visibleCampList = campFilter ? camps.filter(c => c.id === campFilter) : camps
+      if (!visibleCampList.length) return showToast('لا توجد مخيمات للتصدير', true)
+      const rows = visibleCampList.map(c => {
+        const mgr = byMemberId[c.manager_id]
+        const count = filtered.filter(w => {
+          const f = families.find(x => x.id === w.family_id)
+          return f?.camp_id === c.id
+        }).length
+        return {
+          'المخيم':        c.name || '',
+          'المندوب':       mgr?.full_name || '',
+          'جوال المندوب':  mgr?.phone || '',
+          'خط العرض':      c.latitude ?? '',
+          'خط الطول':      c.longitude ?? '',
+          'عدد المطابقين': count,
+        }
+      })
+      exportXLSX(rows, 'بانر المخيمات', 'بانر_كشف_النساء')
+    } catch (err) {
+      showToast('خطأ في تصدير البانر: ' + err.message, true)
     }
   }
 
@@ -214,10 +251,16 @@ export default function WomenPage() {
         icon="👩"
         subtitle={`${filtered.length} من ${allWomen.length} سجل`}
         action={canExport && filtered.length > 0 && (
-          <button onClick={exportExcel}
-            className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">
-            📤 تصدير
-          </button>
+          <div className="flex gap-1.5">
+            <button onClick={exportExcel}
+              className="bg-accent text-bg font-black px-3 py-2 rounded-xl text-sm">
+              📤 تصدير
+            </button>
+            <button onClick={exportBanner}
+              className="bg-blue/10 border border-blue/30 text-blue font-black px-3 py-2 rounded-xl text-sm">
+              📍 بانر
+            </button>
+          </div>
         )}
       />
 
