@@ -394,11 +394,18 @@ export async function fetchDecisionLog(limit = 100) {
 /** يوافق على طلب: يطبّق التغيير الفعلي على families/family_members */
 export async function approveRequest(req, reviewer) {
   try {
-    const { family_id, action, new_data } = req
+    const { family_id, action, new_data, old_data } = req
 
     if (action === 'delete') {
       await supabase.from('family_members').delete().eq('family_id', family_id)
       await supabase.from('families').delete().eq('id', family_id)
+    } else if (action === 'camp_insert') {
+      // المخيم لم يُنشأ أصلاً عند تقديم الطلب — يُنشأ الآن فقط عند الموافقة
+      await supabase.from('camps').insert(new_data)
+    } else if (action === 'camp_update') {
+      await supabase.from('camps').update(new_data).eq('id', new_data.id)
+    } else if (action === 'camp_delete') {
+      await supabase.from('camps').delete().eq('id', old_data.id)
     } else if (action?.startsWith('movement_')) {
       // الحركة لم تُنشأ أصلاً عند تقديم الطلب — تُنشأ الآن فقط عند الموافقة
       await supabase.from('family_movements').insert(new_data)
@@ -434,7 +441,8 @@ export async function rejectRequest(req, reviewer, note) {
     } else if (action === 'delete') {
       await supabase.from('families').update({ pending_delete: false }).eq('id', family_id)
     }
-    // action يبدأ بـ movement_ → لا حاجة لأي إجراء استرجاع، الحركة لم تُنشأ أصلاً قبل الموافقة
+    // camp_insert/camp_update/camp_delete وmovement_* → لا حاجة لأي إجراء استرجاع،
+    // العملية الفعلية لم تُطبَّق أصلاً على camps/family_movements قبل الموافقة
 
     await supabase.from('family_history').update({
       status: 'rejected',

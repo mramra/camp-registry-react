@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { ORG_ID, supabase, useLocalDB, visibleFamilies } from '../../lib/db'
+import { ORG_ID, supabase, useLocalDB, visibleFamilies, isExemptFromApproval, recordApprovalRequest } from '../../lib/db'
 import { useApp } from '../../context/AppContext'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
@@ -198,6 +198,25 @@ export default function CampsList() {
           facilities: 0, portal_open: false,
         }),
       }
+      const actorId   = profile?.user_id || profile?.id || null
+      const actorName = profile?.full_name || profile?.name || '—'
+      const exempt = isExemptFromApproval(profile)
+
+      if (!exempt) {
+        await recordApprovalRequest({
+          familyId:  null,
+          action:    editCamp ? 'camp_update' : 'camp_insert',
+          oldData:   editCamp || null,
+          newData:   data,
+          changes:   null,
+          actorId, actorName,
+          actorRole: profile?.role || null,
+        })
+        setShowForm(false)
+        showToast(`✅ تم إرسال طلب ${editCamp ? 'التعديل' : 'الإضافة'} للمراجعة`)
+        return
+      }
+
       await upsert('camps', data)
       const newCamps = editCamp ? camps.map(c=>c.id===data.id?data:c) : [...camps, data]
       setCamps(newCamps)
@@ -209,11 +228,28 @@ export default function CampsList() {
   }
 
   async function handleDelete(camp) {
-    if (!isOwner) {
-      showToast('⛔ حذف المخيمات للمالك فقط', true)
+    const allowedToDelete = isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)
+    if (!allowedToDelete) {
+      showToast('⛔ لا تملك صلاحية حذف هذا المخيم', true)
       return
     }
-    if (!window.confirm(`حذف "${camp.name}"؟`)) return
+    const exempt = isExemptFromApproval(profile)
+    if (!window.confirm(exempt ? `حذف "${camp.name}"؟` : `طلب حذف "${camp.name}"؟ (بانتظار موافقة)`)) return
+
+    if (!exempt) {
+      try {
+        const actorId   = profile?.user_id || profile?.id || null
+        const actorName = profile?.full_name || profile?.name || '—'
+        await recordApprovalRequest({
+          familyId: null, action: 'camp_delete',
+          oldData: camp, newData: null, changes: null,
+          actorId, actorName, actorRole: profile?.role || null,
+        })
+        showToast('✅ تم إرسال طلب الحذف للمراجعة')
+      } catch(err) { showToast('خطأ: ' + err.message, true) }
+      return
+    }
+
     try {
       await remove('camps', camp.id)
       if (navigator.onLine) {
@@ -430,7 +466,7 @@ function CampCard({ camp, sub, famCount, memberMap, managerMap, isOwner, isSuper
   const fc = famCount[camp.id] || 0
   const st = STATUS_MAP[camp.status] || { label: camp.status||'—', color:'#6b7280' }
   const canEdit = isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)
-  const canDel  = isOwner && fc === 0
+  const canDel  = (isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)) && fc === 0
 
   return (
     <div>

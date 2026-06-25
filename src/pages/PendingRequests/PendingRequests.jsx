@@ -17,6 +17,9 @@ const ACTION_LABEL = {
   movement_entry:    { icon: '🟢', label: 'تسجيل دخول أسرة',     color: '#10b981' },
   movement_exit:     { icon: '🔴', label: 'تسجيل خروج أسرة',     color: '#ef4444' },
   movement_transfer: { icon: '🔵', label: 'نقل أسرة بين مخيمات', color: '#3b82f6' },
+  camp_insert: { icon: '🏕️', label: 'طلب إضافة مخيم', color: '#10b981' },
+  camp_update: { icon: '🏕️', label: 'طلب تعديل مخيم', color: '#3b82f6' },
+  camp_delete: { icon: '🏕️', label: 'طلب حذف مخيم',   color: '#ef4444' },
 }
 
 const ROLE_LABEL = {
@@ -47,7 +50,10 @@ function FieldDiff({ changes }) {
 function RequestHeader({ req, navigate, campMap, famMap }) {
   const meta = ACTION_LABEL[req.action] || ACTION_LABEL.update
   const isMovement = req.action?.startsWith('movement_')
+  const isCamp = req.action?.startsWith('camp_')
   const famName = req.new_data?.head_name || req.old_data?.head_name || famMap?.[req.family_id]?.head_name || req.family_name || '—'
+  const campData = req.new_data || req.old_data || {}
+  const campName = campData.name || '—'
   return (
     <>
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -61,17 +67,32 @@ function RequestHeader({ req, navigate, campMap, famMap }) {
             • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
           </div>
         </div>
-        <button onClick={() => navigate(`/families/edit/${req.family_id}`)}
-          className="text-accent text-[11px] font-bold whitespace-nowrap">
-          عرض الأسرة ←
-        </button>
+        {!isCamp && (
+          <button onClick={() => navigate(`/families/edit/${req.family_id}`)}
+            className="text-accent text-[11px] font-bold whitespace-nowrap">
+            عرض الأسرة ←
+          </button>
+        )}
       </div>
 
       <div className="bg-surface2 rounded-xl px-3 py-2 mb-2">
-        <span className="text-white font-bold text-sm">{famName}</span>
+        <span className="text-white font-bold text-sm">{isCamp ? campName : famName}</span>
       </div>
 
       {req.action === 'update' && <FieldDiff changes={req.changes} />}
+
+      {isCamp && (
+        <div className="bg-surface2 rounded-xl p-3 mt-2 text-[11px] text-muted space-y-1">
+          <div>🏷️ النوع: <span className="text-white font-bold">{campData.camp_type === 'sub' ? 'فرع' : 'رئيسي'}</span></div>
+          {campData.parent_camp_id && (
+            <div>🏕️ تابع لـ: <span className="text-white font-bold">{campMap?.[campData.parent_camp_id] || '—'}</span></div>
+          )}
+          {campData.address && <div>📍 العنوان: <span className="text-white">{campData.address}</span></div>}
+          {req.action === 'camp_update' && req.old_data && (
+            <div className="pt-1 border-t border-border mt-1">قبل التعديل: <span className="text-muted">{req.old_data.name}</span></div>
+          )}
+        </div>
+      )}
 
       {isMovement && (
         <div className="bg-surface2 rounded-xl p-3 mt-2 text-[11px] text-muted space-y-1">
