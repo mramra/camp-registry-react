@@ -50,11 +50,14 @@ function FieldDiff({ changes }) {
   )
 }
 
-function RequestHeader({ req, navigate, campMap, famMap }) {
+function RequestHeader({ req, navigate, campMap, famMap, memberByUserId }) {
   const meta = ACTION_LABEL[req.action] || ACTION_LABEL.update
   const isMovement = req.action?.startsWith('movement_')
   const isCamp = req.action?.startsWith('camp_')
   const isUser = req.action?.startsWith('user_')
+  const submitter = memberByUserId?.[req.changed_by]
+  const submitterName = req.user_name || submitter?.full_name || '—'
+  const submitterRole = req.user_role || submitter?.role
   const famName = req.new_data?.head_name || req.old_data?.head_name || famMap?.[req.family_id]?.head_name || req.family_name || '—'
   const campData = req.new_data || req.old_data || {}
   const campName = campData.name || '—'
@@ -69,7 +72,7 @@ function RequestHeader({ req, navigate, campMap, famMap }) {
             <span className="font-bold text-white text-sm">{meta.label}</span>
           </div>
           <div className="text-muted text-xs mt-0.5">
-            👤 {req.user_name || '—'} ({ROLE_LABEL[req.user_role] || req.user_role || '—'})
+            👤 {submitterName} ({ROLE_LABEL[submitterRole] || submitterRole || '—'})
             • {req.created_at ? new Date(req.created_at).toLocaleString('ar') : ''}
           </div>
         </div>
@@ -142,6 +145,7 @@ export default function PendingRequests() {
   const [note, setNote] = useState('')
   const [campMap, setCampMap] = useState({})
   const [famMap,  setFamMap]  = useState({})
+  const [memberByUserId, setMemberByUserId] = useState({})
 
   const canReview = isOwner || profile?.can_review_approvals === true
 
@@ -154,6 +158,7 @@ export default function PendingRequests() {
         query('org_members'), query('camps'), query('families'),
       ])
       const byUserId = Object.fromEntries(members.map(m => [m.user_id, m]))
+      setMemberByUserId(byUserId)
       setCampMap(Object.fromEntries(camps.map(c => [c.id, c.name])))
       setFamMap(Object.fromEntries(fams.map(f => [f.id, f])))
 
@@ -236,7 +241,7 @@ export default function PendingRequests() {
           <div className="flex flex-col gap-3">
             {requests.map(req => (
               <div key={req.id} className="bg-surface border border-border rounded-2xl p-4">
-                <RequestHeader req={req} navigate={navigate} campMap={campMap} famMap={famMap} />
+                <RequestHeader req={req} navigate={navigate} campMap={campMap} famMap={famMap} memberByUserId={memberByUserId} />
 
                 {req.action === 'delete' && req.old_data && (
                   <div className="bg-red/10 border border-red/20 rounded-xl px-3 py-2 text-[11px] text-muted">
@@ -285,7 +290,7 @@ export default function PendingRequests() {
           <div className="flex flex-col gap-3">
             {decisionLog.map(req => (
               <div key={req.id} className="bg-surface border border-border rounded-2xl p-4">
-                <RequestHeader req={req} navigate={navigate} campMap={campMap} famMap={famMap} />
+                <RequestHeader req={req} navigate={navigate} campMap={campMap} famMap={famMap} memberByUserId={memberByUserId} />
 
                 <div className={`rounded-xl px-3 py-2 text-xs font-bold flex items-center justify-between
                   ${req.status === 'approved' ? 'bg-green/10 text-green' : 'bg-red/10 text-red'}`}>
