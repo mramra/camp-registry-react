@@ -31,6 +31,8 @@ const EMPTY_FORM = {
 
 export default function UsersList() {
   const [users,    setUsers]    = useState([])
+  const [pendingByUser, setPendingByUser] = useState({})
+  const [pendingInserts, setPendingInserts] = useState(0)
   const [camps,    setCamps]    = useState([])
   const [search,   setSearch]   = useState('')
   const [loading,  setLoading]  = useState(true)
@@ -55,15 +57,21 @@ export default function UsersList() {
   async function loadData() {
     setLoading(true)
     try {
-      const [lCamps, lUsers] = await Promise.all([
+      const [lCamps, lUsers, lPending] = await Promise.all([
         query('camps'),
         query('org_members', { org_id: ORG_ID }),
+        supabase.from('family_history').select('action,old_data')
+          .is('family_id', null).like('action', 'user_%').eq('status', 'pending'),
       ])
       // عزل حقيقي على مستوى البيانات: المندوب/مدير الإيواء يرى فقط مخيماته ومن ضمنها
       // (وليس فلترة بصرية فقط — انظر visibleOrgMembers في db.js)
       const allowedCampIds = getAllowedCampIds(lCamps)
       setCamps(getVisibleCamps(lCamps))
       setUsers(visibleOrgMembers(lUsers, profile, allowedCampIds))
+      const pm = {}
+      ;(lPending?.data || []).forEach(r => { if (r.old_data?.id) pm[r.old_data.id] = r.action })
+      setPendingByUser(pm)
+      setPendingInserts((lPending?.data || []).filter(r => r.action === 'user_insert').length)
     } catch(e) { console.warn(e) }
     finally { setLoading(false) }
   }
@@ -226,6 +234,13 @@ export default function UsersList() {
   }
 
   async function handleDelete(user) {
+    const subCount = user.role === 'camp_delegate' ? getAssistants(user.id).length
+      : user.role === 'super_admin' ? getDelegates(user.id).length + getDelegates(user.id).flatMap(d => getAssistants(d.id)).length
+      : 0
+    if (subCount > 0) {
+      showToast(`⛔ يوجد ${subCount} مستخدم تابع لهذا الحساب — أعد تعيينهم أو احذفهم أولاً`, true)
+      return
+    }
     if (!window.confirm(isExemptFromApproval(profile) ? `حذف "${user.full_name}"؟` : `طلب حذف "${user.full_name}"؟ (بانتظار موافقة)`)) return
 
     if (!isExemptFromApproval(profile)) {
@@ -329,6 +344,15 @@ export default function UsersList() {
         )}
       />
 
+      {pendingInserts > 0 && (
+        <button onClick={() => navigate('/pending-requests')}
+          className="w-full text-right bg-yellow-400/10 border border-yellow-400/30 rounded-xl p-3 mb-3 text-sm font-bold flex items-center justify-between"
+          style={{color:'#f59e0b'}}>
+          <span>⏳ {pendingInserts} طلب إضافة مستخدم بانتظار المراجعة</span>
+          <span>←</span>
+        </button>
+      )}
+
       {!online && (
         <div className="bg-surface2 border border-border text-muted text-[10px] rounded-xl p-2.5 mb-3 text-center">
           📴 أوف لاين — التعديلات ستُزامَن عند الاتصال
@@ -360,7 +384,7 @@ export default function UsersList() {
             const isOpen = !collapsed[admin.id]
             return (
               <div key={admin.id}>
-                <UserCard user={admin} cfg={cfg} campMap={campMap} isMe={isMe(admin.id)}
+                <UserCard user={admin} pending={pendingByUser[admin.id]} cfg={cfg} campMap={campMap} isMe={isMe(admin.id)}
                   onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
                   onPreview={handlePreview}
@@ -376,7 +400,7 @@ export default function UsersList() {
                     <div key={delegate.id} className="mr-4 border-r-2 border-accent/20">
                       <div className="flex items-center gap-1 pr-2">
                         <span className="text-accent/40 text-xs mr-1">└─</span>
-                        <UserCard user={delegate} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
+                        <UserCard user={delegate} pending={pendingByUser[delegate.id]} cfg={dcfg} campMap={campMap} isMe={isMe(delegate.id)}
                           onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                           onReset={u => { setReset(u); setNewPass(randomPassword()) }}
                           onPreview={handlePreview}
@@ -390,7 +414,7 @@ export default function UsersList() {
                         <div key={asst.id} className="mr-8 border-r-2 border-blue/20">
                           <div className="flex items-center gap-1 pr-2">
                             <span className="text-blue/40 text-xs mr-1">└─</span>
-                            <UserCard user={asst} cfg={ROLE_CONFIG.assistant} campMap={campMap}
+                            <UserCard user={asst} pending={pendingByUser[asst.id]} cfg={ROLE_CONFIG.assistant} campMap={campMap}
                               isMe={isMe(asst.id)} onEdit={openEdit} onToggle={handleToggleStatus}
                               onDelete={handleDelete}
                               onReset={u => { setReset(u); setNewPass(randomPassword()) }}
@@ -410,7 +434,7 @@ export default function UsersList() {
             <div>
               <div className="text-xs text-muted font-bold px-2 py-2 mt-2">مناديب غير مرتبطين</div>
               {orphanDelegates.map(d => (
-                <UserCard key={d.id} user={d} cfg={ROLE_CONFIG.camp_delegate} campMap={campMap}
+                <UserCard key={d.id} user={d} pending={pendingByUser[d.id]} cfg={ROLE_CONFIG.camp_delegate} campMap={campMap}
                   isMe={isMe(d.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
                   onPreview={handlePreview}
@@ -423,7 +447,7 @@ export default function UsersList() {
             <div>
               <div className="text-xs text-muted font-bold px-2 py-2 mt-2">مساعدون غير مرتبطين</div>
               {orphanAssistants.map(a => (
-                <UserCard key={a.id} user={a} cfg={ROLE_CONFIG.assistant} campMap={campMap}
+                <UserCard key={a.id} user={a} pending={pendingByUser[a.id]} cfg={ROLE_CONFIG.assistant} campMap={campMap}
                   isMe={isMe(a.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
                   onReset={u => { setReset(u); setNewPass(randomPassword()) }}
                   onPreview={handlePreview}
@@ -433,7 +457,7 @@ export default function UsersList() {
             </div>
           )}
           {search && allFiltered.filter(u=>!['super_admin','platform_owner'].includes(u.role)).map(u => (
-            <UserCard key={u.id} user={u} cfg={ROLE_CONFIG[u.role]||ROLE_CONFIG.assistant} campMap={campMap}
+            <UserCard key={u.id} user={u} pending={pendingByUser[u.id]} cfg={ROLE_CONFIG[u.role]||ROLE_CONFIG.assistant} campMap={campMap}
               isMe={isMe(u.id)} onEdit={openEdit} onToggle={handleToggleStatus} onDelete={handleDelete}
               onReset={u2 => { setReset(u2); setNewPass(randomPassword()) }}
               onPreview={handlePreview}
@@ -681,7 +705,7 @@ export default function UsersList() {
   )
 }
 
-function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onReset, onPreview, isOwner, isSuperAdmin, childCount, isOpen, onToggleOpen, fullWidth, online }) {
+function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onReset, onPreview, isOwner, isSuperAdmin, childCount, isOpen, onToggleOpen, fullWidth, online, pending }) {
   return (
     <div className={`bg-surface border border-border rounded-xl overflow-hidden mb-1.5 border-r-4 ${cfg.bg} ${!user.is_active?'opacity-60':''} ${fullWidth?'w-full':''}`}>
       <div className="flex items-center gap-3 p-3">
@@ -692,6 +716,12 @@ function UserCard({ user, cfg, campMap, isMe, onEdit, onToggle, onDelete, onRese
             {isMe && <span className="text-[9px] bg-green/20 text-green border border-green/30 px-1.5 rounded-full">أنت</span>}
             {user.must_change_pass && <span className="text-[9px] text-accent">⚠️</span>}
             {!online && <span className="text-[9px] text-muted">📴</span>}
+            {pending && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                style={{background:'rgba(245,158,11,0.15)', color:'#f59e0b', border:'1px solid rgba(245,158,11,0.4)'}}>
+                ⏳ {pending === 'user_delete' ? 'طلب حذف معلَّق' : 'طلب تعديل معلَّق'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className={`text-[10px] font-bold ${cfg.color}`}>{cfg.label}</span>

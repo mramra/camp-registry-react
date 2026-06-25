@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { ORG_ID, supabase, useLocalDB, visibleFamilies, isExemptFromApproval, recordApprovalRequest } from '../../lib/db'
 import { useApp } from '../../context/AppContext'
@@ -16,6 +17,8 @@ const STATUS_MAP = {
 
 export default function CampsList() {
   const [camps,       setCamps]       = useState([])
+  const [pendingByCamp, setPendingByCamp] = useState({})
+  const [pendingInserts, setPendingInserts] = useState(0)
   const [famCount,    setFamCount]    = useState({})
   const [memberMap,   setMemberMap]   = useState({})
   const [managerMap,  setManagerMap]  = useState({})
@@ -38,6 +41,7 @@ export default function CampsList() {
   const [saving,      setSaving]      = useState(false)
 
   const { isOwner, isSuperAdmin, isCampDelegate, isAssistant, profile } = useAuth()
+  const navigate = useNavigate()
   const { showToast } = useApp()
   const { getVisibleCamps } = useDataScope()
 
@@ -53,13 +57,19 @@ export default function CampsList() {
   async function loadData() {
     setLoading(true)
     try {
-      const [lCamps, lFamsRaw, lMems] = await Promise.all([
+      const [lCamps, lFamsRaw, lMems, lPending] = await Promise.all([
         query('camps'),
         query('families'),
         query('org_members'),
+        supabase.from('family_history').select('action,old_data')
+          .is('family_id', null).like('action', 'camp_%').eq('status', 'pending'),
       ])
       const lFams = visibleFamilies(lFamsRaw, isOwner)
       applyData(lCamps, lFams, lMems)
+      const pm = {}
+      ;(lPending?.data || []).forEach(r => { if (r.old_data?.id) pm[r.old_data.id] = r.action })
+      setPendingByCamp(pm)
+      setPendingInserts((lPending?.data || []).filter(r => r.action === 'camp_insert').length)
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -233,6 +243,15 @@ export default function CampsList() {
       showToast('⛔ لا تملك صلاحية حذف هذا المخيم', true)
       return
     }
+    const subCount = camps.filter(c => c.parent_camp_id === camp.id).length
+    if (subCount > 0) {
+      showToast(`⛔ يوجد ${subCount} فرع تابع لهذا المخيم — احذف الفروع أولاً`, true)
+      return
+    }
+    if ((famCount[camp.id] || 0) > 0) {
+      showToast('⛔ يوجد أسر مسجَّلة بهذا المخيم — لا يمكن الحذف', true)
+      return
+    }
     const exempt = isExemptFromApproval(profile)
     if (!window.confirm(exempt ? `حذف "${camp.name}"؟` : `طلب حذف "${camp.name}"؟ (بانتظار موافقة)`)) return
 
@@ -299,6 +318,15 @@ export default function CampsList() {
         )}
       />
 
+      {pendingInserts > 0 && (
+        <button onClick={() => navigate('/pending-requests')}
+          className="w-full text-right bg-yellow-400/10 border border-yellow-400/30 rounded-xl p-3 mb-3 text-sm font-bold flex items-center justify-between"
+          style={{color:'#f59e0b'}}>
+          <span>⏳ {pendingInserts} طلب إضافة مخيم بانتظار المراجعة</span>
+          <span>←</span>
+        </button>
+      )}
+
       {(isOwner || isSuperAdmin) && (() => {
         const unmanaged = visible.filter(c => !memberMap[c.id])
         if (!unmanaged.length) return null
@@ -320,6 +348,7 @@ export default function CampsList() {
         <div className="flex flex-col gap-2">
           {parents.map(camp => (
             <CampCard key={camp.id}
+              pending={pendingByCamp[camp.id]}
               camp={camp}
               sub={children.filter(c=>c.parent_camp_id===camp.id)}
               famCount={famCount}
@@ -462,11 +491,11 @@ export default function CampsList() {
   )
 }
 
-function CampCard({ camp, sub, famCount, memberMap, managerMap, isOwner, isSuperAdmin, isCampDelegate, profile, onEdit, onDelete, collapsed, onToggle }) {
+function CampCard({ camp, sub, famCount, memberMap, managerMap, isOwner, isSuperAdmin, isCampDelegate, profile, onEdit, onDelete, collapsed, onToggle, pending }) {
   const fc = famCount[camp.id] || 0
   const st = STATUS_MAP[camp.status] || { label: camp.status||'—', color:'#6b7280' }
   const canEdit = isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)
-  const canDel  = (isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)) && fc === 0
+  const canDel  = (isOwner || isSuperAdmin || (isCampDelegate && profile?.camp_id === camp.id)) && fc === 0 && sub.length === 0
 
   return (
     <div>
@@ -474,7 +503,15 @@ function CampCard({ camp, sub, famCount, memberMap, managerMap, isOwner, isSuper
         style={{borderRight:'3px solid #f59e0b'}}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="font-black text-white text-sm">⛺ {camp.name}</div>
+            <div className="font-black text-white text-sm flex items-center gap-1.5">
+              ⛺ {camp.name}
+              {pending && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{background:'rgba(245,158,11,0.15)', color:'#f59e0b', border:'1px solid rgba(245,158,11,0.4)'}}>
+                  ⏳ {pending === 'camp_delete' ? 'طلب حذف معلَّق' : 'طلب تعديل معلَّق'}
+                </span>
+              )}
+            </div>
             {managerMap[camp.id] ? (
               <div className="text-[11px] mt-0.5" style={{color:'#ef4444'}}>🔴 مدير الإيواء: {managerMap[camp.id]}</div>
             ) : (
