@@ -35,7 +35,7 @@ serve(async (req)=>{
       error: 'جلسة غير صالحة'
     }, 401);
     // ② تحقق من دور المستخدم في org_members
-    const { data: member } = await userClient.from('org_members').select('role, is_active').eq('user_id', user.id).eq('org_id', ORG_ID).single();
+    const { data: member } = await userClient.from('org_members').select('id, role, is_active').eq('user_id', user.id).eq('org_id', ORG_ID).single();
     if (!member?.is_active) return json({
       error: 'الحساب موقوف'
     }, 403);
@@ -65,21 +65,46 @@ serve(async (req)=>{
     // قيود الدور:
     // camp_delegate لا يستطيع إنشاء super_admin
     if (member.role === 'camp_delegate') {
-      if (action === 'create' && body.role !== 'assistant') return json({
+      if ((action === 'create' || action === 'create_user') && body.role !== 'assistant') return json({
         error: 'المندوب يستطيع إنشاء مساعدين فقط'
       }, 403);
     }
     if (member.role === 'super_admin') {
-      if (action === 'create' && ![
+      if ((action === 'create' || action === 'create_user') && ![
         'camp_delegate',
         'assistant'
       ].includes(body.role)) return json({
         error: 'مدير الإيواء يستطيع إنشاء مناديب ومساعدين فقط'
       }, 403);
     }
+    // قيد التبعية الهرمية: يجلب صف العضو الهدف، ويتحقق أنه فعلاً تابع للمستدعي
+    // (نفس منطق التجميع بالواجهة: supervisor_id أو created_by) — قبل أي حذف أو
+    // إعادة كلمة مرور. ملك المنصة مُستثنى دائماً (مُتحقَّق منه فعلياً بفروع لاحقة).
+    async function assertIsSubordinate(targetUserId) {
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+      const { data: target } = await admin.from('org_members')
+        .select('id, role, supervisor_id, created_by, camp_id')
+        .eq('user_id', targetUserId).eq('org_id', ORG_ID).single();
+      if (!target) return { ok: false, error: 'المستخدم الهدف غير موجود' };
+      const isMine = target.supervisor_id === member.id || target.created_by === user.id;
+      if (member.role === 'camp_delegate') {
+        if (target.role !== 'assistant' || !isMine) {
+          return { ok: false, error: 'المندوب لا يستطيع التعامل إلا مع مساعديه فقط' };
+        }
+      } else if (member.role === 'super_admin') {
+        if (!['camp_delegate', 'assistant'].includes(target.role) || !isMine) {
+          return { ok: false, error: 'مدير الإيواء لا يستطيع التعامل إلا مع من أنشأهم فعلاً' };
+        }
+      }
+      return { ok: true };
+    }
     // ── إنشاء مستخدم ──
-    if (action === 'create') {
-      const { nationalId, phone, fullName } = body;
+    if (action === 'create' || action === 'create_user') {
+      const nationalId = body.nationalId || body.national_id;
+      const fullName   = body.fullName   || body.full_name;
+      const phone      = body.phone;
       if (!nationalId || !phone || !fullName) return json({
         error: 'بيانات ناقصة'
       }, 400);
@@ -88,7 +113,7 @@ serve(async (req)=>{
         headers,
         body: JSON.stringify({
           email: nationalId + '@c.co',
-          password: phone,
+          password: body.password || phone,
           email_confirm: true,
           user_metadata: {
             full_name: fullName
@@ -99,16 +124,42 @@ serve(async (req)=>{
       if (!res.ok) return json({
         error: data.message || 'فشل إنشاء الحساب'
       }, res.status);
+      // إدراج صف العضوية الفعلي — كان غائباً بالكامل، الحساب يُنشأ بلا أي صلاحيات
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+      const { error: memberErr } = await admin.from('org_members').insert({
+        org_id: ORG_ID, user_id: data.id,
+        full_name: fullName, national_id: nationalId, phone,
+        role: body.role, camp_id: body.camp_id || null,
+        supervisor_id: body.supervisor_id || null,
+        can_add: body.can_add, can_edit: body.can_edit, can_delete: body.can_delete,
+        can_export: body.can_export, can_import: body.can_import,
+        allowed_pages: body.allowed_pages || '{}',
+        created_by: user.id,
+        bypass_approval: body.bypass_approval || false,
+        can_review_approvals: body.can_review_approvals ?? true,
+        is_active: true,
+      });
+      if (memberErr) {
+        // فشل إدراج العضوية بعد إنشاء الحساب — نتراجع بحذف الحساب لتجنّب حساب "معلَّق"
+        await fetch(`${adminUrl}/${data.id}`, { method: 'DELETE', headers });
+        return json({ error: 'فشل إنشاء صف العضوية: ' + memberErr.message }, 500);
+      }
       return json({
         id: data.id
       });
     }
     // ── حذف مستخدم ──
-    if (action === 'delete') {
-      const { userId } = body;
+    if (action === 'delete' || action === 'delete_user') {
+      const userId = body.userId || body.user_id;
       if (!userId) return json({
         error: 'userId مطلوب'
       }, 400);
+      if (member.role !== 'platform_owner') {
+        const check = await assertIsSubordinate(userId);
+        if (!check.ok) return json({ error: check.error }, 403);
+      }
       const res = await fetch(`${adminUrl}/${userId}`, {
         method: 'DELETE',
         headers
@@ -125,10 +176,15 @@ serve(async (req)=>{
     }
     // ── إعادة كلمة المرور ──
     if (action === 'reset_password') {
-      const { userId, newPassword } = body;
+      const userId = body.userId || body.user_id;
+      const newPassword = body.newPassword || body.new_password;
       if (!userId || !newPassword) return json({
         error: 'بيانات ناقصة'
       }, 400);
+      if (member.role !== 'platform_owner') {
+        const check = await assertIsSubordinate(userId);
+        if (!check.ok) return json({ error: check.error }, 403);
+      }
       const res = await fetch(`${adminUrl}/${userId}`, {
         method: 'PUT',
         headers,
