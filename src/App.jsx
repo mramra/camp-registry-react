@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AppProvider } from './context/AppContext'
 import { PowerSyncProvider } from './context/PowerSyncContext'
@@ -163,6 +164,7 @@ export default function App() {
           </AppProvider>
         </PowerSyncProvider>
       </AuthProvider>
+      <SpeedInsights />
     </BrowserRouter>
   )
 }
