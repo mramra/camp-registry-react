@@ -93,6 +93,7 @@ export default function ChildrenPage() {
         camp:       campMap[f.camp_id] || '—',
         camp_id:    f.camp_id,
         head_name:  f.head_name,
+        head_phone: f.phone1,
         disabilities: f.head_disabilities,
         chronic:    f.head_chronic_diseases,
         orphan:     f.head_orphan_status,
@@ -118,6 +119,7 @@ export default function ChildrenPage() {
         camp:       campMap[f.camp_id] || '—',
         camp_id:    f.camp_id,
         head_name:  f.head_name,
+        head_phone: f.phone1,
         disabilities: m.disabilities,
         chronic:    m.chronic_diseases,
         orphan:     m.orphan_status,
@@ -172,13 +174,13 @@ export default function ChildrenPage() {
       const rows = filtered.map(c => ({
         'الاسم': c.name,
         'رقم الهوية': c.national_id || '',
+        'تاريخ الميلاد': c.dob || '',
         'العمر': c.age ?? '',
         'الجنس': c.gender || '',
         'الصلة': c.relation,
         'المخيم': c.camp,
         'اسم رب الأسرة': c.head_name,
-        'يتيم': c.orphan ? 'نعم' : '',
-        'إعاقة': c.disabilities && (Array.isArray(c.disabilities) ? c.disabilities.length : c.disabilities) ? 'نعم' : '',
+        'جوال رب الأسرة': c.head_phone || '',
       }))
 
       // بانر المخيم — فقط لو اختير مخيم محدد، نفس تنسيق صفحة النساء/الاستيراد والتصدير
