@@ -15,7 +15,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp }  from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { calcAge, getStageGroup, getGradeDelay, getExpectedGrade, STAGE_ICONS } from '../../lib/helpers'
+import { calcAge, getStageGroup, getGradeDelay, getExpectedGrade, STAGE_ICONS, getCampDelegateInfo } from '../../lib/helpers'
 import { useDataScope } from '../../lib/useDataScope'
 import { exportXLSX } from '../../lib/excelExport'
 import PageHeader from '../../components/ui/PageHeader'
@@ -135,27 +135,24 @@ export default function EducationStatus() {
         'متأخر دراسياً':     p.delay > 0 ? `نعم (${p.delay} صف)` : 'لا',
       }
     })
-    exportXLSX(rows, 'الحالة الدراسية', stageFilter ? `طلاب_${stageFilter}` : 'طلاب_الكل')
-  }
 
-  function exportBanner() {
-    if (!canExport) return showToast('⛔ لا تملك صلاحية التصدير', true)
-    const byMemberId = Object.fromEntries(orgMembers.map(m => [m.id, m]))
-    const visibleCampList = campFilter ? camps.filter(c => c.id === campFilter) : camps
-    if (!visibleCampList.length) return showToast('لا توجد مخيمات للتصدير', true)
-    const rows = visibleCampList.map(c => {
-      const mgr = byMemberId[c.manager_id]
-      const count = byStage.filter(p => famMap[p.family_id]?.camp_id === c.id).length
-      return {
-        'المخيم':         c.name || '',
-        'المندوب':        mgr?.full_name || '',
-        'جوال المندوب':   mgr?.phone || '',
-        'خط العرض':       c.latitude ?? '',
-        'خط الطول':       c.longitude ?? '',
-        'عدد المطابقين':  count,
+    // بانر المخيم — فقط لو اختير مخيم محدد، نفس تنسيق صفحتي النساء والأطفال
+    let campInfo = null
+    if (campFilter) {
+      const camp = camps.find(c => c.id === campFilter)
+      if (camp) {
+        const delegate = getCampDelegateInfo(camp, orgMembers)
+        campInfo = {
+          campName: camp.name,
+          delegateName: delegate?.name,
+          delegatePhone: delegate?.phone,
+          latitude: camp.latitude,
+          longitude: camp.longitude,
+        }
       }
-    })
-    exportXLSX(rows, 'بانر المخيمات', stageFilter ? `بانر_${stageFilter}` : 'بانر_الكل')
+    }
+
+    exportXLSX(rows, 'الحالة الدراسية', stageFilter ? `طلاب_${stageFilter}` : 'طلاب_الكل', campInfo)
   }
 
   return (
@@ -191,16 +188,10 @@ export default function EducationStatus() {
       </Card>
 
       {canExport && (
-        <div className="flex gap-2">
-          <button onClick={exportStudents}
-            className="flex-1 bg-green/10 border border-green/30 text-green font-bold text-sm rounded-xl px-3 py-2.5">
-            📥 تصدير الطلاب
-          </button>
-          <button onClick={exportBanner}
-            className="flex-1 bg-blue/10 border border-blue/30 text-blue font-bold text-sm rounded-xl px-3 py-2.5">
-            📍 تصدير بانر المخيمات
-          </button>
-        </div>
+        <button onClick={exportStudents}
+          className="w-full bg-green/10 border border-green/30 text-green font-bold text-sm rounded-xl px-3 py-2.5">
+          📥 تصدير الطلاب
+        </button>
       )}
 
       {loading ? (

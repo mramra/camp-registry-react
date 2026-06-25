@@ -3,7 +3,7 @@ import { useApp }         from '../../context/AppContext'
 import { useAuth }        from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies, supabase, ORG_ID } from '../../lib/db'
 import {
-  parseArr, calcAge, isAgeInRange, hasHealthData, getCampDelegateInfo,
+  parseArr, calcAge, isAgeInRange, getCampDelegateInfo,
   buildFamHasNamedWife, buildFamWithInfant, isAutoNursing,
 } from '../../lib/helpers'
 import { useDataScope }   from '../../lib/useDataScope'
@@ -184,24 +184,17 @@ export default function WomenPage() {
   async function exportExcel() {
     try {
       if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
-      const rows = filtered.map(w => {
-        const healthParts = []
-        if (hasHealthData(w.disabilities)) healthParts.push('إعاقة')
-        if (hasHealthData(w.chronic))       healthParts.push('مرض مزمن')
-        return {
-          'الاسم': w.name,
-          'رقم الهوية': w.national_id || '',
-          'تاريخ الميلاد': w.dob || '',
-          'العمر': w.age ?? '',
-          'الصلة': w.relation,
-          'الحالة الاجتماعية': w.marital || '',
-          'المخيم': w.camp,
-          'عدد أفراد الأسرة': (w._mems?.length || 0) + 1,
-          'الحالة الصحية (نسائية)': Array.isArray(w.female_status) ? w.female_status.join('،') : '',
-          'الإعاقة / المرض المزمن': healthParts.join('،'),
-          'الهاتف': w.phone || '',
-        }
-      })
+      const rows = filtered.map(w => ({
+        'الاسم': w.name,
+        'رقم الهوية': w.national_id || '',
+        'تاريخ الميلاد': w.dob || '',
+        'العمر': w.age ?? '',
+        'الصلة': w.relation,
+        'الحالة الاجتماعية': w.marital || '',
+        'المخيم': w.camp,
+        'عدد أفراد الأسرة': (w._mems?.length || 0) + 1,
+        'الهاتف': w.phone || '',
+      }))
 
       // بانر المخيم — فقط لو اختير مخيم محدد (لا "كل المخيمات")، نفس تنسيق
       // صفحة الاستيراد والتصدير بالضبط
