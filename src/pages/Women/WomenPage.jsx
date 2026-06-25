@@ -181,7 +181,7 @@ export default function WomenPage() {
     }
   }, [allWomen, campFilter, families, famWithInfant, famHasNamedWife])
 
-  function exportExcel() {
+  async function exportExcel() {
     try {
       if (!filtered.length) return showToast('لا توجد بيانات للتصدير', true)
       const rows = filtered.map(w => {
@@ -202,36 +202,29 @@ export default function WomenPage() {
           'الهاتف': w.phone || '',
         }
       })
-      exportXLSX(rows, 'كشف النساء', 'كشف_النساء')
+
+      // بانر المخيم — فقط لو اختير مخيم محدد (لا "كل المخيمات")، نفس تنسيق
+      // صفحة الاستيراد والتصدير بالضبط
+      let campInfo = null
+      if (campFilter) {
+        const camp = camps.find(c => c.id === campFilter)
+        if (camp) {
+          const { data: orgMembers } = await supabase.from('org_members')
+            .select('id,full_name,phone').eq('org_id', ORG_ID)
+          const mgr = (orgMembers || []).find(m => m.id === camp.manager_id)
+          campInfo = {
+            campName: camp.name,
+            delegateName: mgr?.full_name,
+            delegatePhone: mgr?.phone,
+            latitude: camp.latitude,
+            longitude: camp.longitude,
+          }
+        }
+      }
+
+      exportXLSX(rows, 'كشف النساء', 'كشف_النساء', campInfo)
     } catch (err) {
       showToast('خطأ في التصدير: ' + err.message, true)
-    }
-  }
-
-  async function exportBanner() {
-    try {
-      const { data: orgMembers } = await supabase.from('org_members').select('id,full_name,phone').eq('org_id', ORG_ID)
-      const byMemberId = Object.fromEntries((orgMembers || []).map(m => [m.id, m]))
-      const visibleCampList = campFilter ? camps.filter(c => c.id === campFilter) : camps
-      if (!visibleCampList.length) return showToast('لا توجد مخيمات للتصدير', true)
-      const rows = visibleCampList.map(c => {
-        const mgr = byMemberId[c.manager_id]
-        const count = filtered.filter(w => {
-          const f = families.find(x => x.id === w.family_id)
-          return f?.camp_id === c.id
-        }).length
-        return {
-          'المخيم':        c.name || '',
-          'المندوب':       mgr?.full_name || '',
-          'جوال المندوب':  mgr?.phone || '',
-          'خط العرض':      c.latitude ?? '',
-          'خط الطول':      c.longitude ?? '',
-          'عدد المطابقين': count,
-        }
-      })
-      exportXLSX(rows, 'بانر المخيمات', 'بانر_كشف_النساء')
-    } catch (err) {
-      showToast('خطأ في تصدير البانر: ' + err.message, true)
     }
   }
 
@@ -251,16 +244,10 @@ export default function WomenPage() {
         icon="👩"
         subtitle={`${filtered.length} من ${allWomen.length} سجل`}
         action={canExport && filtered.length > 0 && (
-          <div className="flex gap-1.5">
-            <button onClick={exportExcel}
-              className="bg-accent text-bg font-black px-3 py-2 rounded-xl text-sm">
-              📤 تصدير
-            </button>
-            <button onClick={exportBanner}
-              className="bg-blue/10 border border-blue/30 text-blue font-black px-3 py-2 rounded-xl text-sm">
-              📍 بانر
-            </button>
-          </div>
+          <button onClick={exportExcel}
+            className="bg-accent text-bg font-black px-4 py-2 rounded-xl text-sm">
+            📤 تصدير
+          </button>
         )}
       />
 
