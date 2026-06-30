@@ -13,6 +13,24 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <title>نبض المخيم</title>
+  <!--
+    سكريبت مقابل لـ public/404.html — يقرأ المسار المُعاد توجيهه عبر
+    سطر الاستعلام الخاص (?/مسار) ويُصحّح عنوان المتصفح بـ history.replaceState
+    قبل تحميل React، بحيث يبدأ React Router بالمسار الصحيح من اللحظة
+    الأولى دون أي ومضة أو إعادة توجيه ظاهرة للمستخدم.
+  -->
+  <script>
+    (function (l) {
+      if (l.search[1] === '/') {
+        var decoded = l.search.slice(1).split('&').map(function (s) {
+          return s.replace(/~and~/g, '&')
+        }).join('?')
+        window.history.replaceState(null, null,
+          l.pathname.slice(0, -1) + decoded + l.hash
+        )
+      }
+    }(window.location))
+  </script>
 </head>
 <body>
   <div id="root"></div>
