@@ -611,6 +611,42 @@ export default function FamilyForm() {
               actorRole:  profile?.role || null,
             })
           }
+
+          // ══════════════════════════════════════════
+          // حركة دخول تلقائية: أسرة جديدة لها مخيم محدد منذ الإنشاء
+          // تُعتبر منطقياً "دخلت" هذا المخيم — تُسجَّل حركة 'entry' تلقائياً
+          // في family_movements، بنفس منطق الموافقة (exempt) المستخدم أعلاه.
+          // لا تُسجَّل حركة عند مجرد تعديل أسرة موجودة (isEdit=true).
+          // ══════════════════════════════════════════
+          if (!isEdit && familyData.camp_id) {
+            const movementData = {
+              id:         crypto.randomUUID(),
+              org_id:     ORG_ID,
+              family_id:  familyId,
+              type:       'entry',
+              from_camp:  null,
+              to_camp:    familyData.camp_id,
+              date:       now.split('T')[0],
+              reason:     'تسجيل أسرة جديدة',
+              notes:      null,
+              created_by: actorId,
+              created_at: now,
+            }
+            if (exempt) {
+              supabase.from('family_movements').insert(movementData)
+                .then(({ error }) => { if (error) console.warn('[auto-entry-movement]', error.message) })
+            } else {
+              recordApprovalRequest({
+                familyId:  familyId,
+                action:    'movement_entry',
+                oldData:   null,
+                newData:   movementData,
+                changes:   null,
+                actorId, actorName,
+                actorRole: profile?.role || null,
+              })
+            }
+          }
         } else if (fErr) {
           console.warn('[save family]', fErr.message)
           showToast('⚠️ حُفظ محلياً — سيُزامَن لاحقاً')
