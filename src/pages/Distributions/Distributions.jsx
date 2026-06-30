@@ -32,6 +32,8 @@ export default function Distributions() {
   const [camps,     setCamps]     = useState({})
   const [campsRaw,  setCampsRaw]  = useState([])
   const [search,    setSearch]    = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterCamp,   setFilterCamp]   = useState('')
   const [loading,   setLoading]   = useState(true)
   const [selected,  setSelected]  = useState(null)  // الجولة المختارة
   const [view,      setView]      = useState('rounds') // 'rounds' | 'batches' | 'receive'
@@ -57,7 +59,7 @@ export default function Distributions() {
   const { getAllowedCampIds, filterLocal, getVisibleCamps } = useDataScope()
   const { query, upsert, bulkUpsert, remove } = useLocalDB()
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [filterStatus, filterCamp])
 
   // ─── تحميل الجولات ───────────────────────────────────
   async function loadData() {
@@ -68,14 +70,16 @@ export default function Distributions() {
       setCampsRaw(campsData)
 
       // offline-first: SQLite أولاً
-      const local = await query('dist_rounds')
+      let local = await query('dist_rounds')
+      if (filterStatus) local = local.filter(r => r.status === filterStatus)
+      if (filterCamp)   local = local.filter(r => r.camp_id === filterCamp)
       setRounds(local.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)))
 
       if (online) {
-        const { data, error } = await supabase
-          .from('dist_rounds').select('*')
-          .eq('org_id', ORG_ID)
-          .order('created_at', { ascending: false })
+        let q = supabase.from('dist_rounds').select('*').eq('org_id', ORG_ID)
+        if (filterStatus) q = q.eq('status', filterStatus)
+        if (filterCamp)   q = q.eq('camp_id', filterCamp)
+        const { data, error } = await q.order('created_at', { ascending: false })
         if (!error && data) {
           await bulkUpsert('dist_rounds', data).catch(() => {})
           setRounds(data)
@@ -582,6 +586,20 @@ export default function Distributions() {
       </div>
 
       <SearchBar value={search} onChange={setSearch} placeholder="بحث في الجولات..." />
+
+      {/* الفلاتر */}
+      <div className="flex gap-2 mb-3">
+        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}
+          className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent">
+          <option value="">كل الحالات</option>
+          {Object.entries(STATUS_MAP).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <select value={filterCamp} onChange={e=>setFilterCamp(e.target.value)}
+          className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent">
+          <option value="">كل المخيمات</option>
+          {campsList.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
 
       {loading
         ? <div className="flex justify-center py-16"><Spinner /></div>
