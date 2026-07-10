@@ -49,7 +49,7 @@ const EMPTY_FORM = {
   original_address:'', address_details:'', notes:'',
   categories:[], economic_level:'',
   head_orphan_status:null, head_orphan_cause:null, head_qualification:null,
-  head_disabilities:[], head_injuries:[], head_chronic_diseases:[], head_female_status:[],
+  head_disabilities:[], head_injuries:[], head_chronic_diseases:[], head_female_status:[], head_needs:[],
 }
 const newMember = () => ({
   id: crypto.randomUUID(),
@@ -215,7 +215,7 @@ function MemberRow({ member, index, onUpdate, onRemove, onOpenHealth, errors }) 
           {(() => {
             const n = (member.disabilities?.length||0) + (member.injuries?.length||0)
               + (member.chronic_diseases?.length||0) + (member.female_status?.length||0)
-              + (member.orphan_status ? 1 : 0)
+              + (member.needs?.length||0) + (member.orphan_status ? 1 : 0)
             return n > 0 ? <span className="bg-accent text-bg text-[10px] font-black px-2 py-0.5 rounded-full">{n}</span> : null
           })()}
         </button>
@@ -346,6 +346,7 @@ export default function FamilyForm() {
             head_injuries:         parsed.head_injuries         || [],
             head_chronic_diseases: parsed.head_chronic_diseases || [],
             head_female_status:    parsed.head_female_status    || [],
+            head_needs:            parsed.head_needs            || [],
           })
           originalDataRef.current = f
         }
@@ -365,6 +366,7 @@ export default function FamilyForm() {
                 head_injuries:         parsed.head_injuries         || [],
                 head_chronic_diseases: parsed.head_chronic_diseases || [],
                 head_female_status:    parsed.head_female_status    || [],
+                head_needs:            parsed.head_needs            || [],
               })
               originalDataRef.current = data
               // حفظ محلي محدّث
@@ -521,6 +523,7 @@ export default function FamilyForm() {
         head_injuries:         JSON.stringify(form.head_injuries         || []),
         head_chronic_diseases: JSON.stringify(form.head_chronic_diseases || []),
         head_female_status:    JSON.stringify(form.head_female_status    || []),
+        head_needs:            JSON.stringify(form.head_needs            || []),
         version:        newVersion,
         created_at:     isEdit ? (form.created_at || now) : now,
         updated_at:     now,
@@ -549,6 +552,7 @@ export default function FamilyForm() {
         injuries:         m.injuries         || [],
         chronic_diseases: m.chronic_diseases || [],
         female_status:    m.female_status    || [],
+        needs:            m.needs            || [],
         updated_at:  now,
       }))
 
@@ -855,7 +859,7 @@ export default function FamilyForm() {
               {(() => {
                 const n = (form.head_disabilities?.length||0) + (form.head_injuries?.length||0)
                   + (form.head_chronic_diseases?.length||0) + (form.head_female_status?.length||0)
-                  + (form.head_orphan_status ? 1 : 0)
+                  + (form.head_needs?.length||0) + (form.head_orphan_status ? 1 : 0)
                 return n > 0 ? <span className="bg-accent text-bg text-[10px] font-black px-2 py-0.5 rounded-full">{n}</span> : null
               })()}
             </button>
@@ -990,6 +994,7 @@ export default function FamilyForm() {
             injuries:         form.head_injuries,
             chronic_diseases: form.head_chronic_diseases,
             female_status:    form.head_female_status,
+            needs:            form.head_needs,
           }}
           onSave={(fields) => {
             setF('head_orphan_status', fields.orphan_status)
@@ -998,6 +1003,7 @@ export default function FamilyForm() {
             setF('head_injuries', fields.injuries)
             setF('head_chronic_diseases', fields.chronic_diseases)
             setF('head_female_status', fields.female_status)
+            setF('head_needs', fields.needs)
           }}
         />
       )}
@@ -1020,6 +1026,7 @@ export default function FamilyForm() {
               injuries:         m.injuries,
               chronic_diseases: m.chronic_diseases,
               female_status:    m.female_status,
+              needs:            m.needs,
             }}
             onSave={(fields) => updateMemberFields(m.id, fields)}
           />

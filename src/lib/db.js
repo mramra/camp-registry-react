@@ -63,12 +63,12 @@ export const TABLES = {
       'transferred_to_camp_id', 'client_id', 'created_by', 'updated_by', 'tent2',
       'category_tags', 'category_details', 'economic_level',
       'head_orphan_status', 'head_orphan_cause', 'head_disabilities',
-      'head_injuries', 'head_chronic_diseases', 'head_female_status', '_deleted',
+      'head_injuries', 'head_chronic_diseases', 'head_female_status', 'head_needs', '_deleted',
       'review_status', 'pending_delete',
     ],
     // أعمدة مخزّنة كـ JSON-string في Postgres (text) — تحتاج JSON.parse عند القراءة
     jsonTextColumns: ['tags', 'category_tags', 'category_details',
-      'head_disabilities', 'head_injuries', 'head_chronic_diseases', 'head_female_status'],
+      'head_disabilities', 'head_injuries', 'head_chronic_diseases', 'head_female_status', 'head_needs'],
     requiredOnInsert: ['org_id', 'head_name'],
   },
 
@@ -76,10 +76,10 @@ export const TABLES = {
     columns: [
       'id', 'family_id', 'name', 'relation', 'national_id', 'dob', 'gender',
       'created_at', 'health', 'orphan_status', 'orphan_cause',
-      'disabilities', 'injuries', 'chronic_diseases', 'female_status',
+      'disabilities', 'injuries', 'chronic_diseases', 'female_status', 'needs',
       'updated_at', '_deleted',
     ],
-    arrayColumns: ['disabilities', 'injuries', 'chronic_diseases', 'female_status'],
+    arrayColumns: ['disabilities', 'injuries', 'chronic_diseases', 'female_status', 'needs'],
     requiredOnInsert: ['family_id', 'name'],
   },
 

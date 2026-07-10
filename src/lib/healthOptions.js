@@ -36,6 +36,12 @@ export const CHRONIC_DISEASES = [
 
 export const FEMALE_STATUSES = ['حامل']
 
+// احتياجات مساعدة — فئة مستقلة عن الإعاقة/الإصابة/المرض المزمن
+export const NEEDS_TYPES = [
+  'نظارة طبية', 'سماعة أذن', 'كرسي متحرك', 'عكاز',
+  'جهاز مشي', 'أطراف صناعية', 'حفاضات', 'أدوية مزمنة', 'جهاز تنفس', 'أخرى',
+]
+
 export const ORPHAN_TYPES = [
   { key:'father', label:'يتيم الأب' },
   { key:'mother', label:'يتيم الأم' },
@@ -53,5 +59,6 @@ export function emptyHealthFields() {
     injuries: [],
     chronic_diseases: [],
     female_status: [],
+    needs: [],
   }
 }

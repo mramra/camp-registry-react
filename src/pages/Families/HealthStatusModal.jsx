@@ -1,20 +1,21 @@
 /**
  * HealthStatusModal.jsx — إدخال/تعديل الحالات الصحية التفصيلية
  * يُستخدم لرب الأسرة (subjectKind='head') وكل فرد (subjectKind='member').
- * نفس منطق وخيارات النسخة القديمة (page-member-needs): إعاقات/إصابات/أمراض مزمنة
- * (متعددة الاختيار مع تفصيل اختياري لكل نوع)، يتم (للقاصرين فقط)، حالات النساء (للإناث فقط).
+ * إعاقات/إصابات/أمراض مزمنة/احتياجات مساعدة (شرائح اختيار متعدد بدل checkbox،
+ * نفس أسلوب اختيار حقول التصدير)، يتم (للقاصرين فقط)، حالات النساء (للإناث فقط).
  */
 import { useState, useMemo } from 'react'
 import Modal from '../../components/ui/Modal'
 import { calcAge } from '../../lib/helpers'
 import {
-  DISABILITY_TYPES, INJURY_TYPES, CHRONIC_DISEASES,
+  DISABILITY_TYPES, INJURY_TYPES, CHRONIC_DISEASES, NEEDS_TYPES,
   FEMALE_STATUSES, ORPHAN_TYPES, ORPHAN_CAUSES,
 } from '../../lib/healthOptions'
 
-// ── صف اختيار متعدد مع تفصيل اختياري (إعاقة/إصابة/مرض) ──
-function MultiSelectWithDetails({ typesList, items, onChange }) {
+// ── اختيار متعدد بشرائح مع تفصيل اختياري (إعاقة/إصابة/مرض) ──
+function ChipMultiSelectWithDetails({ typesList, items, onChange }) {
   const list = Array.isArray(items) ? items : []
+  const selectedTypes = typesList.filter(t => list.some(i => i.type === t.label))
 
   function toggle(label) {
     const exists = list.find(i => i.type === label)
@@ -26,30 +27,65 @@ function MultiSelectWithDetails({ typesList, items, onChange }) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {typesList.map(t => {
-        const current = list.find(i => i.type === t.label)
-        const checked = !!current
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {typesList.map(t => {
+          const checked = list.some(i => i.type === t.label)
+          return (
+            <button key={t.key} type="button" onClick={() => toggle(t.label)}
+              className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                checked ? 'bg-purple-500/15 border-purple-500 text-purple-400 font-bold' : 'bg-surface2 border-border text-muted'
+              }`}>
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {selectedTypes.length > 0 && (
+        <div className="flex flex-col gap-2 mt-2">
+          {selectedTypes.map(t => {
+            const current = list.find(i => i.type === t.label)
+            return (
+              <div key={t.key} className="flex items-center gap-2 bg-surface2 rounded-lg p-2">
+                <span className="text-white text-xs font-bold w-24 flex-shrink-0">{t.label}</span>
+                {t.details.length > 0 ? (
+                  <select value={current?.detail || ''} onChange={e => setDetail(t.label, e.target.value)}
+                    className="flex-1 bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none">
+                    <option value="">تفاصيل (اختياري)</option>
+                    {t.details.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                ) : (
+                  <input value={current?.detail || ''} onChange={e => setDetail(t.label, e.target.value)}
+                    placeholder="تفاصيل (اختياري)"
+                    className="flex-1 bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none" />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── اختيار متعدد بشرائح بسيطة بلا تفاصيل (احتياجات مساعدة / حالات نسائية) ──
+function ChipMultiSelectSimple({ options, items, onChange }) {
+  const list = Array.isArray(items) ? items : []
+  function toggle(v) {
+    onChange(list.includes(v) ? list.filter(x => x !== v) : [...list, v])
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(opt => {
+        const checked = list.includes(opt)
         return (
-          <div key={t.key} className="bg-surface2 border border-border rounded-xl p-2.5">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" checked={checked} onChange={() => toggle(t.label)}
-                className="w-[18px] h-[18px] accent-accent flex-shrink-0" />
-              <span className="text-white text-sm">{t.label}</span>
-            </label>
-            {checked && t.details.length > 0 && (
-              <select value={current.detail || ''} onChange={e => setDetail(t.label, e.target.value)}
-                className="w-full mt-2 bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none">
-                <option value="">تفاصيل (اختياري)</option>
-                {t.details.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            )}
-            {checked && t.details.length === 0 && (
-              <input value={current.detail || ''} onChange={e => setDetail(t.label, e.target.value)}
-                placeholder="تفاصيل (اختياري)"
-                className="w-full mt-2 bg-bg border border-border rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none" />
-            )}
-          </div>
+          <button key={opt} type="button" onClick={() => toggle(opt)}
+            className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+              checked ? 'bg-purple-500/15 border-purple-500 text-purple-400 font-bold' : 'bg-surface2 border-border text-muted'
+            }`}>
+            {opt}
+          </button>
         )
       })}
     </div>
@@ -63,14 +99,11 @@ export default function HealthStatusModal({ open, onClose, subjectName, gender, 
   const [injuries,     setInjuries]     = useState(initial?.injuries     || [])
   const [chronics,     setChronics]     = useState(initial?.chronic_diseases || [])
   const [femaleStatus, setFemaleStatus] = useState(initial?.female_status || [])
+  const [needs,        setNeeds]        = useState(initial?.needs || [])
 
   const age = useMemo(() => calcAge(dob), [dob])
   const isMinor  = age !== null && age < 18
   const isFemale = (gender || '').includes('أنثى')
-
-  function toggleFemale(s) {
-    setFemaleStatus(fs => fs.includes(s) ? fs.filter(x => x !== s) : [...fs, s])
-  }
 
   function handleSave() {
     onSave({
@@ -80,6 +113,7 @@ export default function HealthStatusModal({ open, onClose, subjectName, gender, 
       injuries,
       chronic_diseases: chronics,
       female_status: femaleStatus,
+      needs,
     })
     onClose()
   }
@@ -119,34 +153,32 @@ export default function HealthStatusModal({ open, onClose, subjectName, gender, 
         {/* الإعاقات */}
         <div>
           <div className="text-xs font-bold text-muted mb-2">🦽 الإعاقات</div>
-          <MultiSelectWithDetails typesList={DISABILITY_TYPES} items={disabilities} onChange={setDisabilities} />
+          <ChipMultiSelectWithDetails typesList={DISABILITY_TYPES} items={disabilities} onChange={setDisabilities} />
         </div>
 
         {/* الإصابات */}
         <div>
           <div className="text-xs font-bold text-muted mb-2">🩹 إصابات الحرب</div>
-          <MultiSelectWithDetails typesList={INJURY_TYPES} items={injuries} onChange={setInjuries} />
+          <ChipMultiSelectWithDetails typesList={INJURY_TYPES} items={injuries} onChange={setInjuries} />
         </div>
 
         {/* الأمراض المزمنة */}
         <div>
           <div className="text-xs font-bold text-muted mb-2">💊 الأمراض المزمنة</div>
-          <MultiSelectWithDetails typesList={CHRONIC_DISEASES} items={chronics} onChange={setChronics} />
+          <ChipMultiSelectWithDetails typesList={CHRONIC_DISEASES} items={chronics} onChange={setChronics} />
+        </div>
+
+        {/* احتياجات مساعدة */}
+        <div>
+          <div className="text-xs font-bold text-muted mb-2">🦯 احتياجات مساعدة</div>
+          <ChipMultiSelectSimple options={NEEDS_TYPES} items={needs} onChange={setNeeds} />
         </div>
 
         {/* حالات خاصة بالنساء */}
         {isFemale && (
           <div>
             <div className="text-xs font-bold text-muted mb-2">♀️ حالات خاصة</div>
-            <div className="flex flex-col gap-1.5">
-              {FEMALE_STATUSES.map(s => (
-                <label key={s} className="flex items-center gap-2.5 bg-surface2 border border-border rounded-xl p-2.5 cursor-pointer">
-                  <input type="checkbox" checked={femaleStatus.includes(s)} onChange={() => toggleFemale(s)}
-                    className="w-[18px] h-[18px] accent-accent" />
-                  <span className="text-white text-sm">{s}</span>
-                </label>
-              ))}
-            </div>
+            <ChipMultiSelectSimple options={FEMALE_STATUSES} items={femaleStatus} onChange={setFemaleStatus} />
           </div>
         )}
 
