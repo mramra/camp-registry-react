@@ -13,7 +13,8 @@ export const FAM_COLS = [
   { key:'wife_name',        label:'اسم الزوجة',         def:true  },
   { key:'wife_id',          label:'هوية الزوجة',         def:true  },
   { key:'phone1',           label:'رقم الجوال',          def:true  },
-  { key:'phone2',           label:'جوال بديل',           def:false },
+  { key:'phone2',           label:'رقم واتساب',          def:false },
+  { key:'wallet_type',      label:'المحفظة الإلكترونية',  def:false },
   { key:'camp',             label:'المخيم',               def:true  },
   { key:'tent',             label:'رقم الخيمة',          def:true  },
   { key:'head_dob',         label:'تاريخ ميلاد رب الأسرة',def:false },
@@ -67,6 +68,7 @@ export function resolveFamilyColumn(key, family, { campName, membersCount, wife 
     case 'wife_id':          return wife?.national_id || ''
     case 'phone1':           return family.phone1 || ''
     case 'phone2':           return family.phone2 || ''
+    case 'wallet_type':      return family.wallet_type || ''
     case 'camp':              return campName ?? family.camps?.name ?? ''
     case 'tent':              return family.tent || ''
     case 'head_dob':          return family.head_dob || ''

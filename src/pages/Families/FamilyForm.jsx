@@ -47,7 +47,7 @@ const EMPTY_FORM = {
   head_gender:'', head_marital:'', head_dob:'',
   camp_id:'', tent:'', tent2:'',
   original_address:'', address_details:'', notes:'',
-  categories:[], economic_level:'',
+  categories:[], economic_level:'', wallet_type:'',
   head_orphan_status:null, head_orphan_cause:null, head_qualification:null,
   head_disabilities:[], head_injuries:[], head_chronic_diseases:[], head_female_status:[], head_needs:[],
 }
@@ -342,6 +342,7 @@ export default function FamilyForm() {
           setForm({ ...EMPTY_FORM, ...parsed,
             categories:    parsed.category_tags || f.categories || [],
             economic_level:f.economic_level || '',
+            wallet_type:   f.wallet_type || '',
             head_disabilities:     parsed.head_disabilities     || [],
             head_injuries:         parsed.head_injuries         || [],
             head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -362,6 +363,7 @@ export default function FamilyForm() {
               setForm({ ...EMPTY_FORM, ...parsed,
                 categories:    parsed.category_tags || data.categories || [],
                 economic_level:data.economic_level || '',
+                wallet_type:   data.wallet_type || '',
                 head_disabilities:     parsed.head_disabilities     || [],
                 head_injuries:         parsed.head_injuries         || [],
                 head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -490,7 +492,7 @@ export default function FamilyForm() {
       const ALLOWED_FIELDS = [
         'id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
         'head_marital','phone1','phone2','tent','original_address','address_details',
-        'status','notes','category_tags','economic_level','version',
+        'status','notes','category_tags','economic_level','wallet_type','version',
         'created_at','updated_at','created_by','updated_by',
       ]
       const actorId   = profile?.user_id || profile?.id || null
@@ -515,6 +517,7 @@ export default function FamilyForm() {
         notes:          form.notes          || null,
         category_tags:  form.categories     || form.category_tags || [],
         economic_level: form.economic_level || null,
+        wallet_type:    form.wallet_type    || null,
         head_qualification: form.head_qualification || null,
         // الحقول الصحية التفصيلية لرب الأسرة — مخزّنة كنص JSON (text) في Supabase
         head_orphan_status:    form.head_orphan_status || null,
@@ -799,9 +802,9 @@ export default function FamilyForm() {
               <FormField label="رقم الجوال" value={form.phone1}
                 onChange={e => setF('phone1', e.target.value)}
                 type="tel" placeholder="05xxxxxxxx" />
-              <FormField label="رقم بديل" value={form.phone2}
+              <FormField label="📱 رقم واتساب" value={form.phone2}
                 onChange={e => setF('phone2', e.target.value)}
-                type="tel" placeholder="05xxxxxxxx" />
+                type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)" />
             </div>
 
             {/* الجنس والحالة الاجتماعية */}
@@ -955,6 +958,16 @@ export default function FamilyForm() {
                 className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
                 <option value="">— غير محدد —</option>
                 {ECONOMIC_LEVELS.map(l=><option key={l.key} value={l.key}>{l.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">💳 محفظة إلكترونية</label>
+              <select value={form.wallet_type||''}
+                onChange={e=>setF('wallet_type',e.target.value)}
+                className="w-full bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                <option value="">بدون</option>
+                <option value="PalPay">PalPay</option>
+                <option value="JawwalPay">JawwalPay</option>
               </select>
             </div>
           </div>
