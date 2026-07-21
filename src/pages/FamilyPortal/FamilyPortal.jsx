@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ORG_ID, supabase } from '../../lib/db'
+import { CATEGORY_LABELS, ECONOMIC_LABELS } from '../../lib/helpers'
 
 const STATUS_LABELS = { active:'نشط ✅', ok:'نشط ✅', pending:'معلق ⏳', departed:'مغادر 📤', inactive:'مغادر 📤' }
-const CAT_LABELS = { martyr:'🕊️ أسرة شهيد', captive:'⛓️ أسرة أسير', no_provider:'💔 فاقد معيل', destroyed:'🏗️ بيت مهدم', large:'👨‍👩‍👧‍👦 أسرة كبيرة' }
-const ECON_LABELS = { extreme_poverty:'فقر مدقع', poor:'فقير', worker:'عامل/متوسط', employee:'موظف/متوسط', well_off:'ميسور' }
 
 export default function FamilyPortal() {
   const [nationalId, setNationalId] = useState('')
@@ -105,12 +104,12 @@ export default function FamilyPortal() {
                   <div className="text-accent text-xs font-bold mb-2">🏷️ الفئات</div>
                   {family.categories?.map(c=>(
                     <span key={c} className="inline-block text-[10px] bg-accent/15 text-accent border border-accent/20 rounded-full px-2 py-0.5 mr-1 mb-1">
-                      {CAT_LABELS[c]||c}
+                      {CATEGORY_LABELS[c] ? `${CATEGORY_LABELS[c].icon} ${CATEGORY_LABELS[c].label}` : c}
                     </span>
                   ))}
                   {family.economic_level && (
                     <div className="text-muted text-xs mt-1">
-                      💰 {ECON_LABELS[family.economic_level]||family.economic_level}
+                      💰 {ECONOMIC_LABELS[family.economic_level]?.label || family.economic_level}
                     </div>
                   )}
                 </div>

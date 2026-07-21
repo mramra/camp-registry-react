@@ -423,3 +423,22 @@ export const STAGE_ICONS = [
 
 /** خيارات المؤهل العلمي للبالغين (18+) — حقل اختياري، فاضي يعني غير مُسجَّل */
 export const QUALIFICATION_OPTIONS = ['دبلوم', 'بكالوريوس', 'ماجستير', 'دكتوراه']
+
+/** تصنيفات الأسرة (getFamilyCategories) — كانت مكرَّرة بشكلين مختلفين قليلاً
+ * بملفي NeedsReport.jsx وFamilyPortal.jsx، وُحِّدت هنا كمصدر واحد. */
+export const CATEGORY_LABELS = {
+  normal:      { label: 'أسرة عادية', icon: '🏠', color: 'muted'  },
+  martyr:      { label: 'أسر شهداء',  icon: '🕊️', color: 'purple' },
+  captive:     { label: 'أسر أسرى',   icon: '⛓️', color: 'blue'   },
+  no_provider: { label: 'فاقد معيل',  icon: '💔', color: 'red'    },
+  large:       { label: 'أسرة كبيرة', icon: '👨‍👩‍👧‍👦', color: 'green'  },
+}
+
+/** المستوى الاقتصادي — نفس ملاحظة CATEGORY_LABELS أعلاه */
+export const ECONOMIC_LABELS = {
+  extreme_poverty: { label: 'فقر مدقع', icon: '🔴' },
+  poor:            { label: 'فقير',     icon: '🟠' },
+  worker:          { label: 'عامل',     icon: '🟡' },
+  employee:        { label: 'موظف',     icon: '🟢' },
+  well_off:        { label: 'ميسور',    icon: '🔵' },
+}

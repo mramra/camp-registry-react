@@ -1,0 +1,22 @@
+# تبعيات
+node_modules/
+
+# ملفات البناء
+dist/
+dist-ssr/
+build/
+
+# بيئة/أسرار (احتياط -- لا يوجد حالياً ملف .env بالمشروع، لكن لو أُضيف مستقبلاً)
+.env
+.env.local
+.env.*.local
+
+# محرر/نظام تشغيل
+.vscode/
+.DS_Store
+*.local
+
+# سجلات
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

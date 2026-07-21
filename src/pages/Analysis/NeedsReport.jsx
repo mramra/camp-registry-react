@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
 import { useLocalDB, visibleFamilies } from '../../lib/db'
-import { hasHealthData, getFamilyCategories, getOrphanCount } from '../../lib/helpers'
+import { hasHealthData, getFamilyCategories, getOrphanCount, CATEGORY_LABELS, ECONOMIC_LABELS } from '../../lib/helpers'
 import { exportXLSX } from '../../lib/excelExport'
 import { useDataScope } from '../../lib/useDataScope'
 import PageHeader from '../../components/ui/PageHeader'
@@ -15,17 +15,6 @@ import Badge from '../../components/ui/Badge'
 // يجب أن تظهر كنص حرفي كامل بالكود ليكتشفها الفحص الثابت عند البناء)
 const COLOR_TEXT = { muted:'text-muted', purple:'text-purple', blue:'text-blue', red:'text-red', green:'text-green', accent:'text-accent' }
 
-const CAT_LABELS = {
-  normal:      { label:'أسرة عادية', icon:'🏠', color:'muted'  },
-  martyr:      { label:'أسر شهداء',  icon:'🕊️', color:'purple' },
-  captive:     { label:'أسر أسرى',   icon:'⛓️', color:'blue'   },
-  no_provider: { label:'فاقد معيل',  icon:'💔', color:'red'    },
-  large:       { label:'أسرة كبيرة', icon:'👨‍👩‍👧‍👦', color:'green'  },
-}
-const ECON_LABELS = {
-  extreme_poverty:'🔴 فقر مدقع', poor:'🟠 فقير',
-  worker:'🟡 عامل', employee:'🟢 موظف', well_off:'🔵 ميسور',
-}
 const HEALTH_TYPES = {
   معاق: { label:'إعاقة',     icon:'🦽' },
   مصاب: { label:'إصابة حرب', icon:'🩹' },
@@ -98,7 +87,7 @@ export default function NeedsReport() {
   // إحصائيات سريعة
   const quickStats = useMemo(()=>{
     const s={}
-    Object.keys(CAT_LABELS).forEach(k=>{ s[k]=0 })
+    Object.keys(CATEGORY_LABELS).forEach(k=>{ s[k]=0 })
     families.forEach(f=>{
       getFamilyCategories(f, memsByFamily[f.id]).forEach(c=>{ s[c]=(s[c]||0)+1 })
     })
@@ -122,8 +111,8 @@ export default function NeedsReport() {
           'الجوال':             f.phone1 || '',
           'المخيم':             campMap[f.camp_id] || '',
           'عدد الأفراد':        mems.length + 1,
-          'الفئات':             getFamilyCategories(f, mems).map(c=>CAT_LABELS[c]?.label||c).join(' | '),
-          'المستوى الاقتصادي':  ECON_LABELS[f.economic_level]?.replace(/^../,'') || '',
+          'الفئات':             getFamilyCategories(f, mems).map(c=>CATEGORY_LABELS[c]?.label||c).join(' | '),
+          'المستوى الاقتصادي':  ECONOMIC_LABELS[f.economic_level]?.label || '',
           'الأيتام':            getOrphanCount(f, mems),
         }
       })
@@ -141,7 +130,7 @@ export default function NeedsReport() {
 
       {/* إحصائيات سريعة */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        {Object.entries(CAT_LABELS).map(([k,v])=>(
+        {Object.entries(CATEGORY_LABELS).map(([k,v])=>(
           <button key={k} onClick={()=>setFilterCat(f=>f===k?'':k)}
             className={`rounded-xl p-2 text-center border transition-all ${filterCat===k?'bg-accent/20 border-accent':'bg-surface border-border'}`}>
             <div className="text-base mb-0.5">{v.icon}</div>
@@ -175,11 +164,11 @@ export default function NeedsReport() {
           </select>
           <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} className={SEL}>
             <option value="">🏷️ كل الفئات</option>
-            {Object.entries(CAT_LABELS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
+            {Object.entries(CATEGORY_LABELS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
           </select>
           <select value={filterEcon} onChange={e=>setFilterEcon(e.target.value)} className={SEL}>
             <option value="">💰 كل المستويات الاقتصادية</option>
-            {Object.entries(ECON_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            {Object.entries(ECONOMIC_LABELS).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
           </select>
           <select value={filterHealth} onChange={e=>setFilterHealth(e.target.value)} className={SEL}>
             <option value="">🏥 كل الحالات الصحية</option>
@@ -210,9 +199,9 @@ export default function NeedsReport() {
                     {campMap[f.camp_id] && <div className="text-blue text-xs mt-0.5">🏕️ {campMap[f.camp_id]}</div>}
                     <div className="flex gap-1 mt-1.5 flex-wrap">
                       {getFamilyCategories(f, mems).map(c=>(
-                        <Badge key={c} color={CAT_LABELS[c]?.color}>{CAT_LABELS[c]?.icon} {CAT_LABELS[c]?.label||c}</Badge>
+                        <Badge key={c} color={CATEGORY_LABELS[c]?.color}>{CATEGORY_LABELS[c]?.icon} {CATEGORY_LABELS[c]?.label||c}</Badge>
                       ))}
-                      {f.economic_level && <span className="text-[9px] bg-surface2 text-muted border border-border px-1.5 py-0.5 rounded-full">{ECON_LABELS[f.economic_level]?.replace(/^../,'').trim()}</span>}
+                      {f.economic_level && <span className="text-[9px] bg-surface2 text-muted border border-border px-1.5 py-0.5 rounded-full">{ECONOMIC_LABELS[f.economic_level]?.label}</span>}
                       {orphanCount>0 && <span className="text-[9px] bg-red/15 text-red border border-red/20 px-1.5 py-0.5 rounded-full font-bold">🕊️ {orphanCount} يتيم</span>}
                     </div>
                     {unhealthy.length>0 && (
