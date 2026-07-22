@@ -47,7 +47,7 @@ const EMPTY_FORM = {
   head_gender:'', head_marital:'', head_dob:'',
   camp_id:'', tent:'', tent2:'',
   original_address:'', address_details:'', notes:'',
-  categories:[], economic_level:'', wallet_type:'',
+  categories:[], economic_level:'', wallet_type:'', wallet_phone:'', whatsapp_prefix:'',
   head_orphan_status:null, head_orphan_cause:null, head_qualification:null,
   head_disabilities:[], head_injuries:[], head_chronic_diseases:[], head_female_status:[], head_needs:[],
 }
@@ -343,6 +343,7 @@ export default function FamilyForm() {
             categories:    parsed.category_tags || f.categories || [],
             economic_level:f.economic_level || '',
             wallet_type:   f.wallet_type || '',
+            wallet_phone:  f.wallet_phone || '',
             head_disabilities:     parsed.head_disabilities     || [],
             head_injuries:         parsed.head_injuries         || [],
             head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -364,6 +365,7 @@ export default function FamilyForm() {
                 categories:    parsed.category_tags || data.categories || [],
                 economic_level:data.economic_level || '',
                 wallet_type:   data.wallet_type || '',
+                wallet_phone:  data.wallet_phone || '',
                 head_disabilities:     parsed.head_disabilities     || [],
                 head_injuries:         parsed.head_injuries         || [],
                 head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -492,7 +494,7 @@ export default function FamilyForm() {
       const ALLOWED_FIELDS = [
         'id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
         'head_marital','phone1','phone2','tent','original_address','address_details',
-        'status','notes','category_tags','economic_level','wallet_type','version',
+        'status','notes','category_tags','economic_level','wallet_type','wallet_phone','version',
         'created_at','updated_at','created_by','updated_by',
       ]
       const actorId   = profile?.user_id || profile?.id || null
@@ -510,7 +512,7 @@ export default function FamilyForm() {
         head_dob:       form.head_dob       || null,
         head_marital:   form.head_marital   || null,
         phone1:         form.phone1         || null,
-        phone2:         form.phone2         || null,
+        phone2:         ((form.whatsapp_prefix||'') + (form.phone2||'').trim()) || null,
         tent:           form.tent           || null,
         original_address:  form.original_address  || null,
         address_details:   form.address_details   || null,
@@ -518,6 +520,7 @@ export default function FamilyForm() {
         category_tags:  form.categories     || form.category_tags || [],
         economic_level: form.economic_level || null,
         wallet_type:    form.wallet_type    || null,
+        wallet_phone:   form.wallet_phone   || null,
         head_qualification: form.head_qualification || null,
         // الحقول الصحية التفصيلية لرب الأسرة — مخزّنة كنص JSON (text) في Supabase
         head_orphan_status:    form.head_orphan_status || null,
@@ -798,13 +801,24 @@ export default function FamilyForm() {
             </div>
 
             {/* الجوال */}
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label="رقم الجوال" value={form.phone1}
-                onChange={e => setF('phone1', e.target.value)}
-                type="tel" placeholder="05xxxxxxxx" />
-              <FormField label="📱 رقم واتساب" value={form.phone2}
-                onChange={e => setF('phone2', e.target.value)}
-                type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)" />
+            <FormField label="رقم الجوال" value={form.phone1}
+              onChange={e => setF('phone1', e.target.value)}
+              type="tel" placeholder="05xxxxxxxx" />
+
+            <div>
+              <label className="text-xs font-bold text-muted block mb-1.5">📱 رقم واتساب</label>
+              <div className="grid grid-cols-3 gap-3">
+                <select value={form.whatsapp_prefix||''}
+                  onChange={e=>setF('whatsapp_prefix', e.target.value)}
+                  className="col-span-1 bg-surface2 border border-border rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-accent">
+                  <option value="">مقدمة</option>
+                  <option value="972">972</option>
+                  <option value="970">970</option>
+                </select>
+                <input value={form.phone2} onChange={e => setF('phone2', e.target.value)}
+                  type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)"
+                  className="col-span-2 bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent" />
+              </div>
             </div>
 
             {/* الجنس والحالة الاجتماعية */}
@@ -970,6 +984,11 @@ export default function FamilyForm() {
                 <option value="JawwalPay">JawwalPay</option>
               </select>
             </div>
+            {form.wallet_type && (
+              <FormField label="📱 رقم جوال المحفظة" value={form.wallet_phone}
+                onChange={e => setF('wallet_phone', e.target.value)}
+                type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)" />
+            )}
           </div>
         </Card>
 

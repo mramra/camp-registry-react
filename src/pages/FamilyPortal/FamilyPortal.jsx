@@ -86,6 +86,7 @@ export default function FamilyPortal() {
                   {[
                     ['اسم رب الأسرة', family.head_name],
                     ['رقم الهوية',    family.head_id],
+                    ['رقم الجوال',    family.phone1||'—'],
                     ['المخيم',        family.camps?.name||'—'],
                     ['الخيمة',        family.tent||'—'],
                     ['الحالة',        STATUS_LABELS[family.status]||family.status||'—'],
@@ -120,9 +121,14 @@ export default function FamilyPortal() {
                 <div className="bg-surface2 border border-border rounded-xl p-4">
                   <div className="text-accent text-xs font-bold mb-2">👨‍👩‍👧‍👦 أفراد الأسرة ({members.length})</div>
                   {members.slice(0,5).map(m=>(
-                    <div key={m.id} className="flex justify-between py-1 border-b border-border/30 last:border-0">
-                      <span className="text-white text-xs">{m.name}</span>
-                      <span className="text-muted text-[10px]">{m.relation}</span>
+                    <div key={m.id} className="py-1.5 border-b border-border/30 last:border-0">
+                      <div className="flex justify-between">
+                        <span className="text-white text-xs font-bold">{m.name}</span>
+                        <span className="text-muted text-[10px]">{m.relation}</span>
+                      </div>
+                      <div className="text-muted text-[11px] mt-0.5">
+                        🎂 {m.dob || '—'} &nbsp; 🪪 {m.national_id || '—'}
+                      </div>
                     </div>
                   ))}
                   {members.length>5 && <div className="text-muted text-[10px] mt-1">+{members.length-5} أخرى</div>}
