@@ -344,6 +344,7 @@ export default function FamilyForm() {
             economic_level:f.economic_level || '',
             wallet_type:   f.wallet_type || '',
             wallet_phone:  f.wallet_phone || '',
+            whatsapp_prefix: f.whatsapp_prefix || '',
             head_disabilities:     parsed.head_disabilities     || [],
             head_injuries:         parsed.head_injuries         || [],
             head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -366,6 +367,7 @@ export default function FamilyForm() {
                 economic_level:data.economic_level || '',
                 wallet_type:   data.wallet_type || '',
                 wallet_phone:  data.wallet_phone || '',
+                whatsapp_prefix: data.whatsapp_prefix || '',
                 head_disabilities:     parsed.head_disabilities     || [],
                 head_injuries:         parsed.head_injuries         || [],
                 head_chronic_diseases: parsed.head_chronic_diseases || [],
@@ -459,6 +461,14 @@ export default function FamilyForm() {
     if (dobErr) errs.head_dob = dobErr
     // المخيم
     if (!form.camp_id) errs.camp_id = 'اختر المخيم'
+    // صيغة رقم الواتساب/جوال المحفظة -- 059 أو 056 و10 خانات (طلب مباشر)
+    const PALESTINIAN_PHONE_RE = /^(059|056)\d{7}$/
+    if (form.phone2?.trim() && !PALESTINIAN_PHONE_RE.test(form.phone2.trim())) {
+      errs.phone2 = '❌ رقم غير صحيح -- يجب أن يبدأ بـ059 أو 056 ويكون 10 خانات'
+    }
+    if (form.wallet_phone?.trim() && !PALESTINIAN_PHONE_RE.test(form.wallet_phone.trim())) {
+      errs.wallet_phone = '❌ رقم غير صحيح -- يجب أن يبدأ بـ059 أو 056 ويكون 10 خانات'
+    }
     // أفراد
     members.forEach((m, i) => {
       if (!m.name.trim()) errs[`m_name_${i}`] = 'الاسم مطلوب'
@@ -494,7 +504,7 @@ export default function FamilyForm() {
       const ALLOWED_FIELDS = [
         'id','org_id','camp_id','head_name','head_id','head_gender','head_dob',
         'head_marital','phone1','phone2','tent','original_address','address_details',
-        'status','notes','category_tags','economic_level','wallet_type','wallet_phone','version',
+        'status','notes','category_tags','economic_level','wallet_type','wallet_phone','whatsapp_prefix','version',
         'created_at','updated_at','created_by','updated_by',
       ]
       const actorId   = profile?.user_id || profile?.id || null
@@ -512,7 +522,8 @@ export default function FamilyForm() {
         head_dob:       form.head_dob       || null,
         head_marital:   form.head_marital   || null,
         phone1:         form.phone1         || null,
-        phone2:         ((form.whatsapp_prefix||'') + (form.phone2||'').trim()) || null,
+        phone2:         (form.phone2||'').trim() || null,
+        whatsapp_prefix: form.whatsapp_prefix || null,
         tent:           form.tent           || null,
         original_address:  form.original_address  || null,
         address_details:   form.address_details   || null,
@@ -817,8 +828,9 @@ export default function FamilyForm() {
                 </select>
                 <input value={form.phone2} onChange={e => setF('phone2', e.target.value)}
                   type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)"
-                  className="col-span-2 bg-surface2 border border-border rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent" />
+                  className={`col-span-2 bg-surface2 border ${errors.phone2?'border-red':'border-border'} rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-accent`} />
               </div>
+              {errors.phone2 && <p className="text-red text-[11px] mt-1">{errors.phone2}</p>}
             </div>
 
             {/* الجنس والحالة الاجتماعية */}
@@ -987,7 +999,8 @@ export default function FamilyForm() {
             {form.wallet_type && (
               <FormField label="📱 رقم جوال المحفظة" value={form.wallet_phone}
                 onChange={e => setF('wallet_phone', e.target.value)}
-                type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)" />
+                type="tel" placeholder="05xxxxxxxx (اتركه فارغاً لو نفس رقم الجوال)"
+                error={errors.wallet_phone} />
             )}
           </div>
         </Card>
